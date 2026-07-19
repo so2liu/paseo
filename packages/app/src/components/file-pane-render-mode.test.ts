@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
+import { isRenderedHtmlFile, isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
 
 describe("isRenderedMarkdownFile", () => {
   it("detects .md files", () => {
@@ -19,5 +19,17 @@ describe("isRenderedMarkdownFile", () => {
   it("does not treat other text files as rendered markdown", () => {
     expect(isRenderedMarkdownFile("src/index.ts")).toBe(false);
     expect(isRenderedMarkdownFile("README.md.txt")).toBe(false);
+  });
+});
+
+describe("isRenderedHtmlFile", () => {
+  it("detects HTML files", () => {
+    expect(isRenderedHtmlFile("index.html")).toBe(true);
+    expect(isRenderedHtmlFile("pages/preview.HTM")).toBe(true);
+  });
+
+  it("does not treat templates or suffixed files as rendered HTML", () => {
+    expect(isRenderedHtmlFile("page.html.ts")).toBe(false);
+    expect(isRenderedHtmlFile("page.hbs")).toBe(false);
   });
 });

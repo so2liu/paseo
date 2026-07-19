@@ -8,9 +8,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useSessionStore, type ExplorerFile } from "@/stores/session-store";
 import { highlightCode, type HighlightToken } from "@getpaseo/highlight";
@@ -18,7 +17,7 @@ import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { lineNumberGutterWidth } from "@/components/code-insets";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
-import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
+import { isRenderedHtmlFile, isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes } from "@/attachments/service";
@@ -29,6 +28,8 @@ import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
+import { FileMarkdownPreview } from "@/file-preview/file-markdown-preview";
+import { HtmlPreview } from "@/file-preview/html-preview";
 
 interface CodeLineProps {
   tokens: HighlightToken[];
@@ -185,38 +186,51 @@ const codeLineStyles = StyleSheet.create((theme) => ({
   },
 }));
 
-function FilePreviewBody({
-  preview,
-  isLoading,
+interface TextFilePreviewProps {
+  source: string;
+  filePath: string;
+  isMobile: boolean;
+  location: WorkspaceFileLocation;
+  codeFontSize: number;
+}
+
+interface KeyedCodeLine {
+  key: string;
+  tokens: HighlightToken[];
+  lineNumber: number;
+}
+
+function keyCodeLines(lines: HighlightToken[][]): KeyedCodeLine[] {
+  const seen = new Map<string, number>();
+  return lines.map((tokens, index) => {
+    const identity = tokens.map((token) => token.text).join("");
+    const occurrence = seen.get(identity) ?? 0;
+    seen.set(identity, occurrence + 1);
+    return { key: `${identity}:${occurrence}`, tokens, lineNumber: index + 1 };
+  });
+}
+
+function TextFilePreviewBase({
+  source,
+  filePath,
   isMobile,
   location,
-  imagePreviewUri,
-}: FilePreviewBodyProps) {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  const filePath = location.path;
-  const isMarkdownFile =
-    preview?.kind === "text" && isRenderedMarkdownFile(filePath) && !location.lineStart;
-
+  codeFontSize,
+}: TextFilePreviewProps) {
+  const isMarkdownFile = isRenderedMarkdownFile(filePath) && !location.lineStart;
+  const isHtmlFile = isRenderedHtmlFile(filePath) && !location.lineStart;
   const previewScrollRef = useRef<RNScrollView>(null);
-
   const highlightedLines = useMemo(() => {
-    if (!preview || preview.kind !== "text" || isMarkdownFile) {
-      return null;
-    }
-
-    return highlightCode(preview.content ?? "", filePath);
-  }, [isMarkdownFile, preview, filePath]);
-
+    if (isMarkdownFile || isHtmlFile) return null;
+    return highlightCode(source, filePath);
+  }, [filePath, isHtmlFile, isMarkdownFile, source]);
   const gutterWidth = useMemo(() => {
     if (!highlightedLines) return 0;
-    return lineNumberGutterWidth(highlightedLines.length, theme.fontSize.code);
-  }, [highlightedLines, theme.fontSize.code]);
-  const lineHeight = theme.fontSize.code * 1.45;
+    return lineNumberGutterWidth(highlightedLines.length, codeFontSize);
+  }, [codeFontSize, highlightedLines]);
+  const lineHeight = codeFontSize * 1.45;
   const lineSelection = useMemo(() => {
-    if (!highlightedLines) {
-      return null;
-    }
+    if (!highlightedLines) return null;
     return clampLineSelection({
       lineStart: location.lineStart,
       lineEnd: location.lineEnd,
@@ -224,15 +238,8 @@ function FilePreviewBody({
     });
   }, [highlightedLines, location.lineEnd, location.lineStart]);
 
-  const imageSource = useMemo(
-    () => (imagePreviewUri ? { uri: imagePreviewUri } : null),
-    [imagePreviewUri],
-  );
-
   useEffect(() => {
-    if (!lineSelection) {
-      return;
-    }
+    if (!lineSelection) return;
     const timeout = setTimeout(() => {
       previewScrollRef.current?.scrollTo({
         y: Math.max(0, (lineSelection.lineStart - 1) * lineHeight),
@@ -241,6 +248,88 @@ function FilePreviewBody({
     }, 0);
     return () => clearTimeout(timeout);
   }, [lineHeight, lineSelection]);
+
+  if (isHtmlFile) {
+    return <HtmlPreview source={source} />;
+  }
+
+  if (isMarkdownFile) {
+    return (
+      <View style={styles.previewScrollContainer}>
+        <RNScrollView
+          ref={previewScrollRef}
+          style={styles.previewContent}
+          contentContainerStyle={styles.previewMarkdownScrollContent}
+          showsVerticalScrollIndicator
+        >
+          <FileMarkdownPreview source={source} />
+        </RNScrollView>
+      </View>
+    );
+  }
+
+  const lines = highlightedLines ?? [[{ text: source, style: null }]];
+  const keyedLines = keyCodeLines(lines);
+  const codeLines = (
+    <View dataSet={CODE_SURFACE_DATASET}>
+      {keyedLines.map(({ key, tokens, lineNumber }) => (
+        <CodeLine
+          key={key}
+          tokens={tokens}
+          lineNumber={lineNumber}
+          gutterWidth={gutterWidth}
+          highlighted={
+            Boolean(lineSelection) &&
+            lineNumber >= (lineSelection?.lineStart ?? 0) &&
+            lineNumber <= (lineSelection?.lineEnd ?? 0)
+          }
+        />
+      ))}
+    </View>
+  );
+
+  return (
+    <View style={styles.previewScrollContainer}>
+      <RNScrollView
+        ref={previewScrollRef}
+        style={styles.previewContent}
+        showsVerticalScrollIndicator
+      >
+        {isMobile ? (
+          <View style={styles.previewCodeScrollContent}>{codeLines}</View>
+        ) : (
+          <RNScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator
+            contentContainerStyle={styles.previewCodeScrollContent}
+          >
+            {codeLines}
+          </RNScrollView>
+        )}
+      </RNScrollView>
+    </View>
+  );
+}
+
+const TextFilePreview = withUnistyles(TextFilePreviewBase, (theme) => ({
+  codeFontSize: theme.fontSize.code,
+}));
+
+function FilePreviewBody({
+  preview,
+  isLoading,
+  isMobile,
+  location,
+  imagePreviewUri,
+}: FilePreviewBodyProps) {
+  const { t } = useTranslation();
+  const filePath = location.path;
+
+  const imageSource = useMemo(
+    () => (imagePreviewUri ? { uri: imagePreviewUri } : null),
+    [imagePreviewUri],
+  );
 
   if (isLoading && !preview) {
     return (
@@ -260,66 +349,13 @@ function FilePreviewBody({
   }
 
   if (preview.kind === "text") {
-    if (isMarkdownFile) {
-      return (
-        <View style={styles.previewScrollContainer}>
-          <RNScrollView
-            ref={previewScrollRef}
-            style={styles.previewContent}
-            contentContainerStyle={styles.previewMarkdownScrollContent}
-            showsVerticalScrollIndicator
-          >
-            <MarkdownRenderer text={preview.content ?? ""} />
-          </RNScrollView>
-        </View>
-      );
-    }
-
-    const lines = highlightedLines ?? [[{ text: preview.content ?? "", style: null }]];
-    const keyedLines = lines.map((tokens, index) => ({
-      key: `line-${index}`,
-      tokens,
-      lineNumber: index + 1,
-    }));
-    const codeLines = (
-      <View dataSet={CODE_SURFACE_DATASET}>
-        {keyedLines.map(({ key, tokens, lineNumber }) => (
-          <CodeLine
-            key={key}
-            tokens={tokens}
-            lineNumber={lineNumber}
-            gutterWidth={gutterWidth}
-            highlighted={
-              Boolean(lineSelection) &&
-              lineNumber >= (lineSelection?.lineStart ?? 0) &&
-              lineNumber <= (lineSelection?.lineEnd ?? 0)
-            }
-          />
-        ))}
-      </View>
-    );
-
     return (
-      <View style={styles.previewScrollContainer}>
-        <RNScrollView
-          ref={previewScrollRef}
-          style={styles.previewContent}
-          showsVerticalScrollIndicator
-        >
-          {isMobile ? (
-            <View style={styles.previewCodeScrollContent}>{codeLines}</View>
-          ) : (
-            <RNScrollView
-              horizontal
-              nestedScrollEnabled
-              showsHorizontalScrollIndicator
-              contentContainerStyle={styles.previewCodeScrollContent}
-            >
-              {codeLines}
-            </RNScrollView>
-          )}
-        </RNScrollView>
-      </View>
+      <TextFilePreview
+        source={preview.content ?? ""}
+        filePath={filePath}
+        isMobile={isMobile}
+        location={location}
+      />
     );
   }
 
@@ -336,7 +372,6 @@ function FilePreviewBody({
     return (
       <View style={styles.previewScrollContainer}>
         <RNScrollView
-          ref={previewScrollRef}
           style={styles.previewContent}
           contentContainerStyle={styles.previewImageScrollContent}
           showsVerticalScrollIndicator
