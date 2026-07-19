@@ -35,21 +35,18 @@ describe("timeline sync planning", () => {
     });
   });
 
-  test("resume with a cursor catches up after the cursor", () => {
-    const plan = planResumeTimelineSync({
-      cursor: { epoch: "epoch-1", startSeq: 1, endSeq: 100 },
-    });
+  test("resume loads the latest bounded tail even when a cursor exists", () => {
+    const plan = planResumeTimelineSync();
 
     expect(plan).toEqual({
-      direction: "after",
-      cursor: { epoch: "epoch-1", seq: 100 },
+      direction: "tail",
       limit: TIMELINE_FETCH_PAGE_SIZE,
       projection: "projected",
     });
   });
 
   test("resume without a cursor loads a bounded tail page", () => {
-    const plan = planResumeTimelineSync({ cursor: undefined });
+    const plan = planResumeTimelineSync();
 
     expect(plan).toEqual({
       direction: "tail",

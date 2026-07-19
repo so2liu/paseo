@@ -51,13 +51,7 @@ export function planInitialAgentTimelineSync(input: {
   return planTimelineTailFetch();
 }
 
-export function planResumeTimelineSync(input: {
-  cursor: AgentTimelineCursorRange | undefined;
-}): ProjectedTimelineForwardFetchPlan {
-  if (input.cursor) {
-    return planTimelineCatchUpAfter({ epoch: input.cursor.epoch, seq: input.cursor.endSeq });
-  }
-
+export function planResumeTimelineSync(): ProjectedTimelineForwardFetchPlan {
   return planTimelineTailFetch();
 }
 

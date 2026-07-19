@@ -146,15 +146,11 @@ function deriveBootstrapTailTimelinePolicy({
   reset,
   epoch,
   endCursor,
-  isInitializing,
-  hasActiveInitDeferred,
 }: {
   direction: TimelineDirection;
   reset: boolean;
   epoch: string;
   endCursor: { seq: number } | null;
-  isInitializing: boolean;
-  hasActiveInitDeferred: boolean;
 }): {
   replace: boolean;
   catchUpCursor: { epoch: string; endSeq: number } | null;
@@ -163,8 +159,7 @@ function deriveBootstrapTailTimelinePolicy({
     return { replace: true, catchUpCursor: null };
   }
 
-  const isBootstrapTailInit = direction === "tail" && isInitializing && hasActiveInitDeferred;
-  if (!isBootstrapTailInit) {
+  if (direction !== "tail") {
     return { replace: false, catchUpCursor: null };
   }
 
@@ -1058,8 +1053,6 @@ export function processTimelineResponse(
     reset: payload.reset,
     epoch: payload.epoch,
     endCursor: payload.endCursor,
-    isInitializing,
-    hasActiveInitDeferred,
   });
   const replace = bootstrapPolicy.replace;
 

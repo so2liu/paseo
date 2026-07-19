@@ -321,6 +321,29 @@ describe("processTimelineResponse", () => {
     expect(assistant?.timestamp.toISOString()).toBe("2025-01-01T12:00:04.000Z");
   });
 
+  it("replaces an older authoritative view with the latest tail on resume", () => {
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [makeAssistantItem("old conclusion", "old-message")],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 10 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 900 },
+        endCursor: { seq: 1_000 },
+        entries: [makeTimelineEntry(1_000, "latest conclusion")],
+        hasOlder: true,
+      },
+    });
+
+    expect(getAssistantTexts(result.tail)).toEqual(["latest conclusion"]);
+    expect(result.cursor).toEqual({ epoch: "epoch-1", startSeq: 900, endSeq: 1_000 });
+    expect(result.sideEffects).not.toContainEqual({
+      type: "catch_up",
+      cursor: { epoch: "epoch-1", endSeq: 10 },
+    });
+  });
+
   it("reconciles an optimistic user message during tail replacement", () => {
     const image = {
       id: "optimistic-image",
