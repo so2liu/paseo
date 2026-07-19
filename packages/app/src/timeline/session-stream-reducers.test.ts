@@ -344,6 +344,34 @@ describe("processTimelineResponse", () => {
     });
   });
 
+  it("does not duplicate a cached final answer when a resume tail restores its message id", () => {
+    const finalAnswer = "The final answer is already cached.";
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [makeAssistantItem(finalAnswer, "cached-answer")],
+      currentCursor: undefined,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 100 },
+        endCursor: { seq: 100 },
+        entries: [
+          {
+            ...makeTimelineEntry(100, finalAnswer),
+            item: {
+              type: "assistant_message",
+              text: finalAnswer,
+              messageId: "canonical-answer",
+            },
+          },
+        ],
+      },
+    });
+
+    expect(getAssistantTexts([...result.tail, ...result.head])).toEqual([finalAnswer]);
+  });
+
   it("reconciles an optimistic user message during tail replacement", () => {
     const image = {
       id: "optimistic-image",
