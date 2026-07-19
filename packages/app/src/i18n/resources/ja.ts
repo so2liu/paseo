@@ -491,6 +491,7 @@ export const ja: TranslationResources = {
         copyResumeCommand: "再開コマンドをコピー",
         copyAgentId: "エージェントIDをコピー",
         copyFilePath: "ファイルパスをコピー",
+        downloadFile: "このデバイスにダウンロード",
         rename: "名前を変更",
         closeAbove: "上のタブを閉じる",
         closeBelow: "下のタブを閉じる",
@@ -1868,6 +1869,7 @@ export const ja: TranslationResources = {
         title: "デバイスをペアリング",
         rowTitle: "デバイスをペアリング",
         rowHint: "QRコードをスキャンするかリンクをコピーしてスマートフォンをこのホストに接続",
+        updateRequired: "Update this host to retrieve its pairing link",
       },
       orchestration: {
         title: "オーケストレーション",

@@ -491,6 +491,7 @@ export const es: TranslationResources = {
         copyResumeCommand: "Copiar comando de reanudación",
         copyAgentId: "Copiar ID del agente",
         copyFilePath: "Copy file path",
+        downloadFile: "Download to this device",
         rename: "Rebautizar",
         closeAbove: "Cerrar pestañas arriba",
         closeBelow: "Cerrar pestañas a continuación",
@@ -1897,6 +1898,7 @@ export const es: TranslationResources = {
         title: "Emparejar dispositivos",
         rowTitle: "Emparejar un dispositivo",
         rowHint: "Escanee un códigoQRo copie un enlace para conectar su teléfono a este host",
+        updateRequired: "Update this host to retrieve its pairing link",
       },
       orchestration: {
         title: "Orquestación",

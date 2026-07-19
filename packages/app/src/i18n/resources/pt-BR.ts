@@ -491,6 +491,7 @@ export const ptBR: TranslationResources = {
         copyResumeCommand: "Copiar comando de retomada",
         copyAgentId: "Copiar ID do agente",
         copyFilePath: "Copiar caminho do arquivo",
+        downloadFile: "Baixar para este dispositivo",
         rename: "Renomear",
         closeAbove: "Fechar abas acima",
         closeBelow: "Fechar abas abaixo",
@@ -1882,6 +1883,7 @@ export const ptBR: TranslationResources = {
         title: "Parear dispositivos",
         rowTitle: "Parear um dispositivo",
         rowHint: "Escaneie um QR code ou copie um link para conectar seu celular a este host",
+        updateRequired: "Update this host to retrieve its pairing link",
       },
       orchestration: {
         title: "Orquestração",

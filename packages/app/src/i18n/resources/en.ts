@@ -486,6 +486,7 @@ export const en = {
         copyResumeCommand: "Copy resume command",
         copyAgentId: "Copy agent id",
         copyFilePath: "Copy file path",
+        downloadFile: "Download to this device",
         rename: "Rename",
         closeAbove: "Close tabs above",
         closeBelow: "Close tabs below",
@@ -1860,6 +1861,7 @@ export const en = {
         title: "Pair devices",
         rowTitle: "Pair a device",
         rowHint: "Scan a QR code or copy a link to connect your phone to this host",
+        updateRequired: "Update this host to retrieve its pairing link",
       },
       orchestration: {
         title: "Orchestration",

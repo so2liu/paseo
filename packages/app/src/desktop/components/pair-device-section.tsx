@@ -17,6 +17,17 @@ type PairingViewState =
   | { tag: "unavailable"; message: string }
   | { tag: "ready"; url: string };
 
+interface PairingOfferResult {
+  url?: string | null;
+  relayEnabled?: boolean;
+}
+
+export interface PairDeviceSectionProps {
+  enabled?: boolean;
+  queryKey?: readonly unknown[];
+  loadPairingOffer?: () => Promise<PairingOfferResult>;
+}
+
 function resolvePairingViewState(args: {
   isPending: boolean;
   isError: boolean;
@@ -42,15 +53,19 @@ function resolvePairingViewState(args: {
   return { tag: "ready", url: args.data.url };
 }
 
-export function PairDeviceSection() {
+export function PairDeviceSection({
+  enabled,
+  queryKey,
+  loadPairingOffer,
+}: PairDeviceSectionProps = {}) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const showSection = shouldUseDesktopDaemon();
+  const showSection = enabled ?? shouldUseDesktopDaemon();
   const [copied, setCopied] = useState(false);
 
   const pairingQuery = useQuery({
-    queryKey: ["desktop-daemon-pairing"],
-    queryFn: getDesktopDaemonPairing,
+    queryKey: queryKey ?? ["desktop-daemon-pairing"],
+    queryFn: loadPairingOffer ?? getDesktopDaemonPairing,
     enabled: showSection,
     staleTime: 5 * 60 * 1000,
     retry: 1,

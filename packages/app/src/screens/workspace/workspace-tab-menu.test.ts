@@ -213,6 +213,7 @@ describe("buildWorkspaceTabMenuEntries", () => {
 
   it("includes copy file path for file tabs", () => {
     const onCopyFilePath = vi.fn();
+    const onDownloadFile = vi.fn();
     const fileTab: WorkspaceTabDescriptor = {
       key: "file_abc",
       tabId: "file_abc",
@@ -228,6 +229,7 @@ describe("buildWorkspaceTabMenuEntries", () => {
       onCopyResumeCommand: vi.fn(),
       onCopyAgentId: vi.fn(),
       onCopyFilePath,
+      onDownloadFile,
       onReloadAgent: vi.fn(),
       onRenameTab: vi.fn(),
       onCloseTab: vi.fn(),
@@ -238,6 +240,7 @@ describe("buildWorkspaceTabMenuEntries", () => {
 
     const labels = entries.filter((entry) => entry.kind === "item").map((entry) => entry.label);
     expect(labels[0]).toBe("Copy file path");
+    expect(labels[1]).toBe("Download to this device");
     expect(labels).not.toContain("Copy resume command");
     expect(labels).not.toContain("Copy agent id");
     expect(labels).not.toContain("Rename");
@@ -251,6 +254,15 @@ describe("buildWorkspaceTabMenuEntries", () => {
     }
     copyFilePathEntry.onSelect();
     expect(onCopyFilePath).toHaveBeenCalledWith("/some/path.ts");
+
+    const downloadFileEntry = entries.find(
+      (entry) => entry.kind === "item" && entry.key === "download-file",
+    );
+    if (!downloadFileEntry || downloadFileEntry.kind !== "item") {
+      throw new Error("Download file entry missing");
+    }
+    downloadFileEntry.onSelect();
+    expect(onDownloadFile).toHaveBeenCalledWith("/some/path.ts");
   });
 
   it("uses the same rename entry shape for agent and terminal tabs", () => {
