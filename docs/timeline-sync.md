@@ -52,6 +52,10 @@ History before that tail remains available through user-driven upward pagination
 background run from forcing the user to wait while the app replays every page between an old local
 cursor and the current conclusion.
 
+If the fetched tail is structurally identical to the tail already on screen, the reducer preserves
+the existing stream array identities. The authoritative sync still completes, but React subscribers
+do not receive a replacement conversation and the user's scroll position remains untouched.
+
 Sequence gaps detected while the agent is actively viewed still catch up after the known cursor to
 completion. That path preserves continuous delivery for an already-open conversation; it is distinct
 from returning to a conversation, where latest-content latency takes priority.

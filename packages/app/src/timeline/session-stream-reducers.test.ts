@@ -372,6 +372,35 @@ describe("processTimelineResponse", () => {
     expect(getAssistantTexts([...result.tail, ...result.head])).toEqual([finalAnswer]);
   });
 
+  it("preserves rendered stream identity when a resume tail is unchanged", () => {
+    const first = processTimelineResponse({
+      ...baseTimelineInput,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 1_000 },
+        endCursor: { seq: 1_000 },
+        entries: [makeTimelineEntry(1_000, "latest conclusion")],
+      },
+    });
+    const second = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: first.tail,
+      currentHead: first.head,
+      currentCursor: first.cursor ?? undefined,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 1_000 },
+        endCursor: { seq: 1_000 },
+        entries: [makeTimelineEntry(1_000, "latest conclusion")],
+      },
+    });
+
+    expect(second.tail).toBe(first.tail);
+    expect(second.head).toBe(first.head);
+  });
+
   it("reconciles an optimistic user message during tail replacement", () => {
     const image = {
       id: "optimistic-image",
