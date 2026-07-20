@@ -172,7 +172,6 @@ function serializeAgent(agent: Agent): StoredAgent {
     attentionReason: agent.attentionReason ?? null,
     attentionTimestamp: agent.attentionTimestamp?.toISOString() ?? null,
     archivedAt: agent.archivedAt?.toISOString() ?? null,
-    pinnedAt: agent.pinnedAt?.toISOString() ?? null,
   };
   return {
     snapshot,

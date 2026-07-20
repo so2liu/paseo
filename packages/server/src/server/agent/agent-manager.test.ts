@@ -3064,53 +3064,6 @@ test("updateAgentMetadata bumps updatedAt for stored agents", async () => {
   expect(Date.parse(after!.updatedAt)).toBeGreaterThan(Date.parse(before!.updatedAt));
 });
 
-test("setAgentPinnedAt persists and broadcasts live and stored agent state", async () => {
-  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-pin-"));
-  const storage = new AgentStorage(join(workdir, "agents"), logger);
-  const manager = new AgentManager({
-    clients: { codex: new TestAgentClient() },
-    registry: storage,
-    logger,
-    idFactory: () => "00000000-0000-4000-8000-000000000139",
-  });
-  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
-    workspaceId: undefined,
-  });
-  const stateEvents: AgentManagerEvent[] = [];
-  const unsubscribe = manager.subscribe((event) => stateEvents.push(event), {
-    replayState: false,
-  });
-
-  const pinnedAt = "2026-07-20T12:00:00.000Z";
-  await manager.setAgentPinnedAt(snapshot.id, pinnedAt);
-  expect((await storage.get(snapshot.id))?.pinnedAt).toBe(pinnedAt);
-  expect(stateEvents.some((event) => event.type === "agent_state")).toBe(true);
-
-  await manager.closeAgent(snapshot.id);
-  const closedRecord = await storage.get(snapshot.id);
-  expect(closedRecord).not.toBeNull();
-  await storage.upsert({
-    ...closedRecord!,
-    requiresAttention: true,
-    attentionReason: "finished",
-    attentionTimestamp: "2026-07-20T12:30:00.000Z",
-  });
-  stateEvents.length = 0;
-  await manager.setAgentPinnedAt(snapshot.id, null);
-  expect((await storage.get(snapshot.id))?.pinnedAt).toBeNull();
-  expect(stateEvents).toHaveLength(1);
-  expect(stateEvents[0]).toMatchObject({
-    type: "agent_state",
-    agent: {
-      id: snapshot.id,
-      lifecycle: "closed",
-      attention: { requiresAttention: true, attentionReason: "finished" },
-    },
-  });
-
-  unsubscribe();
-});
-
 test("persists live mode, model, and thinking changes without an external snapshot subscriber", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-live-persist-"));
   const storagePath = join(workdir, "agents");

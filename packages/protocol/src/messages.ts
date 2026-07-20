@@ -710,8 +710,6 @@ export const AgentSnapshotPayloadSchema = z.object({
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
   attentionTimestamp: z.string().nullable().optional(),
   archivedAt: z.string().nullable().optional(),
-  // COMPAT(agentPinning): added in v0.2.0-beta.1, remove optional after 2027-01-20.
-  pinnedAt: z.string().nullable().optional(),
   providerUnavailable: z.boolean().optional(),
 });
 
@@ -731,8 +729,6 @@ export const AgentListItemPayloadSchema = z.object({
   updatedAt: z.string(),
   lastUserMessageAt: z.string().nullable(),
   archivedAt: z.string().nullable().optional(),
-  // COMPAT(agentPinning): added in v0.2.0-beta.1, remove optional after 2027-01-20.
-  pinnedAt: z.string().nullable().optional(),
   requiresAttention: z.boolean().optional(),
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
   attentionTimestamp: z.string().nullable().optional(),
@@ -840,13 +836,6 @@ export const WorkspaceTitleSetRequestSchema = z.object({
 export const WorkspacePinSetRequestSchema = z.object({
   type: z.literal("workspace.pin.set.request"),
   workspaceId: z.string(),
-  pinned: z.boolean(),
-  requestId: z.string(),
-});
-
-export const AgentPinSetRequestSchema = z.object({
-  type: z.literal("agent.pin.set.request"),
-  agentId: z.string(),
   pinned: z.boolean(),
   requestId: z.string(),
 });
@@ -1600,19 +1589,6 @@ export const WorkspacePinSetResponsePayloadSchema = z.object({
 export const WorkspacePinSetResponseSchema = z.object({
   type: z.literal("workspace.pin.set.response"),
   payload: WorkspacePinSetResponsePayloadSchema,
-});
-
-export const AgentPinSetResponsePayloadSchema = z.object({
-  requestId: z.string(),
-  agentId: z.string(),
-  accepted: z.boolean(),
-  pinnedAt: z.string().nullable(),
-  error: z.string().nullable(),
-});
-
-export const AgentPinSetResponseSchema = z.object({
-  type: z.literal("agent.pin.set.response"),
-  payload: AgentPinSetResponsePayloadSchema,
 });
 
 export const WorkspaceRecoveryStateSchema = z.discriminatedUnion("kind", [
@@ -2439,7 +2415,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProjectRemoveRequestSchema,
   WorkspaceTitleSetRequestSchema,
   WorkspacePinSetRequestSchema,
-  AgentPinSetRequestSchema,
   WorkspaceRecoveryInspectRequestSchema,
   WorkspaceRecoveryRestoreRequestSchema,
   SetVoiceModeMessageSchema,
@@ -2788,8 +2763,6 @@ export const ServerInfoStatusPayloadSchema = z
         providerSubagents: z.boolean().optional(),
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: z.boolean().optional(),
-        // COMPAT(agentPinning): added in v0.2.0-beta.1, remove gate after 2027-01-20.
-        agentPinning: z.boolean().optional(),
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: z.boolean().optional(),
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
@@ -5176,7 +5149,6 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectRemoveResponseSchema,
   WorkspaceTitleSetResponseSchema,
   WorkspacePinSetResponseSchema,
-  AgentPinSetResponseSchema,
   WorkspaceRecoveryInspectResponseSchema,
   WorkspaceRecoveryRestoreResponseSchema,
   WaitForFinishResponseMessageSchema,
@@ -5348,8 +5320,6 @@ export type WorkspaceTitleSetResponsePayload = z.infer<
 >;
 export type WorkspacePinSetResponse = z.infer<typeof WorkspacePinSetResponseSchema>;
 export type WorkspacePinSetResponsePayload = z.infer<typeof WorkspacePinSetResponsePayloadSchema>;
-export type AgentPinSetResponse = z.infer<typeof AgentPinSetResponseSchema>;
-export type AgentPinSetResponsePayload = z.infer<typeof AgentPinSetResponsePayloadSchema>;
 export type WorkspaceRecoveryState = z.infer<typeof WorkspaceRecoveryStateSchema>;
 export type WorkspaceRecoveryInspectResponse = z.infer<
   typeof WorkspaceRecoveryInspectResponseSchema
@@ -5492,7 +5462,6 @@ export type ProjectRenameRequest = z.infer<typeof ProjectRenameRequestSchema>;
 export type ProjectRemoveRequest = z.infer<typeof ProjectRemoveRequestSchema>;
 export type WorkspaceTitleSetRequest = z.infer<typeof WorkspaceTitleSetRequestSchema>;
 export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema>;
-export type AgentPinSetRequest = z.infer<typeof AgentPinSetRequestSchema>;
 export type WorkspaceRecoveryInspectRequest = z.infer<typeof WorkspaceRecoveryInspectRequestSchema>;
 export type WorkspaceRecoveryRestoreRequest = z.infer<typeof WorkspaceRecoveryRestoreRequestSchema>;
 export type SetAgentModeRequestMessage = z.infer<typeof SetAgentModeRequestMessageSchema>;

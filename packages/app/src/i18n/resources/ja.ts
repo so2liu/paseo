@@ -225,7 +225,6 @@ export const ja: TranslationResources = {
   agentList: {
     fallbackTitle: "新しいセッション",
     dateSections: {
-      pinned: "ピン留め",
       recent: "最近",
       today: "今日",
       yesterday: "昨日",
@@ -249,12 +248,6 @@ export const ja: TranslationResources = {
       hostOffline: "ホストオフライン",
       runningAgent: "このエージェントはまだ実行中です。アーカイブするとエージェントが停止します。",
       archive: "アーカイブ",
-    },
-    pin: {
-      pin: "セッションをピン留め",
-      unpin: "ピン留めを解除",
-      updateHost: "セッションをピン留めするにはホストを更新してください",
-      failed: "セッションのピン留めを更新できませんでした",
     },
   },
   message: {

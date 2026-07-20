@@ -225,7 +225,6 @@ export const ptBR: TranslationResources = {
   agentList: {
     fallbackTitle: "Nova sessão",
     dateSections: {
-      pinned: "Fixadas",
       recent: "Recentes",
       today: "Hoje",
       yesterday: "Ontem",
@@ -249,12 +248,6 @@ export const ptBR: TranslationResources = {
       hostOffline: "Host offline",
       runningAgent: "Este agente ainda está em execução. Arquivá-lo interromperá o agente.",
       archive: "Arquivar",
-    },
-    pin: {
-      pin: "Fixar sessão",
-      unpin: "Desafixar sessão",
-      updateHost: "Atualize o host para fixar sessões",
-      failed: "Não foi possível atualizar a sessão fixada",
     },
   },
   message: {

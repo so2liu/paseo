@@ -17,16 +17,10 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { formatTimeAgo } from "@/utils/time";
 import { type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { useSessionStore } from "@/stores/session-store";
-import { Archive, ChevronRight, Pin, PinOff } from "lucide-react-native";
+import { Archive, ChevronRight } from "lucide-react-native";
 import { getProviderIcon } from "@/components/provider-icons";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
-import { useToast } from "@/contexts/toast-context";
-import {
-  buildAgentListItems,
-  type AgentListItem,
-  type AgentListSectionKey,
-} from "@/components/agent-list-items";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -40,12 +34,52 @@ interface AgentListProps {
   showHostColumn?: boolean;
 }
 
-function formatDateSectionLabel(t: TFunction, section: AgentListSectionKey): string {
+type DateSectionKey = "today" | "yesterday" | "thisWeek" | "thisMonth" | "older";
+
+const DATE_SECTION_ORDER = [
+  "today",
+  "yesterday",
+  "thisWeek",
+  "thisMonth",
+  "older",
+] as const satisfies readonly DateSectionKey[];
+
+type FlatListItem =
+  | { type: "header"; key: string; section: DateSectionKey }
+  | { type: "agent"; key: string; agent: AggregatedAgent };
+
+function deriveDateSectionKey(lastActivityAt: Date): DateSectionKey {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+  const activityStart = new Date(
+    lastActivityAt.getFullYear(),
+    lastActivityAt.getMonth(),
+    lastActivityAt.getDate(),
+  );
+
+  if (activityStart.getTime() >= todayStart.getTime()) {
+    return "today";
+  }
+  if (activityStart.getTime() >= yesterdayStart.getTime()) {
+    return "yesterday";
+  }
+
+  const diffTime = todayStart.getTime() - activityStart.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays <= 7) {
+    return "thisWeek";
+  }
+  if (diffDays <= 30) {
+    return "thisMonth";
+  }
+  return "older";
+}
+
+function formatDateSectionLabel(t: TFunction, section: DateSectionKey): string {
   switch (section) {
     case "today":
       return t("agentList.dateSections.today");
-    case "pinned":
-      return t("agentList.dateSections.pinned");
     case "yesterday":
       return t("agentList.dateSections.yesterday");
     case "thisWeek":
@@ -242,13 +276,6 @@ function SessionRow({
           <Text style={sessionTitleStyle} numberOfLines={1}>
             {agent.title || t("agentList.fallbackTitle")}
           </Text>
-          {agent.pinnedAt ? (
-            <Pin
-              size={theme.iconSize.xs}
-              color={theme.colors.foregroundMuted}
-              testID={`agent-row-pinned-${agent.serverId}-${agent.id}`}
-            />
-          ) : null}
           <SessionRowBadges
             agent={agent}
             archivedIcon={archivedIcon}
@@ -329,101 +356,6 @@ function SessionRow({
   );
 }
 
-function resolveAgentActionTitle(input: {
-  agent: AggregatedAgent | null;
-  daemonUnavailable: boolean;
-  t: TFunction;
-}): string {
-  if (input.daemonUnavailable) return input.t("agentList.archiveSheet.hostOffline");
-  if (input.agent?.status === "running") return input.t("agentList.archiveSheet.runningAgent");
-  return input.agent?.title || input.t("agentList.fallbackTitle");
-}
-
-function resolveAgentPinLabel(input: {
-  agent: AggregatedAgent | null;
-  supportsPinning: boolean;
-  t: TFunction;
-}): string {
-  if (!input.supportsPinning) return input.t("agentList.pin.updateHost");
-  return input.agent?.pinnedAt ? input.t("agentList.pin.unpin") : input.t("agentList.pin.pin");
-}
-
-function AgentActionSheet({
-  agent,
-  daemonUnavailable,
-  supportsPinning,
-  isPinning,
-  onClose,
-  onTogglePin,
-  onArchive,
-}: {
-  agent: AggregatedAgent | null;
-  daemonUnavailable: boolean;
-  supportsPinning: boolean;
-  isPinning: boolean;
-  onClose: () => void;
-  onTogglePin: () => void;
-  onArchive: () => void;
-}) {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const pinDisabled = daemonUnavailable || !supportsPinning || Boolean(agent?.archivedAt);
-  const archiveDisabled = daemonUnavailable || Boolean(agent?.archivedAt);
-  const containerStyle = useMemo(
-    () => [styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, theme.spacing[6]) }],
-    [insets.bottom, theme.spacing],
-  );
-  const archiveTextStyle = useMemo(
-    () => [styles.sheetArchiveText, archiveDisabled && styles.sheetArchiveTextDisabled],
-    [archiveDisabled],
-  );
-  const title = resolveAgentActionTitle({ agent, daemonUnavailable, t });
-  const pinLabel = resolveAgentPinLabel({ agent, supportsPinning, t });
-
-  return (
-    <Modal visible={agent !== null} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={styles.sheetOverlay}>
-        <Pressable style={styles.sheetBackdrop} onPress={onClose} />
-        <View style={containerStyle}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>{title}</Text>
-          <Pressable
-            disabled={pinDisabled || isPinning}
-            style={[styles.sheetPinButton, pinDisabled && styles.sheetButtonDisabled]}
-            onPress={onTogglePin}
-            testID="agent-action-pin"
-          >
-            {agent?.pinnedAt ? (
-              <PinOff size={theme.iconSize.sm} color={theme.colors.foreground} />
-            ) : (
-              <Pin size={theme.iconSize.sm} color={theme.colors.foreground} />
-            )}
-            <Text style={styles.sheetPinText}>{pinLabel}</Text>
-          </Pressable>
-          <View style={styles.sheetButtonRow}>
-            <Pressable
-              style={[styles.sheetButton, styles.sheetCancelButton]}
-              onPress={onClose}
-              testID="agent-action-cancel"
-            >
-              <Text style={styles.sheetCancelText}>{t("common.actions.cancel")}</Text>
-            </Pressable>
-            <Pressable
-              disabled={archiveDisabled}
-              style={[styles.sheetButton, styles.sheetArchiveButton]}
-              onPress={onArchive}
-              testID="agent-action-archive"
-            >
-              <Text style={archiveTextStyle}>{t("agentList.archiveSheet.archive")}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 export function AgentList({
   agents,
   isRefreshing = false,
@@ -436,11 +368,10 @@ export function AgentList({
 }: AgentListProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [actionAgent, setActionAgent] = useState<AggregatedAgent | null>(null);
-  const [isPinning, setIsPinning] = useState(false);
   const isMobile = useIsCompactFormFactor();
   const { archiveAgent } = useArchiveAgent();
-  const toast = useToast();
 
   const actionClient = useSessionStore((state) =>
     actionAgent?.serverId ? (state.sessions[actionAgent.serverId]?.client ?? null) : null,
@@ -448,11 +379,6 @@ export function AgentList({
 
   const isActionSheetVisible = actionAgent !== null;
   const isActionDaemonUnavailable = Boolean(actionAgent?.serverId && !actionClient);
-  const supportsActionAgentPinning = useSessionStore((state) =>
-    actionAgent?.serverId
-      ? state.sessions[actionAgent.serverId]?.serverInfo?.features?.agentPinning === true
-      : false,
-  );
 
   const handleAgentPress = useCallback(
     (agent: AggregatedAgent) => {
@@ -473,9 +399,23 @@ export function AgentList({
     [isActionSheetVisible, onAgentSelect],
   );
 
-  const handleAgentLongPress = useCallback((agent: AggregatedAgent) => {
-    setActionAgent(agent);
-  }, []);
+  const handleAgentLongPress = useCallback(
+    (agent: AggregatedAgent) => {
+      const isRunning = agent.status === "running";
+      if (isRunning) {
+        setActionAgent(agent);
+        return;
+      }
+
+      const client = useSessionStore.getState().sessions[agent.serverId]?.client ?? null;
+      if (!client) {
+        setActionAgent(agent);
+        return;
+      }
+      void archiveAgent({ serverId: agent.serverId, agentId: agent.id }).catch(() => {});
+    },
+    [archiveAgent],
+  );
 
   const handleCloseActionSheet = useCallback(() => {
     setActionAgent(null);
@@ -490,26 +430,30 @@ export function AgentList({
     setActionAgent(null);
   }, [actionAgent, actionClient, archiveAgent]);
 
-  const handleToggleAgentPin = useCallback(async () => {
-    if (!actionAgent || !actionClient || !supportsActionAgentPinning || isPinning) {
-      return;
+  const flatItems = useMemo((): FlatListItem[] => {
+    const buckets = new Map<DateSectionKey, AggregatedAgent[]>();
+    for (const agent of agents) {
+      const section = deriveDateSectionKey(agent.lastActivityAt);
+      const existing = buckets.get(section) ?? [];
+      existing.push(agent);
+      buckets.set(section, existing);
     }
-    setIsPinning(true);
-    try {
-      await actionClient.setAgentPinned(actionAgent.id, !actionAgent.pinnedAt);
-      setActionAgent(null);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("agentList.pin.failed"));
-    } finally {
-      setIsPinning(false);
-    }
-  }, [actionAgent, actionClient, isPinning, supportsActionAgentPinning, t, toast]);
 
-  const flatItems = useMemo((): AgentListItem[] => {
-    return buildAgentListItems(agents);
+    const result: FlatListItem[] = [];
+    for (const section of DATE_SECTION_ORDER) {
+      const data = buckets.get(section);
+      if (!data || data.length === 0) {
+        continue;
+      }
+      result.push({ type: "header", key: `header:${section}`, section });
+      for (const agent of data) {
+        result.push({ type: "agent", key: `${agent.serverId}:${agent.id}`, agent });
+      }
+    }
+    return result;
   }, [agents]);
 
-  const renderItem: ListRenderItem<AgentListItem> = useCallback(
+  const renderItem: ListRenderItem<FlatListItem> = useCallback(
     ({ item }) => {
       if (item.type === "header") {
         return (
@@ -541,12 +485,21 @@ export function AgentList({
     ],
   );
 
-  const keyExtractor = useCallback((item: AgentListItem) => item.key, []);
+  const keyExtractor = useCallback((item: FlatListItem) => item.key, []);
 
   const refreshColors = useMemo(
     () => [theme.colors.foregroundMuted],
     [theme.colors.foregroundMuted],
   );
+  const sheetContainerStyle = useMemo(
+    () => [styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, theme.spacing[6]) }],
+    [insets.bottom, theme.spacing],
+  );
+  const sheetArchiveTextStyle = useMemo(
+    () => [styles.sheetArchiveText, isActionDaemonUnavailable && styles.sheetArchiveTextDisabled],
+    [isActionDaemonUnavailable],
+  );
+
   const refreshControl = useMemo(
     () =>
       onRefresh ? (
@@ -574,15 +527,41 @@ export function AgentList({
         refreshControl={refreshControl}
       />
 
-      <AgentActionSheet
-        agent={actionAgent}
-        daemonUnavailable={isActionDaemonUnavailable}
-        supportsPinning={supportsActionAgentPinning}
-        isPinning={isPinning}
-        onClose={handleCloseActionSheet}
-        onTogglePin={handleToggleAgentPin}
-        onArchive={handleArchiveAgent}
-      />
+      <Modal
+        visible={isActionSheetVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={handleCloseActionSheet}
+      >
+        <View style={styles.sheetOverlay}>
+          <Pressable style={styles.sheetBackdrop} onPress={handleCloseActionSheet} />
+          <View style={sheetContainerStyle}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>
+              {isActionDaemonUnavailable
+                ? t("agentList.archiveSheet.hostOffline")
+                : t("agentList.archiveSheet.runningAgent")}
+            </Text>
+            <View style={styles.sheetButtonRow}>
+              <Pressable
+                style={[styles.sheetButton, styles.sheetCancelButton]}
+                onPress={handleCloseActionSheet}
+                testID="agent-action-cancel"
+              >
+                <Text style={styles.sheetCancelText}>{t("common.actions.cancel")}</Text>
+              </Pressable>
+              <Pressable
+                disabled={isActionDaemonUnavailable}
+                style={[styles.sheetButton, styles.sheetArchiveButton]}
+                onPress={handleArchiveAgent}
+                testID="agent-action-archive"
+              >
+                <Text style={sheetArchiveTextStyle}>{t("agentList.archiveSheet.archive")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -782,23 +761,6 @@ const styles = StyleSheet.create((theme) => ({
   sheetButtonRow: {
     flexDirection: "row",
     gap: theme.spacing[3],
-  },
-  sheetPinButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
-    paddingVertical: theme.spacing[4],
-    backgroundColor: theme.colors.surface3,
-  },
-  sheetPinText: {
-    color: theme.colors.foreground,
-    fontWeight: theme.fontWeight.semibold,
-    fontSize: theme.fontSize.base,
-  },
-  sheetButtonDisabled: {
-    opacity: 0.45,
   },
   sheetButton: {
     flex: 1,

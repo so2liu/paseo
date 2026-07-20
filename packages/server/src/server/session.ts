@@ -1527,7 +1527,6 @@ export class Session {
       }
     }
     payload.archivedAt = storedRecord?.archivedAt ?? null;
-    payload.pinnedAt = storedRecord?.pinnedAt ?? null;
     return payload;
   }
 
@@ -1738,8 +1737,6 @@ export class Session {
     switch (msg.type) {
       case "agent.detach.request":
         return this.handleDetachAgentRequest(msg.agentId, msg.requestId);
-      case "agent.pin.set.request":
-        return this.handleAgentPinSetRequest(msg.agentId, msg.pinned, msg.requestId);
       default:
         return undefined;
     }
@@ -2443,33 +2440,6 @@ export class Session {
           error: getErrorMessageOr(error, "Failed to update agent"),
         },
       });
-    }
-  }
-
-  private async handleAgentPinSetRequest(
-    agentId: string,
-    pinned: boolean,
-    requestId: string,
-  ): Promise<void> {
-    const logContext = { agentId, pinned, requestId };
-    this.sessionLogger.info(logContext, "session: agent.pin.set.request");
-    const emitResponse = (accepted: boolean, pinnedAt: string | null, error: string | null) => {
-      this.emit({
-        type: "agent.pin.set.response",
-        payload: { requestId, agentId, accepted, pinnedAt, error },
-      });
-    };
-
-    try {
-      const nextPinnedAt = pinned ? new Date().toISOString() : null;
-      await this.agentManager.setAgentPinnedAt(agentId, nextPinnedAt);
-      emitResponse(true, nextPinnedAt, null);
-    } catch (error) {
-      this.sessionLogger.error(
-        { ...logContext, err: error },
-        "session: agent.pin.set.request error",
-      );
-      emitResponse(false, null, getErrorMessageOr(error, "Failed to pin agent"));
     }
   }
 

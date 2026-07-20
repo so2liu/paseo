@@ -65,7 +65,6 @@ const STORED_AGENT_SCHEMA = z.object({
   attentionTimestamp: z.string().nullable().optional(),
   internal: z.boolean().optional(),
   archivedAt: z.string().nullable().optional(),
-  pinnedAt: z.string().nullable().optional(),
   owner: AgentOwnerSchema.optional(),
 });
 
@@ -220,27 +219,13 @@ export class AgentStorage {
       internal: hasInternalOverride ? options?.internal : (agent.internal ?? existing?.internal),
     });
 
-    // Preserve server-owned metadata that is not part of ManagedAgent across
-    // ordinary runtime snapshot flushes.
+    // Preserve soft-delete/archive status across snapshot flushes.
+    // `archivedAt` is not part of the ManagedAgent snapshot, so a naive projection
+    // would wipe it during normal persistence (including on daemon restart).
     if (existing && existing.archivedAt !== undefined) {
       record.archivedAt = existing.archivedAt;
     }
-    if (existing && existing.pinnedAt !== undefined) {
-      record.pinnedAt = existing.pinnedAt;
-    }
     await this.upsert(record);
-  }
-
-  async setPinnedAt(agentId: string, pinnedAt: string | null): Promise<StoredAgentRecord> {
-    await this.load();
-    await this.waitForPendingWrite(agentId);
-    const record = await this.get(agentId);
-    if (!record) {
-      throw new Error(`Agent ${agentId} not found`);
-    }
-    const next = { ...record, pinnedAt };
-    await this.upsert(next);
-    return next;
   }
 
   async setTitle(agentId: string, title: string): Promise<void> {

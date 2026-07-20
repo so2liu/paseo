@@ -222,7 +222,6 @@ export const zhCN: TranslationResources = {
   agentList: {
     fallbackTitle: "新会话",
     dateSections: {
-      pinned: "已置顶",
       recent: "最近",
       today: "今天",
       yesterday: "昨天",
@@ -246,12 +245,6 @@ export const zhCN: TranslationResources = {
       hostOffline: "Host 离线",
       runningAgent: "此 Agent 仍在运行。归档会停止该 Agent。",
       archive: "归档",
-    },
-    pin: {
-      pin: "置顶会话",
-      unpin: "取消置顶",
-      updateHost: "请更新 Host 以置顶会话",
-      failed: "更新会话置顶失败",
     },
   },
   message: {

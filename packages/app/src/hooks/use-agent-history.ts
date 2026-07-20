@@ -6,11 +6,9 @@ import type {
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { useShallow } from "zustand/shallow";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
 import { buildAgentDirectoryState } from "@/utils/agent-directory-sync";
-import { useSessionStore } from "@/stores/session-store";
 import { agentHistoryQueryKey, allAgentHistoryQueryKey } from "./agent-history-query-key";
 
 const AGENT_HISTORY_PAGE_LIMIT = 200;
@@ -84,7 +82,6 @@ export async function fetchAgentHistoryPage(input: {
       attentionReason: agent.attentionReason,
       attentionTimestamp: agent.attentionTimestamp ?? null,
       archivedAt: agent.archivedAt ?? null,
-      pinnedAt: agent.pinnedAt ?? null,
       createdAt: agent.createdAt,
       labels: agent.labels,
       projectPlacement: agent.projectPlacement,
@@ -189,19 +186,6 @@ export function useAgentHistory(options: {
     return hosts;
   }, [daemons, runtime, runtimeVersion, serverId]);
   const targetServerIds = useMemo(() => targetHosts.map((host) => host.serverId), [targetHosts]);
-  const livePinnedAtByAgentKey = useSessionStore(
-    useShallow((state) => {
-      const result: Record<string, string | null> = {};
-      for (const targetServerId of targetServerIds) {
-        const agents = state.sessions[targetServerId]?.agents;
-        if (!agents) continue;
-        for (const agent of agents.values()) {
-          result[`${targetServerId}:${agent.id}`] = agent.pinnedAt?.toISOString() ?? null;
-        }
-      }
-      return result;
-    }),
-  );
   const queryKey = useMemo(
     () => (serverId ? agentHistoryQueryKey(serverId) : allAgentHistoryQueryKey(targetServerIds)),
     [serverId, targetServerIds],
@@ -260,18 +244,13 @@ export function useAgentHistory(options: {
 
   const agents = useMemo(() => {
     const historyAgents = (data?.pages ?? []).flatMap((page) => page.agents);
-    const labelledAgents = historyAgents.map((agent) => {
-      const agentKey = `${agent.serverId}:${agent.id}`;
-      const livePinnedAt = livePinnedAtByAgentKey[agentKey];
-      return Object.assign({}, agent, {
+    const labelledAgents = historyAgents.map((agent) =>
+      Object.assign({}, agent, {
         serverLabel: serverLabelById.get(agent.serverId) ?? agent.serverLabel,
-        ...(Object.hasOwn(livePinnedAtByAgentKey, agentKey)
-          ? { pinnedAt: livePinnedAt ? new Date(livePinnedAt) : null }
-          : {}),
-      });
-    });
+      }),
+    );
     return sortByLatestActivity(labelledAgents);
-  }, [data?.pages, livePinnedAtByAgentKey, serverLabelById]);
+  }, [data?.pages, serverLabelById]);
   const isInitialLoad = isLoading && agents.length === 0;
   const isRevalidating = isFetching && !isFetchingNextPage && agents.length > 0;
 

@@ -221,7 +221,6 @@ export const en = {
   agentList: {
     fallbackTitle: "New session",
     dateSections: {
-      pinned: "Pinned",
       recent: "Recent",
       today: "Today",
       yesterday: "Yesterday",
@@ -245,12 +244,6 @@ export const en = {
       hostOffline: "Host offline",
       runningAgent: "This agent is still running. Archiving it will stop the agent.",
       archive: "Archive",
-    },
-    pin: {
-      pin: "Pin session",
-      unpin: "Unpin session",
-      updateHost: "Update the host to pin sessions",
-      failed: "Failed to update session pin",
     },
   },
   message: {

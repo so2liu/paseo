@@ -30,7 +30,6 @@ function createSnapshot(
     pendingPermissions: input.pendingPermissions ?? [],
     persistence: input.persistence ?? null,
     title: input.title ?? null,
-    pinnedAt: input.pinnedAt,
     labels: (input.labels ?? {}) as AgentSnapshotPayload["labels"],
   };
 }
@@ -71,14 +70,5 @@ describe("normalizeAgentSnapshot", () => {
     expect(missing.parentAgentId).toBeNull();
     expect(empty.parentAgentId).toBeNull();
     expect(nonString.parentAgentId).toBeNull();
-  });
-
-  it("normalizes the daemon-owned pin timestamp", () => {
-    const pinnedAt = "2026-07-20T12:00:00.000Z";
-    const pinned = normalizeAgentSnapshot(createSnapshot({ pinnedAt }), "server-1");
-    const unpinned = normalizeAgentSnapshot(createSnapshot({ pinnedAt: null }), "server-1");
-
-    expect(pinned.pinnedAt?.toISOString()).toBe(pinnedAt);
-    expect(unpinned.pinnedAt).toBeNull();
   });
 });

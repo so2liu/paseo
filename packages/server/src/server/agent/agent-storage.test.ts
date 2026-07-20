@@ -296,25 +296,6 @@ describe("AgentStorage", () => {
     expect(recordAfterSnapshot?.archivedAt).toBe(archivedAt);
   });
 
-  test("persists pin state across runtime snapshot flushes", async () => {
-    const agentId = "agent-pinned";
-    await storage.applySnapshot(createManagedAgent({ id: agentId, lifecycle: "idle" }));
-
-    const pinnedAt = "2026-07-20T12:00:00.000Z";
-    await storage.setPinnedAt(agentId, pinnedAt);
-    await storage.applySnapshot(
-      createManagedAgent({
-        id: agentId,
-        lifecycle: "running",
-        updatedAt: new Date("2026-07-20T12:01:00.000Z"),
-      }),
-    );
-
-    expect((await storage.get(agentId))?.pinnedAt).toBe(pinnedAt);
-    await storage.setPinnedAt(agentId, null);
-    expect((await storage.get(agentId))?.pinnedAt).toBeNull();
-  });
-
   test("stores titles independently of snapshots", async () => {
     await storage.applySnapshot(
       createManagedAgent({
