@@ -26,6 +26,18 @@ describe("resolveKeyboardShift", () => {
     ).toBe(0);
   });
 
+  it("keeps iOS shifted through a transient zero progress sample", () => {
+    expect(
+      resolveKeyboardShift({
+        rawKeyboardHeight: 320,
+        keyboardProgress: 0,
+        bottomInset: 24,
+        isIos: true,
+        iosMinHeight: 120,
+      }),
+    ).toBe(296);
+  });
+
   it("still ignores small iOS accessory bar reports", () => {
     expect(
       resolveKeyboardShift({
