@@ -2496,6 +2496,25 @@ export class DaemonClient {
     return { pinnedAt: payload.pinnedAt };
   }
 
+  async setAgentPinned(
+    agentId: string,
+    pinned: boolean,
+    requestId?: string,
+  ): Promise<{ pinnedAt: string | null }> {
+    const payload = await this.sendNamespacedCorrelatedSessionRequest<"agent.pin.set.response">({
+      requestId,
+      message: {
+        type: "agent.pin.set.request",
+        agentId,
+        pinned,
+      },
+    });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "setAgentPinned rejected");
+    }
+    return { pinnedAt: payload.pinnedAt };
+  }
+
   async inspectWorkspaceRecovery(
     workspaceId: string,
     requestId?: string,

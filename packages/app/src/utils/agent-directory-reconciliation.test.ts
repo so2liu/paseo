@@ -60,6 +60,7 @@ function replica(id: string, status: Agent["status"]): Agent {
     lastUserMessageAt: null,
     attentionTimestamp: null,
     archivedAt: null,
+    pinnedAt: null,
     parentAgentId: null,
   };
 }

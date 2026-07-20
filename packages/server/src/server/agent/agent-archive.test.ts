@@ -60,6 +60,15 @@ test("clears persisted attention when archiving", () => {
   });
 });
 
+test("clears the session pin when archiving", () => {
+  const archived = buildArchivedAgentRecord(
+    { ...BASE_RECORD, pinnedAt: "2026-07-20T12:00:00.000Z" },
+    { archivedAt: "2026-07-20T13:00:00.000Z" },
+  );
+
+  expect(archived.pinnedAt).toBeNull();
+});
+
 test("can stamp updatedAt to the archive timestamp", () => {
   const archived = buildArchivedAgentRecord(BASE_RECORD, {
     archivedAt: "2025-01-03T00:00:00.000Z",

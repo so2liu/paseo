@@ -138,6 +138,23 @@ const SourceSchema = z.object({
     );
   });
 
+  it("accepts an agent pin response", () => {
+    const result = GeneratedWSOutboundMessageSchema.safeParse({
+      type: "session",
+      message: {
+        type: "agent.pin.set.response",
+        payload: {
+          requestId: "pin-agent",
+          agentId: "agent-1",
+          accepted: true,
+          pinnedAt: "2026-07-20T12:00:00.000Z",
+          error: null,
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("emits runtime imports with .js extensions", async () => {
     const generated = await readFile(generatedWSOutboundPath, "utf8");
     expect(generated).toContain('from "../../validation/ws-outbound-schema-metadata.js"');

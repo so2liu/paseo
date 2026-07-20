@@ -225,6 +225,7 @@ export const es: TranslationResources = {
   agentList: {
     fallbackTitle: "Nueva sesión",
     dateSections: {
+      pinned: "Fijadas",
       recent: "Reciente",
       today: "Hoy",
       yesterday: "Ayer",
@@ -248,6 +249,12 @@ export const es: TranslationResources = {
       hostOffline: "Hostfuera de línea",
       runningAgent: "Este agente todavía está ejecutándose. Archivarlo detendrá al agente.",
       archive: "Archivo",
+    },
+    pin: {
+      pin: "Fijar sesión",
+      unpin: "Desfijar sesión",
+      updateHost: "Actualiza el host para fijar sesiones",
+      failed: "No se pudo actualizar la sesión fijada",
     },
   },
   message: {

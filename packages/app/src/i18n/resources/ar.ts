@@ -222,6 +222,7 @@ export const ar: TranslationResources = {
   agentList: {
     fallbackTitle: "جلسة جديدة",
     dateSections: {
+      pinned: "المثبّتة",
       recent: "مؤخرًا",
       today: "اليوم",
       yesterday: "أمس",
@@ -245,6 +246,12 @@ export const ar: TranslationResources = {
       hostOffline: "Host غير متصل",
       runningAgent: "هذا الوكيل لا يزال قيد التشغيل. ستؤدي أرشفته إلى إيقاف الوكيل.",
       archive: "أرشيف",
+    },
+    pin: {
+      pin: "تثبيت الجلسة",
+      unpin: "إلغاء تثبيت الجلسة",
+      updateHost: "حدّث المضيف لتثبيت الجلسات",
+      failed: "تعذّر تحديث تثبيت الجلسة",
     },
   },
   message: {

@@ -1527,7 +1527,7 @@ export class AgentManager {
     if (this.agents.has(record.id)) {
       this.notifyAgentState(record.id);
     } else if (!archivedRecord.internal) {
-      this.dispatchArchivedStoredAgent(archivedRecord);
+      this.dispatchStoredAgentState(archivedRecord);
     }
 
     await this.fireAgentArchived(record.id);
@@ -1547,7 +1547,7 @@ export class AgentManager {
     }
   }
 
-  private dispatchArchivedStoredAgent(record: StoredAgentRecord): void {
+  private dispatchStoredAgentState(record: StoredAgentRecord): void {
     const updatedAt = new Date(record.updatedAt);
     this.dispatch({
       type: "agent_state",
@@ -1580,7 +1580,14 @@ export class AgentManager {
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
-        attention: { requiresAttention: false },
+        attention:
+          record.requiresAttention && record.attentionReason && record.attentionTimestamp
+            ? {
+                requiresAttention: true,
+                attentionReason: record.attentionReason,
+                attentionTimestamp: new Date(record.attentionTimestamp),
+              }
+            : { requiresAttention: false },
         internal: record.internal,
         labels: record.labels,
       },
@@ -1767,6 +1774,18 @@ export class AgentManager {
     this.emitState(agent);
   }
 
+  async setAgentPinnedAt(agentId: string, pinnedAt: string | null): Promise<StoredAgentRecord> {
+    const registry = this.requireRegistry();
+    const record = await registry.setPinnedAt(agentId, pinnedAt);
+    const liveAgent = this.getAgent(agentId);
+    if (liveAgent) {
+      this.emitState(liveAgent, { persist: false });
+    } else if (!record.internal) {
+      this.dispatchStoredAgentState(record);
+    }
+    return record;
+  }
+
   async clearAgentAttention(agentId: string): Promise<void> {
     const agent = this.requireAgent(agentId);
     if (agent.attention.requiresAttention) {
@@ -1800,7 +1819,7 @@ export class AgentManager {
     } else {
       this.discardRetainedAgentState(agentId);
       if (!nextRecord.internal) {
-        this.dispatchArchivedStoredAgent(nextRecord);
+        this.dispatchStoredAgentState(nextRecord);
       }
     }
 

@@ -226,6 +226,7 @@ export const fr: TranslationResources = {
   agentList: {
     fallbackTitle: "Nouvelle séance",
     dateSections: {
+      pinned: "Épinglées",
       recent: "Récent",
       today: "Aujourd'hui",
       yesterday: "Hier",
@@ -249,6 +250,12 @@ export const fr: TranslationResources = {
       hostOffline: "Hosthors ligne",
       runningAgent: "Cet agent est toujours en cours d'exécution. L’archiver arrêtera l’agent.",
       archive: "Archive",
+    },
+    pin: {
+      pin: "Épingler la session",
+      unpin: "Désépingler la session",
+      updateHost: "Mettez à jour l’hôte pour épingler des sessions",
+      failed: "Impossible de modifier l’épinglage de la session",
     },
   },
   message: {

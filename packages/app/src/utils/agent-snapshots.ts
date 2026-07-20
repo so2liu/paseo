@@ -26,6 +26,7 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     ? new Date(snapshot.attentionTimestamp)
     : null;
   const archivedAt = snapshot.archivedAt ? new Date(snapshot.archivedAt) : null;
+  const pinnedAt = snapshot.pinnedAt ? new Date(snapshot.pinnedAt) : null;
   const parentAgentId = getParentAgentIdFromLabels(snapshot.labels);
 
   return {
@@ -55,6 +56,7 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     attentionReason: snapshot.attentionReason ?? null,
     attentionTimestamp,
     archivedAt,
+    pinnedAt,
     parentAgentId,
     labels: snapshot.labels,
   };

@@ -224,6 +224,7 @@ export const ru: TranslationResources = {
   agentList: {
     fallbackTitle: "Новая сессия",
     dateSections: {
+      pinned: "Закреплённые",
       recent: "Недавний",
       today: "Сегодня",
       yesterday: "Вчера",
@@ -247,6 +248,12 @@ export const ru: TranslationResources = {
       hostOffline: "Host оффлайн",
       runningAgent: "Этот агент все еще работает. Архивирование остановит агент.",
       archive: "Архив",
+    },
+    pin: {
+      pin: "Закрепить сессию",
+      unpin: "Открепить сессию",
+      updateHost: "Обновите хост, чтобы закреплять сессии",
+      failed: "Не удалось изменить закрепление сессии",
     },
   },
   message: {
