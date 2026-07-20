@@ -647,6 +647,7 @@ function ControlledAgentControls({
           modelSelectorProviders={effectiveModelSelectorProviders}
           modelDisabled={modelDisabled}
           comboboxThinkingOptions={comboboxThinkingOptions}
+          displayThinking={displayThinking}
           openSelector={openSelector}
           ProviderIcon={ProviderIcon}
           activeSheet={activeSheet}
@@ -893,6 +894,7 @@ interface SheetAgentControlsContentProps {
   modelSelectorProviders: ProviderSelectorProvider[];
   modelDisabled: boolean;
   comboboxThinkingOptions: ComboboxOption[];
+  displayThinking: string;
   openSelector: AgentControlSelector | null;
   ProviderIcon: ReturnType<typeof getProviderIcon> | null;
   activeSheet: ActiveSheet;
@@ -932,6 +934,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     modelSelectorProviders,
     modelDisabled,
     comboboxThinkingOptions,
+    displayThinking,
     openSelector,
     ProviderIcon,
     activeSheet,
@@ -988,7 +991,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   );
 
   const thinkingButtonStyle = makeBadgePressableStyle(
-    styles.modeIconBadge,
+    styles.modeBadge,
     styles.disabledBadge,
     disabled || !canSelectThinking,
     activeSheet === "thinking",
@@ -1030,10 +1033,13 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
           disabled={disabled || !canSelectThinking}
           style={thinkingButtonStyle}
           accessibilityRole="button"
-          accessibilityLabel={t("agentControls.thinking.select")}
+          accessibilityLabel={t("agentControls.thinking.selectWithValue", {
+            value: displayThinking,
+          })}
           testID="agent-controls-thinking"
         >
           <Brain size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+          <Text style={styles.modeBadgeText}>{displayThinking}</Text>
         </Pressable>
       ) : null}
 
