@@ -83,6 +83,7 @@ import {
 } from "@getpaseo/protocol/browser-automation/capabilities";
 import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import type { DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
+import { AgentMessageQueueService } from "./agent/message-queue-service.js";
 
 const WS_CLOSE_DAEMON_AUTH_FAILED = 4401;
 
@@ -456,6 +457,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
   private readonly agentManager: AgentManager;
   private readonly agentStorage: AgentStorage;
+  private readonly agentMessageQueue: AgentMessageQueueService;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly chatService: FileBackedChatService;
@@ -561,6 +563,12 @@ export class VoiceAssistantWebSocketServer {
     this.hubRelationships = hubRelationships ?? null;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
+    this.agentMessageQueue = new AgentMessageQueueService(
+      paseoHome,
+      agentManager,
+      agentStorage,
+      this.logger,
+    );
     this.projectRegistry = projectRegistry ?? createNoopProjectRegistry();
     this.workspaceRegistry = workspaceRegistry ?? createNoopWorkspaceRegistry();
     const requiredServices = requireWebSocketServices({
@@ -1162,6 +1170,7 @@ export class VoiceAssistantWebSocketServer {
       worktreesRoot: this.worktreesRoot,
       agentManager: this.agentManager,
       agentStorage: this.agentStorage,
+      agentMessageQueue: this.agentMessageQueue,
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
       chatService: this.chatService,
@@ -1350,6 +1359,8 @@ export class VoiceAssistantWebSocketServer {
       desktopManaged: this.daemonRuntimeConfig?.desktopManaged === true,
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
+        // COMPAT(agentMessageQueue): added in v0.1.X, remove gate after 2027-01-20.
+        agentMessageQueue: true,
         // COMPAT(providersSnapshot): keep optional until all clients rely on snapshot flow.
         providersSnapshot: true,
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old

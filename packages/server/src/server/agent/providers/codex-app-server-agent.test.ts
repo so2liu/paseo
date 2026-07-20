@@ -66,6 +66,7 @@ interface CodexClientLike {
 type CodexTestSession = AgentSession & {
   connected: boolean;
   currentThreadId: string | null;
+  currentTurnId: string | null;
   activeForegroundTurnId: string | null;
   client: CodexClientLike | null;
 };
@@ -2662,6 +2663,32 @@ describe("Codex app-server provider", () => {
         turnId: "autonomous-turn",
       },
     });
+  });
+
+  test("steers the active Codex turn without interrupting it", async () => {
+    const session = createSession();
+    const requests: Array<{ method: string; params: unknown }> = [];
+    session.currentTurnId = "active-turn";
+    session.client = {
+      request: async (method, params) => {
+        requests.push({ method, params });
+        return {};
+      },
+    };
+
+    await session.steer?.("Use the existing implementation instead.");
+
+    expect(requests).toContainEqual({
+      method: "turn/steer",
+      params: {
+        threadId: "test-thread",
+        expectedTurnId: "active-turn",
+        input: [
+          { type: "text", text: "Use the existing implementation instead.", text_elements: [] },
+        ],
+      },
+    });
+    expect(requests.some((request) => request.method === "turn/interrupt")).toBe(false);
   });
 
   test("never replaces the root identity with an early child thread start", () => {

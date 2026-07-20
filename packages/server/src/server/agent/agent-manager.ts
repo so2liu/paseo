@@ -763,6 +763,17 @@ export class AgentManager {
     );
   }
 
+  async steerAgent(agentId: string, prompt: AgentPromptInput): Promise<void> {
+    const agent = this.requireSessionAgent(agentId);
+    if (!this.hasInFlightRun(agentId)) {
+      throw new Error(`Agent ${agentId} has no active run to steer`);
+    }
+    if (!agent.session.steer) {
+      throw new Error(`Provider ${agent.provider} does not support steering`);
+    }
+    await agent.session.steer(prompt);
+  }
+
   subscribe(callback: AgentSubscriber, options?: SubscribeOptions): () => void {
     const targetAgentId =
       options?.agentId == null ? null : validateAgentId(options.agentId, "subscribe");

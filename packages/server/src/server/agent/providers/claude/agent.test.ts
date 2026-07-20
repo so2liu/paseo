@@ -659,6 +659,34 @@ describe("ClaudeAgentSession features", () => {
     await session.close();
   });
 
+  test("steers an active Claude turn with a priority-now user message", async () => {
+    const { queryFactory } = createQueryMock();
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+    });
+    const session = await client.createSession({ provider: "claude", cwd: process.cwd() });
+
+    await session.startTurn("initial task");
+    const prompt = queryFactory.mock.calls[0]?.[0].prompt;
+    if (typeof prompt === "string") throw new Error("Expected streaming Claude input");
+    const iterator = prompt[Symbol.asyncIterator]();
+    await iterator.next();
+
+    await session.steer?.("change direction");
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: {
+        type: "user",
+        priority: "now",
+        message: { role: "user", content: [{ type: "text", text: "change direction" }] },
+      },
+    });
+    await session.close();
+  });
+
   test("maps Ultracode to xhigh effort and Claude ultracode settings", async () => {
     const { queryFactory } = createQueryMock();
     const client = new ClaudeAgentClient({
