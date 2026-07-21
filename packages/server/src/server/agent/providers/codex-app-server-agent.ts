@@ -3841,6 +3841,25 @@ export class CodexAppServerAgentSession implements AgentSession {
     return { turnId };
   }
 
+  async steer(prompt: AgentPromptInput): Promise<void> {
+    if (!this.currentThreadId || !this.currentTurnId) {
+      throw new Error("Codex has no active steerable turn");
+    }
+    await this.connect();
+    if (!this.client) {
+      throw new Error("Codex client not initialized");
+    }
+    await this.client.request(
+      "turn/steer",
+      {
+        threadId: this.currentThreadId,
+        expectedTurnId: this.currentTurnId,
+        input: await this.buildUserInput(prompt),
+      },
+      TURN_START_TIMEOUT_MS,
+    );
+  }
+
   private rememberCodexUserMessageTurn(messageId: string | null | undefined): boolean {
     if (typeof messageId !== "string" || messageId.length === 0) {
       return false;

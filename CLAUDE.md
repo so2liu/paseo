@@ -4,6 +4,16 @@ Paseo is a mobile app for monitoring and controlling your local AI coding agents
 
 **Supported agents:** Claude Code, Codex, GitHub Copilot, OpenCode, and Pi.
 
+## Fork ownership, upstream sync, and deployment
+
+This repository is our fork of `getpaseo/paseo`, customized according to the owner's preferences. We build and deploy this customized fork on the owner's Mac and to the owner's iPhone for everyday development use.
+
+- Treat `so2liu/paseo` (`origin`) as our fork and `getpaseo/paseo` (`upstream`) as the upstream project.
+- When the owner asks to pull, sync, or update from upstream, handle the Git operations for them and update from the latest upstream beta release tag, not from an arbitrary `upstream/main` commit. Fetch upstream tags and verify which GitHub prerelease is newest before choosing the base.
+- Preserve our custom features and behavior when updating. Rebase, merge, or port the custom commits onto the selected beta as appropriate, and verify that the resulting tree still contains the intended customizations.
+- When both our fork and upstream contain a fix for the same bug, prefer the upstream implementation. Remove or adapt our redundant fix only after confirming that the upstream fix covers the same behavior; retain unrelated custom behavior.
+- Every daemon deployment and every iOS build or installation for the owner's iPhone must be produced from the current customized fork state. Never deploy an unmodified upstream checkout, upstream tag, or upstream prebuilt artifact in place of our customized version.
+
 ## Repository map
 
 This is an npm workspace monorepo:
@@ -36,6 +46,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/floating-panels.md](docs/floating-panels.md)                 | Anchored popovers — Portal/Modal escape for Android, lifecycle gates, keyboard-shared-value, status-bar offset, the flash      |
 | [docs/expo-router.md](docs/expo-router.md)                         | Expo Router route ownership, startup restore, and native blank-screen gotchas                                                  |
 | [docs/file-icons.md](docs/file-icons.md)                           | Material icon theme integration for the file explorer                                                                          |
+| [docs/file-preview.md](docs/file-preview.md)                       | File preview render modes, Mermaid bundle, HTML sandbox, and security boundaries                                               |
 | [docs/providers.md](docs/providers.md)                             | Adding a new agent provider end-to-end                                                                                         |
 | [docs/forge-providers.md](docs/forge-providers.md)                 | Adding a git forge: registry/manifest, drop-in checklist, self-host/GHES, the two facts tiers                                  |
 | [docs/custom-providers.md](docs/custom-providers.md)               | Custom provider config: Z.AI, Alibaba/Qwen, ACP agents, profiles, custom binaries                                              |

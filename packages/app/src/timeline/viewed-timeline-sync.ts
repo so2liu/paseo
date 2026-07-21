@@ -214,7 +214,7 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
     const nextRequest =
       request ??
       (ports.hasAuthoritativeHistory(agentId)
-        ? planResumeTimelineSync({ cursor })
+        ? planResumeTimelineSync()
         : planInitialAgentTimelineSync({ cursor, hasAuthoritativeHistory: false }));
     void fetchUntilCurrent(agentId, generation, nextRequest);
   };

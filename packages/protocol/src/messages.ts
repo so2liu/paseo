@@ -1117,6 +1117,50 @@ export const SendAgentMessageRequestSchema = z.object({
   attachments: AgentAttachmentsSchema,
 });
 
+export const AgentMessageQueueItemSchema = z.object({
+  id: z.string(),
+  agentId: z.string(),
+  text: z.string(),
+  images: z.array(ImageAttachmentSchema).optional(),
+  attachments: z.array(AgentAttachmentSchema).optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type AgentMessageQueueItem = z.infer<typeof AgentMessageQueueItemSchema>;
+
+export const AgentMessageQueueGetRequestSchema = z.object({
+  type: z.literal("agent.message_queue.get.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+});
+
+export const AgentMessageQueueEnqueueRequestSchema = z.object({
+  type: z.literal("agent.message_queue.enqueue.request"),
+  requestId: z.string(),
+  item: AgentMessageQueueItemSchema.pick({
+    id: true,
+    agentId: true,
+    text: true,
+    images: true,
+    attachments: true,
+  }),
+});
+
+export const AgentMessageQueueRemoveRequestSchema = z.object({
+  type: z.literal("agent.message_queue.remove.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  messageId: z.string(),
+});
+
+export const AgentMessageQueueSteerRequestSchema = z.object({
+  type: z.literal("agent.message_queue.steer.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  messageId: z.string(),
+});
+
 export const WaitForFinishRequestSchema = z.object({
   type: z.literal("wait_for_finish_request"),
   requestId: z.string(),
@@ -2375,6 +2419,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceRecoveryRestoreRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
+  AgentMessageQueueGetRequestSchema,
+  AgentMessageQueueEnqueueRequestSchema,
+  AgentMessageQueueRemoveRequestSchema,
+  AgentMessageQueueSteerRequestSchema,
   WaitForFinishRequestSchema,
   DaemonGetStatusRequestSchema,
   DaemonGetPairingOfferRequestSchema,
@@ -2705,6 +2753,8 @@ export const ServerInfoStatusPayloadSchema = z
         daemonDiagnostics: z.boolean().optional(),
         // COMPAT(daemonSelfUpdate): added in v0.1.93, remove gate after 2026-12-13.
         daemonSelfUpdate: z.boolean().optional(),
+        // COMPAT(pairingOffer): added in v0.2.0, remove gate after 2027-01-19.
+        pairingOffer: z.boolean().optional(),
         // COMPAT(agentForkContext): added in v0.1.102, remove gate after 2026-12-28.
         agentForkContext: z.boolean().optional(),
         // COMPAT(agentForkContextCursor): added in v0.1.108, remove gate after 2027-01-14.
@@ -2735,6 +2785,8 @@ export const ServerInfoStatusPayloadSchema = z
         selectiveAgentTimeline: z.boolean().optional(),
         // COMPAT(stableProjectIdentity): added in v0.1.109, remove gate after 2027-01-15.
         stableProjectIdentity: z.boolean().optional(),
+        // COMPAT(agentMessageQueue): added in v0.1.X, remove gate after 2027-01-20.
+        agentMessageQueue: z.boolean().optional(),
       })
       .optional(),
   })
@@ -3588,6 +3640,42 @@ export const SendAgentMessageResponseMessageSchema = z.object({
     agentId: z.string(),
     accepted: z.boolean(),
     error: z.string().nullable(),
+  }),
+});
+
+const AgentMessageQueueResultPayloadSchema = z.object({
+  requestId: z.string(),
+  agentId: z.string(),
+  items: z.array(AgentMessageQueueItemSchema),
+  success: z.boolean(),
+  error: z.string().nullable(),
+});
+
+export const AgentMessageQueueGetResponseSchema = z.object({
+  type: z.literal("agent.message_queue.get.response"),
+  payload: AgentMessageQueueResultPayloadSchema,
+});
+
+export const AgentMessageQueueEnqueueResponseSchema = z.object({
+  type: z.literal("agent.message_queue.enqueue.response"),
+  payload: AgentMessageQueueResultPayloadSchema,
+});
+
+export const AgentMessageQueueRemoveResponseSchema = z.object({
+  type: z.literal("agent.message_queue.remove.response"),
+  payload: AgentMessageQueueResultPayloadSchema,
+});
+
+export const AgentMessageQueueSteerResponseSchema = z.object({
+  type: z.literal("agent.message_queue.steer.response"),
+  payload: AgentMessageQueueResultPayloadSchema,
+});
+
+export const AgentMessageQueueUpdatedSchema = z.object({
+  type: z.literal("agent.message_queue.updated"),
+  payload: z.object({
+    agentId: z.string(),
+    items: z.array(AgentMessageQueueItemSchema),
   }),
 });
 
@@ -5034,6 +5122,11 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceCreateResponseSchema,
   WorkspaceClearAttentionResponseSchema,
   SendAgentMessageResponseMessageSchema,
+  AgentMessageQueueGetResponseSchema,
+  AgentMessageQueueEnqueueResponseSchema,
+  AgentMessageQueueRemoveResponseSchema,
+  AgentMessageQueueSteerResponseSchema,
+  AgentMessageQueueUpdatedSchema,
   SetVoiceModeResponseMessageSchema,
   DaemonGetStatusResponseSchema,
   DaemonGetPairingOfferResponseSchema,

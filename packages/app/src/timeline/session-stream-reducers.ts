@@ -1,5 +1,6 @@
 import type { AgentStreamEventPayload } from "@getpaseo/protocol/messages";
 import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
+import equal from "fast-deep-equal";
 import type { Agent } from "@/stores/session-store";
 import { useSessionStore } from "@/stores/session-store";
 import type { AssistantMessageItem, StreamItem, UserMessageItem } from "@/types/stream";
@@ -146,15 +147,11 @@ function deriveBootstrapTailTimelinePolicy({
   reset,
   epoch,
   endCursor,
-  isInitializing,
-  hasActiveInitDeferred,
 }: {
   direction: TimelineDirection;
   reset: boolean;
   epoch: string;
   endCursor: { seq: number } | null;
-  isInitializing: boolean;
-  hasActiveInitDeferred: boolean;
 }): {
   replace: boolean;
   catchUpCursor: { epoch: string; endSeq: number } | null;
@@ -163,8 +160,7 @@ function deriveBootstrapTailTimelinePolicy({
     return { replace: true, catchUpCursor: null };
   }
 
-  const isBootstrapTailInit = direction === "tail" && isInitializing && hasActiveInitDeferred;
-  if (!isBootstrapTailInit) {
+  if (direction !== "tail") {
     return { replace: false, catchUpCursor: null };
   }
 
@@ -272,6 +268,11 @@ function applyTimelineReplacePath(args: {
     tail: reconciledTail,
     currentHead,
   });
+  // A resume tail fetch is authoritative, but it is commonly identical to the
+  // already-rendered tail. Preserve the existing array identities in that case
+  // so completing the background sync does not remount the visible conversation.
+  const stableTail = equal(tail, currentTail) ? currentTail : tail;
+  const stableHead = equal(head, currentHead) ? currentHead : head;
   const cursor: TimelineCursor | null =
     payload.startCursor && payload.endCursor
       ? {
@@ -284,7 +285,7 @@ function applyTimelineReplacePath(args: {
   if (bootstrapPolicy.catchUpCursor) {
     sideEffects.push({ type: "catch_up", cursor: bootstrapPolicy.catchUpCursor });
   }
-  return { tail, head, cursor, cursorChanged: true, sideEffects };
+  return { tail: stableTail, head: stableHead, cursor, cursorChanged: true, sideEffects };
 }
 
 function collectLocallyPresentedUserMessages(items: StreamItem[]): Array<{
@@ -1058,8 +1059,6 @@ export function processTimelineResponse(
     reset: payload.reset,
     epoch: payload.epoch,
     endCursor: payload.endCursor,
-    isInitializing,
-    hasActiveInitDeferred,
   });
   const replace = bootstrapPolicy.replace;
 

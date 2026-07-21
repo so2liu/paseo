@@ -23,6 +23,7 @@ import {
   ChevronDown,
   Columns2,
   Copy,
+  Download,
   Pencil,
   RotateCw,
   Rows2,
@@ -97,6 +98,7 @@ const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedX = withUnistyles(X);
 const ThemedCopy = withUnistyles(Copy);
+const ThemedDownload = withUnistyles(Download);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
 const ThemedArrowRightToLine = withUnistyles(ArrowRightToLine);
@@ -328,6 +330,8 @@ function TabContextMenuItem({
     switch (entry.icon) {
       case "copy":
         return <ThemedCopy size={16} uniProps={mutedColorMapping} />;
+      case "download":
+        return <ThemedDownload size={16} uniProps={mutedColorMapping} />;
       case "rotate-cw":
         return <ThemedRotateCw size={16} uniProps={mutedColorMapping} />;
       case "arrow-left-to-line":
@@ -420,6 +424,7 @@ interface WorkspaceDesktopTabsRowProps {
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
+  onDownloadFile: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
@@ -742,6 +747,7 @@ export function WorkspaceDesktopTabsRow({
   onCopyResumeCommand,
   onCopyAgentId,
   onCopyFilePath,
+  onDownloadFile,
   onReloadAgent,
   onRenameTab,
   onCloseTabsToLeft,
@@ -824,6 +830,7 @@ export function WorkspaceDesktopTabsRow({
       copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
       copyAgentId: t("workspace.tabs.menu.copyAgentId"),
       copyFilePath: t("workspace.tabs.menu.copyFilePath"),
+      downloadFile: t("workspace.tabs.menu.downloadFile"),
       rename: t("workspace.tabs.menu.rename"),
       closeAbove: t("workspace.tabs.menu.closeAbove"),
       closeBelow: t("workspace.tabs.menu.closeBelow"),
@@ -922,6 +929,7 @@ export function WorkspaceDesktopTabsRow({
           onCopyResumeCommand={onCopyResumeCommand}
           onCopyAgentId={onCopyAgentId}
           onCopyFilePath={onCopyFilePath}
+          onDownloadFile={onDownloadFile}
           onReloadAgent={onReloadAgent}
           onRenameTab={onRenameTab}
           onCloseTabsToLeft={onCloseTabsToLeft}
@@ -953,6 +961,7 @@ export function WorkspaceDesktopTabsRow({
       onCloseTabsToRight,
       onCopyAgentId,
       onCopyFilePath,
+      onDownloadFile,
       onCopyResumeCommand,
       onNavigateTab,
       onReloadAgent,
@@ -1074,6 +1083,7 @@ function ResolvedDesktopTabChip({
   onCopyResumeCommand,
   onCopyAgentId,
   onCopyFilePath,
+  onDownloadFile,
   onReloadAgent,
   onRenameTab,
   onCloseTabsToLeft,
@@ -1100,6 +1110,7 @@ function ResolvedDesktopTabChip({
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
+  onDownloadFile: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
@@ -1126,6 +1137,7 @@ function ResolvedDesktopTabChip({
         onCopyResumeCommand,
         onCopyAgentId,
         onCopyFilePath,
+        onDownloadFile,
         onReloadAgent,
         onRenameTab,
         onCloseTab,
@@ -1143,6 +1155,7 @@ function ResolvedDesktopTabChip({
       onCloseTabsToRight,
       onCopyAgentId,
       onCopyFilePath,
+      onDownloadFile,
       onCopyResumeCommand,
       labels,
       onReloadAgent,

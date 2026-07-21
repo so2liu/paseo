@@ -187,6 +187,19 @@ test("uses a tail fetch when a live cursor is not authoritative", async () => {
   fetch.respond({ hasNewer: false });
 });
 
+test("resuming authoritative history refreshes the latest tail first", async () => {
+  const world = new TimelineWorld();
+  world.setCursor("agent-a", 9);
+  world.sync.setConnected(true);
+  world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
+  const membership = await world.nextMembership();
+  membership.succeed();
+
+  const fetch = await world.nextFetch("agent-a");
+  expect(fetch.request).toEqual({ direction: "tail", limit: 100, projection: "projected" });
+  fetch.respond({ hasNewer: false });
+});
+
 test("unchanged visible-set publication does not cancel paged catch-up", async () => {
   const world = new TimelineWorld();
   world.sync.setConnected(true);

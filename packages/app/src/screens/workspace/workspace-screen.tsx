@@ -24,6 +24,7 @@ import {
   ArrowRightToLine,
   ChevronDown,
   Copy,
+  Download,
   Ellipsis,
   EllipsisVertical,
   Globe,
@@ -73,6 +74,7 @@ import { useToast } from "@/contexts/toast-context";
 import { selectIsFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
 import { type ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
+import { useDownloadStore } from "@/stores/download-store";
 import {
   buildWorkspaceTabPersistenceKey,
   collectAllTabs,
@@ -193,6 +195,8 @@ import {
   type WorkspaceFileLocation,
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
+import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
+import { getFileNameFromPath } from "@/attachments/utils";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 
@@ -239,6 +243,7 @@ const ThemedEllipsis = withUnistyles(Ellipsis);
 const ThemedEllipsisVertical = withUnistyles(EllipsisVertical);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedCopy = withUnistyles(Copy);
+const ThemedDownload = withUnistyles(Download);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
 const ThemedArrowRightToLine = withUnistyles(ArrowRightToLine);
@@ -408,6 +413,7 @@ interface MobileWorkspaceTabSwitcherProps {
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
+  onDownloadFile: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
@@ -549,6 +555,8 @@ function MobileTabDropdownMenuItem({
     switch (entry.icon) {
       case "copy":
         return <ThemedCopy size={16} uniProps={mutedColorMapping} />;
+      case "download":
+        return <ThemedDownload size={16} uniProps={mutedColorMapping} />;
       case "rotate-cw":
         return <ThemedRotateCw size={16} uniProps={mutedColorMapping} />;
       case "arrow-left-to-line":
@@ -596,6 +604,7 @@ function MobileWorkspaceTabOption({
   onCopyResumeCommand,
   onCopyAgentId,
   onCopyFilePath,
+  onDownloadFile,
   onReloadAgent,
   onRenameTab,
   onCloseTab,
@@ -614,6 +623,7 @@ function MobileWorkspaceTabOption({
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
+  onDownloadFile: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
@@ -627,6 +637,7 @@ function MobileWorkspaceTabOption({
       copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
       copyAgentId: t("workspace.tabs.menu.copyAgentId"),
       copyFilePath: t("workspace.tabs.menu.copyFilePath"),
+      downloadFile: t("workspace.tabs.menu.downloadFile"),
       rename: t("workspace.tabs.menu.rename"),
       closeAbove: t("workspace.tabs.menu.closeAbove"),
       closeBelow: t("workspace.tabs.menu.closeBelow"),
@@ -649,6 +660,7 @@ function MobileWorkspaceTabOption({
     onCopyResumeCommand,
     onCopyAgentId,
     onCopyFilePath,
+    onDownloadFile,
     onReloadAgent,
     onRenameTab,
     onCloseTab,
@@ -716,6 +728,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   onCopyResumeCommand,
   onCopyAgentId,
   onCopyFilePath,
+  onDownloadFile,
   onReloadAgent,
   onRenameTab,
   onCloseTab,
@@ -772,6 +785,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
           onCopyResumeCommand={onCopyResumeCommand}
           onCopyAgentId={onCopyAgentId}
           onCopyFilePath={onCopyFilePath}
+          onDownloadFile={onDownloadFile}
           onReloadAgent={onReloadAgent}
           onRenameTab={onRenameTab}
           onCloseTab={onCloseTab}
@@ -790,6 +804,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
       onCopyResumeCommand,
       onCopyAgentId,
       onCopyFilePath,
+      onDownloadFile,
       onReloadAgent,
       onRenameTab,
       onCloseTab,
@@ -1739,6 +1754,12 @@ function WorkspaceScreenContent({
   });
 
   const client = useHostRuntimeClient(normalizedServerId);
+  const hosts = useHosts();
+  const daemonProfile = useMemo(
+    () => hosts.find((host) => host.serverId === normalizedServerId),
+    [hosts, normalizedServerId],
+  );
+  const startDownload = useDownloadStore((state) => state.startDownload);
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
   const workspaceDirectory = workspaceDescriptor?.workspaceDirectory || null;
   const isMissingWorkspaceDirectory = Boolean(workspaceDescriptor) && !workspaceDirectory;
@@ -2719,6 +2740,38 @@ function WorkspaceScreenContent({
     [toast, t],
   );
 
+  const handleDownloadFile = useCallback(
+    (path: string) => {
+      const downloadTarget = resolveFilePreviewReadTarget({
+        path,
+        workspaceRoot: workspaceDirectory ?? undefined,
+      });
+      if (!client || !downloadTarget) {
+        toast.error(t("downloads.hostUnavailable"));
+        return;
+      }
+      void startDownload({
+        serverId: normalizedServerId,
+        scopeId: normalizedWorkspaceId,
+        fileName: getFileNameFromPath(path) ?? "download",
+        path: downloadTarget.path,
+        daemonProfile,
+        requestFileDownloadToken: (targetPath) =>
+          client.requestDownloadToken(downloadTarget.cwd, targetPath),
+      });
+    },
+    [
+      client,
+      daemonProfile,
+      normalizedServerId,
+      normalizedWorkspaceId,
+      startDownload,
+      t,
+      toast,
+      workspaceDirectory,
+    ],
+  );
+
   const handleCopyResumeCommand = useCallback(
     async (agentId: string) => {
       if (!agentId) return;
@@ -3554,6 +3607,7 @@ function WorkspaceScreenContent({
         onCopyResumeCommand={handleCopyResumeCommand}
         onCopyAgentId={handleCopyAgentId}
         onCopyFilePath={handleCopyFilePath}
+        onDownloadFile={handleDownloadFile}
         onReloadAgent={handleReloadAgent}
         onRenameTab={handleRenameTab}
         onCloseTabsToLeft={handleCloseTabsToLeftInPane}
@@ -3590,6 +3644,7 @@ function WorkspaceScreenContent({
     handleCopyResumeCommand,
     handleCopyAgentId,
     handleCopyFilePath,
+    handleDownloadFile,
     handleReloadAgent,
     handleRenameTab,
     handleCloseTabsToLeftInPane,
@@ -3671,6 +3726,7 @@ function WorkspaceScreenContent({
           onCopyResumeCommand={handleCopyResumeCommand}
           onCopyAgentId={handleCopyAgentId}
           onCopyFilePath={handleCopyFilePath}
+          onDownloadFile={handleDownloadFile}
           onReloadAgent={handleReloadAgent}
           onRenameTab={handleRenameTab}
           onCloseTab={handleCloseTabById}
@@ -3693,6 +3749,7 @@ function WorkspaceScreenContent({
           onCopyResumeCommand={handleCopyResumeCommand}
           onCopyAgentId={handleCopyAgentId}
           onCopyFilePath={handleCopyFilePath}
+          onDownloadFile={handleDownloadFile}
           onReloadAgent={handleReloadAgent}
           onRenameTab={handleRenameTab}
           onCloseTabsToLeft={handleCloseTabsToLeft}

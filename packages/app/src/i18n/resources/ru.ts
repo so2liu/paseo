@@ -491,6 +491,7 @@ export const ru: TranslationResources = {
         copyResumeCommand: "Копировать команду возобновления",
         copyAgentId: "Скопировать идентификатор агента",
         copyFilePath: "Copy file path",
+        downloadFile: "Download to this device",
         rename: "Переименовать",
         closeAbove: "Закрыть вкладки выше",
         closeBelow: "Закройте вкладки ниже",
@@ -1888,6 +1889,7 @@ export const ru: TranslationResources = {
         rowTitle: "Сопряжение устройства",
         rowHint:
           "Отсканируйте код QR или скопируйте ссылку, чтобы подключить свой телефон к этому хосту.",
+        updateRequired: "Update this host to retrieve its pairing link",
       },
       orchestration: {
         title: "оркестровка",

@@ -1,9 +1,12 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { PairDeviceSection } from "@/desktop/components/pair-device-section";
+import {
+  PairDeviceSection,
+  type PairDeviceSectionProps,
+} from "@/desktop/components/pair-device-section";
 
-export interface PairDeviceModalProps {
+export interface PairDeviceModalProps extends PairDeviceSectionProps {
   visible: boolean;
   onClose: () => void;
   testID?: string;
@@ -11,7 +14,14 @@ export interface PairDeviceModalProps {
 
 const SNAP_POINTS: string[] = ["82%", "94%"];
 
-export function PairDeviceModal({ visible, onClose, testID }: PairDeviceModalProps) {
+export function PairDeviceModal({
+  visible,
+  onClose,
+  testID,
+  enabled,
+  queryKey,
+  loadPairingOffer,
+}: PairDeviceModalProps) {
   const { t } = useTranslation();
   const header = useMemo<SheetHeader>(
     () => ({ title: t("settings.host.pairDevices.rowTitle") }),
@@ -27,7 +37,11 @@ export function PairDeviceModal({ visible, onClose, testID }: PairDeviceModalPro
       desktopMaxWidth={640}
       testID={testID}
     >
-      <PairDeviceSection />
+      <PairDeviceSection
+        enabled={enabled}
+        queryKey={queryKey}
+        loadPairingOffer={loadPairingOffer}
+      />
     </AdaptiveModalSheet>
   );
 }

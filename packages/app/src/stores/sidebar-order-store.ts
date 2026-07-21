@@ -1,10 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { moveHostInOrder, type HostMoveDirection } from "@/utils/host-order";
 
 interface SidebarOrderStoreState {
+  hostOrder: string[];
   projectOrder: string[];
   workspaceOrderByProject: Record<string, string[]>;
+  setHostOrder: (keys: string[]) => void;
+  moveHost: (hostIds: string[], serverId: string, direction: HostMoveDirection) => void;
   getProjectOrder: () => string[];
   setProjectOrder: (keys: string[]) => void;
   getWorkspaceOrder: (projectKey: string) => string[];
@@ -12,6 +16,7 @@ interface SidebarOrderStoreState {
 }
 
 interface SidebarOrderPersistedState {
+  hostOrder?: string[];
   projectOrder?: string[];
   workspaceOrderByProject?: Record<string, string[]>;
   projectOrderByServerId?: Record<string, string[]>;
@@ -68,13 +73,14 @@ function normalizeLegacyWorkspaceKey(serverId: string, rawWorkspaceKey: string):
 }
 
 export function migrateSidebarOrderState(persistedState: unknown): {
+  hostOrder: string[];
   projectOrder: string[];
   workspaceOrderByProject: Record<string, string[]>;
 } {
   const state = persistedState as SidebarOrderPersistedState | undefined;
 
   if (!state) {
-    return { projectOrder: [], workspaceOrderByProject: {} };
+    return { hostOrder: [], projectOrder: [], workspaceOrderByProject: {} };
   }
 
   const projectOrder = normalizeKeys(state.projectOrder ?? []);
@@ -103,14 +109,25 @@ export function migrateSidebarOrderState(persistedState: unknown): {
     workspaceOrderByProject[scope.projectKey] = merged;
   }
 
-  return { projectOrder, workspaceOrderByProject };
+  return { hostOrder: normalizeKeys(state.hostOrder ?? []), projectOrder, workspaceOrderByProject };
 }
 
 export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
   persist(
     (set, get) => ({
+      hostOrder: [],
       projectOrder: [],
       workspaceOrderByProject: {},
+      setHostOrder: (keys) => set({ hostOrder: normalizeKeys(keys) }),
+      moveHost: (hostIds, serverId, direction) =>
+        set((state) => ({
+          hostOrder: moveHostInOrder({
+            hostIds,
+            preferredOrder: state.hostOrder,
+            serverId,
+            direction,
+          }),
+        })),
       getProjectOrder: () => get().projectOrder,
       setProjectOrder: (keys) => {
         const normalized = normalizeKeys(keys);
@@ -137,10 +154,11 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
       name: "sidebar-project-workspace-order",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
+        hostOrder: state.hostOrder,
         projectOrder: state.projectOrder,
         workspaceOrderByProject: state.workspaceOrderByProject,
       }),
-      version: 1,
+      version: 2,
       migrate: migrateSidebarOrderState,
     },
   ),

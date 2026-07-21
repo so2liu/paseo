@@ -321,6 +321,86 @@ describe("processTimelineResponse", () => {
     expect(assistant?.timestamp.toISOString()).toBe("2025-01-01T12:00:04.000Z");
   });
 
+  it("replaces an older authoritative view with the latest tail on resume", () => {
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [makeAssistantItem("old conclusion", "old-message")],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 10 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 900 },
+        endCursor: { seq: 1_000 },
+        entries: [makeTimelineEntry(1_000, "latest conclusion")],
+        hasOlder: true,
+      },
+    });
+
+    expect(getAssistantTexts(result.tail)).toEqual(["latest conclusion"]);
+    expect(result.cursor).toEqual({ epoch: "epoch-1", startSeq: 900, endSeq: 1_000 });
+    expect(result.sideEffects).not.toContainEqual({
+      type: "catch_up",
+      cursor: { epoch: "epoch-1", endSeq: 10 },
+    });
+  });
+
+  it("does not duplicate a cached final answer when a resume tail restores its message id", () => {
+    const finalAnswer = "The final answer is already cached.";
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [makeAssistantItem(finalAnswer, "cached-answer")],
+      currentCursor: undefined,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 100 },
+        endCursor: { seq: 100 },
+        entries: [
+          {
+            ...makeTimelineEntry(100, finalAnswer),
+            item: {
+              type: "assistant_message",
+              text: finalAnswer,
+              messageId: "canonical-answer",
+            },
+          },
+        ],
+      },
+    });
+
+    expect(getAssistantTexts([...result.tail, ...result.head])).toEqual([finalAnswer]);
+  });
+
+  it("preserves rendered stream identity when a resume tail is unchanged", () => {
+    const first = processTimelineResponse({
+      ...baseTimelineInput,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 1_000 },
+        endCursor: { seq: 1_000 },
+        entries: [makeTimelineEntry(1_000, "latest conclusion")],
+      },
+    });
+    const second = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: first.tail,
+      currentHead: first.head,
+      currentCursor: first.cursor ?? undefined,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 1_000 },
+        endCursor: { seq: 1_000 },
+        entries: [makeTimelineEntry(1_000, "latest conclusion")],
+      },
+    });
+
+    expect(second.tail).toBe(first.tail);
+    expect(second.head).toBe(first.head);
+  });
+
   it("reconciles an optimistic user message during tail replacement", () => {
     const image = {
       id: "optimistic-image",

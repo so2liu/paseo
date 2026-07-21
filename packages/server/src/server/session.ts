@@ -113,6 +113,7 @@ import {
 } from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
+import { AgentMessageQueueService } from "./agent/message-queue-service.js";
 import {
   ImportSessionsRequestError,
   importProviderSession,
@@ -411,6 +412,7 @@ export interface SessionOptions {
   worktreesRoot?: string;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
+  agentMessageQueue?: AgentMessageQueueService;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
   filesystem?: SessionFileSystem;
@@ -548,6 +550,20 @@ function describeRegistryTransition(record: ArchivedRecordSnapshot | null): Regi
   return record.archivedAt ? "unarchived" : "existing";
 }
 
+function normalizeAgentMessageQueue(
+  queue: AgentMessageQueueService | undefined,
+): AgentMessageQueueService | null {
+  return queue ?? null;
+}
+
+function subscribeAgentMessageQueue(
+  queue: AgentMessageQueueService | null,
+  emit: (agentId: string, items: Awaited<ReturnType<AgentMessageQueueService["list"]>>) => void,
+): (() => void) | null {
+  if (!queue) return null;
+  return queue.subscribe(emit);
+}
+
 /**
  * Session represents a single connected client session.
  * It owns all state management, orchestration logic, and message processing.
@@ -575,6 +591,8 @@ export class Session {
 
   private agentManager: AgentManager;
   private readonly agentStorage: AgentStorage;
+  private readonly agentMessageQueue: AgentMessageQueueService | null;
+  private unsubscribeAgentMessageQueue: (() => void) | null = null;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly filesystem: SessionFileSystem;
@@ -648,6 +666,7 @@ export class Session {
       worktreesRoot,
       agentManager,
       agentStorage,
+      agentMessageQueue,
       projectRegistry,
       workspaceRegistry,
       filesystem,
@@ -713,6 +732,14 @@ export class Session {
     });
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
+    this.agentMessageQueue = normalizeAgentMessageQueue(agentMessageQueue);
+    this.unsubscribeAgentMessageQueue = subscribeAgentMessageQueue(
+      this.agentMessageQueue,
+      (agentId, items) => {
+        if (!this.supports(CLIENT_CAPS.agentMessageQueue)) return;
+        this.emit({ type: "agent.message_queue.updated", payload: { agentId, items } });
+      },
+    );
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
     this.filesystem = filesystem ?? nodeSessionFileSystem;
@@ -1757,6 +1784,8 @@ export class Session {
   }
 
   private dispatchAgentLifecycleMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    const queueRequest = this.dispatchAgentMessageQueueRequest(msg);
+    if (queueRequest) return queueRequest;
     switch (msg.type) {
       case "fetch_agents_request":
         return this.handleFetchAgents(msg);
@@ -1794,6 +1823,18 @@ export class Session {
         return this.handleAgentPermissionResponse(msg.agentId, msg.requestId, msg.response);
       case "clear_agent_attention":
         return this.handleClearAgentAttention(msg.agentId, msg.requestId);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchAgentMessageQueueRequest(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "agent.message_queue.get.request":
+      case "agent.message_queue.enqueue.request":
+      case "agent.message_queue.remove.request":
+      case "agent.message_queue.steer.request":
+        return this.handleAgentMessageQueueRequest(msg);
       default:
         return undefined;
     }
@@ -6127,6 +6168,104 @@ export class Session {
     }
   }
 
+  private async handleAgentMessageQueueRequest(
+    msg: Extract<SessionInboundMessage, { type: `agent.message_queue.${string}.request` }>,
+  ): Promise<void> {
+    const queue = this.agentMessageQueue;
+    const requestedAgentId = "item" in msg ? msg.item.agentId : msg.agentId;
+    const resolved = await this.resolveAgentIdentifier(requestedAgentId);
+    const responseType = msg.type.replace(".request", ".response") as
+      | "agent.message_queue.get.response"
+      | "agent.message_queue.enqueue.response"
+      | "agent.message_queue.remove.response"
+      | "agent.message_queue.steer.response";
+    if (!queue) {
+      this.emitAgentMessageQueueResponse(responseType, {
+        requestId: msg.requestId,
+        agentId: requestedAgentId,
+        items: [],
+        success: false,
+        error: "Agent message queue is unavailable",
+      });
+      return;
+    }
+    if (!resolved.ok) {
+      this.emitAgentMessageQueueResponse(responseType, {
+        requestId: msg.requestId,
+        agentId: requestedAgentId,
+        items: [],
+        success: false,
+        error: resolved.error,
+      });
+      return;
+    }
+
+    const agentId = resolved.agentId;
+    try {
+      let items;
+      switch (msg.type) {
+        case "agent.message_queue.get.request":
+          items = await queue.list(agentId);
+          break;
+        case "agent.message_queue.enqueue.request":
+          items = await queue.enqueue({ ...msg.item, agentId });
+          void queue.drain(agentId);
+          break;
+        case "agent.message_queue.remove.request":
+          items = await queue.remove(agentId, msg.messageId);
+          break;
+        case "agent.message_queue.steer.request":
+          items = await queue.steer(agentId, msg.messageId);
+          break;
+      }
+      this.emitAgentMessageQueueResponse(responseType, {
+        requestId: msg.requestId,
+        agentId,
+        items,
+        success: true,
+        error: null,
+      });
+    } catch (error) {
+      this.emitAgentMessageQueueResponse(responseType, {
+        requestId: msg.requestId,
+        agentId,
+        items: await queue.list(agentId),
+        success: false,
+        error: errorToFriendlyMessage(error),
+      });
+    }
+  }
+
+  private emitAgentMessageQueueResponse(
+    type:
+      | "agent.message_queue.get.response"
+      | "agent.message_queue.enqueue.response"
+      | "agent.message_queue.remove.response"
+      | "agent.message_queue.steer.response",
+    payload: {
+      requestId: string;
+      agentId: string;
+      items: Awaited<ReturnType<AgentMessageQueueService["list"]>>;
+      success: boolean;
+      error: string | null;
+    },
+  ): void {
+    switch (type) {
+      case "agent.message_queue.get.response":
+        this.emit({ type, payload });
+        break;
+      case "agent.message_queue.enqueue.response":
+        this.emit({ type, payload });
+        break;
+      case "agent.message_queue.remove.response":
+        this.emit({ type, payload });
+        break;
+      case "agent.message_queue.steer.response":
+        this.emit({ type, payload });
+        break;
+    }
+  }
+
   private async handleWaitForFinish(
     agentIdOrIdentifier: string,
     requestId: string,
@@ -6292,6 +6431,8 @@ export class Session {
       this.unsubscribeAgentEvents();
       this.unsubscribeAgentEvents = null;
     }
+    this.unsubscribeAgentMessageQueue?.();
+    this.unsubscribeAgentMessageQueue = null;
     this.agentUpdates.dispose();
     await this.hubExecutionController?.cleanup();
     if (this.unsubscribeTerminalWorkspaceContributionEvents) {

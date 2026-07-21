@@ -1,13 +1,16 @@
 import { useCallback, useMemo, type ReactElement, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
 import type { GestureResponderEvent } from "react-native";
-import { Plus, Server, Settings } from "lucide-react-native";
+import { ChevronDown, ChevronUp, Plus, Server, Settings } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostRuntimeSnapshot, type ActiveConnection } from "@/runtime/host-runtime";
+import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { orderHostsLocalFirst } from "@/types/host-connection";
+import { orderHostsByPreference, type HostMoveDirection } from "@/utils/host-order";
 import {
   ADD_HOST_OPTION_ID,
   ALL_HOSTS_OPTION_ID,
@@ -60,6 +63,9 @@ export interface HostPickerOptionProps {
   active: boolean;
   onPress: () => void;
   onOpenHostSettings?: (serverId: string) => void;
+  onMoveHost?: (serverId: string, direction: HostMoveDirection) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
   testID?: string;
 }
 
@@ -71,9 +77,13 @@ export function HostPickerOption({
   active,
   onPress,
   onOpenHostSettings,
+  onMoveHost,
+  canMoveUp = false,
+  canMoveDown = false,
   testID,
 }: HostPickerOptionProps): ReactElement {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const activeConnection = useHostRuntimeSnapshot(serverId)?.activeConnection ?? null;
   const connectionLabel =
     showActiveConnection && activeConnection
@@ -87,22 +97,70 @@ export function HostPickerOption({
     },
     [onOpenHostSettings, serverId],
   );
+  const handleMoveUp = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      onMoveHost?.(serverId, "up");
+    },
+    [onMoveHost, serverId],
+  );
+  const handleMoveDown = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      onMoveHost?.(serverId, "down");
+    },
+    [onMoveHost, serverId],
+  );
   const trailingSlot = useMemo(() => {
-    if (!onOpenHostSettings) return undefined;
+    if (!onOpenHostSettings && !onMoveHost) return undefined;
     return (
-      <Pressable
-        onPress={handleSettingsPress}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${label} settings`}
-      >
-        <Settings size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </Pressable>
+      <View style={styles.rowActions}>
+        {onMoveHost ? (
+          <>
+            <Pressable
+              onPress={handleMoveUp}
+              disabled={!canMoveUp}
+              hitSlop={8}
+              style={!canMoveUp ? styles.reorderButtonDisabled : undefined}
+              accessibilityRole="button"
+              accessibilityLabel={`${t("settings.host.terminalProfiles.moveUp")}: ${label}`}
+            >
+              <ChevronUp size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            </Pressable>
+            <Pressable
+              onPress={handleMoveDown}
+              disabled={!canMoveDown}
+              hitSlop={8}
+              style={!canMoveDown ? styles.reorderButtonDisabled : undefined}
+              accessibilityRole="button"
+              accessibilityLabel={`${t("settings.host.terminalProfiles.moveDown")}: ${label}`}
+            >
+              <ChevronDown size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            </Pressable>
+          </>
+        ) : null}
+        {onOpenHostSettings ? (
+          <Pressable
+            onPress={handleSettingsPress}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${label} settings`}
+          >
+            <Settings size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          </Pressable>
+        ) : null}
+      </View>
     );
   }, [
+    canMoveDown,
+    canMoveUp,
+    handleMoveDown,
+    handleMoveUp,
     handleSettingsPress,
     label,
+    onMoveHost,
     onOpenHostSettings,
+    t,
     theme.colors.foregroundMuted,
     theme.iconSize.sm,
   ]);
@@ -174,6 +232,7 @@ export interface HostPickerProps {
   onEnableBuiltInDaemon?: () => void;
   showActiveConnection?: boolean;
   onOpenHostSettings?: (serverId: string) => void;
+  reorderable?: boolean;
   searchable?: boolean;
   title?: string;
   desktopPlacement?: ComboboxProps["desktopPlacement"];
@@ -197,6 +256,7 @@ export function HostPicker({
   onEnableBuiltInDaemon,
   showActiveConnection,
   onOpenHostSettings,
+  reorderable = false,
   searchable,
   title,
   desktopPlacement = "bottom-start",
@@ -206,9 +266,20 @@ export function HostPicker({
   children,
 }: HostPickerProps): ReactElement {
   const localServerId = useLocalDaemonServerId();
-  const orderedHosts = useMemo(
+  const hostOrder = useSidebarOrderStore((state) => state.hostOrder);
+  const moveHost = useSidebarOrderStore((state) => state.moveHost);
+  const defaultOrderedHosts = useMemo(
     () => orderHostsLocalFirst(hosts, localServerId),
     [hosts, localServerId],
+  );
+  const orderedHosts = useMemo(
+    () => orderHostsByPreference(defaultOrderedHosts, hostOrder),
+    [defaultOrderedHosts, hostOrder],
+  );
+  const hostIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
+  const handleMoveHost = useCallback(
+    (serverId: string, direction: HostMoveDirection) => moveHost(hostIds, serverId, direction),
+    [hostIds, moveHost],
   );
 
   const options = useMemo(() => {
@@ -283,6 +354,9 @@ export function HostPicker({
           active={active}
           onPress={onPress}
           onOpenHostSettings={onOpenHostSettings ? handleOpenHostSettings : undefined}
+          onMoveHost={reorderable ? handleMoveHost : undefined}
+          canMoveUp={orderedHosts[0]?.serverId !== option.id}
+          canMoveDown={orderedHosts[orderedHosts.length - 1]?.serverId !== option.id}
           testID={hostOptionTestID?.(option.id)}
         />
       );
@@ -293,6 +367,9 @@ export function HostPicker({
       onOpenHostSettings,
       showActiveConnection,
       handleOpenHostSettings,
+      handleMoveHost,
+      orderedHosts,
+      reorderable,
     ],
   );
 
@@ -323,5 +400,13 @@ const styles = StyleSheet.create((theme) => ({
     height: theme.iconSize.sm,
     alignItems: "center",
     justifyContent: "center",
+  },
+  rowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  reorderButtonDisabled: {
+    opacity: 0.25,
   },
 }));

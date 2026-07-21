@@ -6,6 +6,15 @@ const markdownRenderer = new MarkdownIt({
   typographer: true,
 });
 
+// Some rich-text editors import a semantic <code> element as a standalone code
+// block, even when Markdown emitted it inline. That changes text around a path
+// such as `/root` into three lines when pasted. Keep the monospace treatment but
+// use an explicitly inline span so clipboard consumers preserve text flow.
+markdownRenderer.renderer.rules.code_inline = (tokens, index) => {
+  const content = markdownRenderer.utils.escapeHtml(tokens[index]?.content ?? "");
+  return `<span style="display: inline; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${content}</span>`;
+};
+
 type ClipboardMimeType = "text/plain" | "text/html";
 
 export interface MarkdownClipboardContent {

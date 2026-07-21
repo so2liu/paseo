@@ -239,7 +239,6 @@ function HostConnectionError({ serverId }: { serverId: string }) {
 export function HostConnectionsPage({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const host = useHostProfile(serverId);
-  const isLocalDaemon = useIsLocalDaemon(serverId);
 
   if (!host) {
     return <HostNotFound />;
@@ -249,11 +248,9 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
-      {isLocalDaemon ? (
-        <SettingsSection title={t("settings.host.pairDevices.title")}>
-          <PairDeviceRow />
-        </SettingsSection>
-      ) : null}
+      <SettingsSection title={t("settings.host.pairDevices.title")}>
+        <PairDeviceRow serverId={serverId} />
+      </SettingsSection>
     </View>
   );
 }
@@ -1241,25 +1238,44 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
   );
 }
 
-function PairDeviceRow() {
+function PairDeviceRow({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  const daemonClient = useHostRuntimeClient(serverId);
+  const supportsPairingOffer = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.pairingOffer === true,
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const canLoadPairingOffer = Boolean(daemonClient && supportsPairingOffer);
 
-  const handleOpen = useCallback(() => setIsModalOpen(true), []);
+  const handleOpen = useCallback(() => {
+    if (canLoadPairingOffer) setIsModalOpen(true);
+  }, [canLoadPairingOffer]);
   const handleClose = useCallback(() => setIsModalOpen(false), []);
+  const loadPairingOffer = useCallback(async () => {
+    if (!daemonClient) {
+      throw new Error(t("pairing.device.unavailable"));
+    }
+    return daemonClient.getDaemonPairingOffer();
+  }, [daemonClient, t]);
+  const pairingQueryKey = useMemo(() => ["host-daemon-pairing", serverId] as const, [serverId]);
 
   return (
     <View style={settingsStyles.card}>
       <Pressable
         style={settingsStyles.row}
         onPress={handleOpen}
+        disabled={!canLoadPairingOffer}
         accessibilityRole="button"
         testID="host-page-pair-device-row"
       >
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("settings.host.pairDevices.rowTitle")}</Text>
-          <Text style={settingsStyles.rowHint}>{t("settings.host.pairDevices.rowHint")}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {supportsPairingOffer
+              ? t("settings.host.pairDevices.rowHint")
+              : t("settings.host.pairDevices.updateRequired")}
+          </Text>
         </View>
         <ChevronRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
       </Pressable>
@@ -1268,6 +1284,9 @@ function PairDeviceRow() {
         visible={isModalOpen}
         onClose={handleClose}
         testID="host-page-pair-device-card"
+        enabled={canLoadPairingOffer}
+        queryKey={pairingQueryKey}
+        loadPairingOffer={loadPairingOffer}
       />
     </View>
   );

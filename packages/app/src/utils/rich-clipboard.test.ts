@@ -74,6 +74,15 @@ describe("createMarkdownClipboardContent", () => {
     expect(content.html).not.toContain('href="javascript:');
     expect(content.html).toContain("&lt;script&gt;");
   });
+
+  it("keeps inline code inline for rich-text clipboard consumers", () => {
+    const content = createMarkdownClipboardContent("用户 `/root` 数据是宿主机");
+
+    expect(content.plainText).toBe("用户 `/root` 数据是宿主机");
+    expect(content.html).toContain('用户 <span style="display: inline; white-space: pre-wrap;');
+    expect(content.html).toContain('monospace;">/root</span> 数据是宿主机');
+    expect(content.html).not.toContain("<code>/root</code>");
+  });
 });
 
 describe("writeMarkdownToRichClipboard", () => {

@@ -93,7 +93,7 @@ import { submitAgentInput } from "@/composer/submit";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { AgentMessageQueueItem, ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -101,7 +101,10 @@ import type {
   WorkspaceComposerAttachment,
 } from "@/attachments/types";
 import type { PickedFile } from "@/attachments/picked-file";
-import { resolveComposerAttachmentSubmitFormat } from "@/composer/attachments/submit";
+import {
+  resolveComposerAttachmentSubmitFormat,
+  splitComposerAttachmentsForSubmit,
+} from "@/composer/attachments/submit";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { useWorkspaceAttachmentsForScopes } from "@/attachments/workspace-attachments-store";
 import { droppedItemsToPickedFiles } from "@/composer/attachments/drop";
@@ -110,6 +113,11 @@ import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/com
 import { AttachmentLabel, AttachmentPill, AttachmentThumbnail } from "@/components/attachment-pill";
 import { AttachmentLightbox } from "@/components/attachment-lightbox";
 import { openExternalUrl } from "@/utils/open-external-url";
+import {
+  listAgentMessageOutbox,
+  persistAgentMessageOutboxItem,
+  removeAgentMessageOutboxItem,
+} from "@/composer/outbox";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
 import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
@@ -120,6 +128,28 @@ import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
 
 type QueuedMessage = QueuedComposerMessage;
+
+function queuedMessagesFromServer(
+  items: AgentMessageQueueItem[],
+  existing: readonly QueuedComposerMessage[],
+): QueuedComposerMessage[] {
+  const existingById = new Map(existing.map((item) => [item.id, item]));
+  const result: QueuedComposerMessage[] = [];
+  for (const item of items) {
+    const attachments: ComposerAttachment[] = [];
+    for (const attachment of item.attachments ?? []) {
+      if (attachment.type === "uploaded_file") attachments.push({ kind: "file", attachment });
+    }
+    result.push({
+      id: item.id,
+      text: item.text,
+      attachments: existingById.get(item.id)?.attachments ?? attachments,
+      wireImages: item.images ?? [],
+      wireAttachments: item.attachments ?? [],
+    });
+  }
+  return result;
+}
 
 type AttachmentListUpdater =
   | UserComposerAttachment[]
@@ -1060,6 +1090,9 @@ export function Composer({
   const supportsForgeSearch = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.forgeSearch === true,
   );
+  const supportsAgentMessageQueue = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.agentMessageQueue === true,
+  );
   const githubAutoAttach = useComposerGithubAutoAttach({
     text: userInput,
     remoteUrl: resolveCheckoutRemoteUrl(checkoutStatusQuery.status),
@@ -1261,6 +1294,81 @@ export function Composer({
     [serverId, setQueuedMessages],
   );
 
+  const applyServerQueue = useCallback(
+    (items: AgentMessageQueueItem[]) => {
+      setQueuedMessages(serverId, (current) => {
+        const existing = current.get(agentId) ?? [];
+        const next = new Map(current);
+        next.set(agentId, queuedMessagesFromServer(items, existing));
+        return next;
+      });
+    },
+    [agentId, serverId, setQueuedMessages],
+  );
+
+  const enqueueOnServer = useCallback(
+    async (queued: QueuedComposerMessage) => {
+      if (!client) throw new Error(t("workspace.terminal.hostDisconnected"));
+      const wire = splitComposerAttachmentsForSubmit(queued.attachments, {
+        format: resolveComposerAttachmentSubmitFormat({
+          supportsForgeAttachments: supportsForgeSearch,
+        }),
+      });
+      const images = queued.wireImages ?? (await encodeImages(wire.images)) ?? [];
+      const items = await client.enqueueAgentMessage({
+        id: queued.id,
+        agentId,
+        text: queued.text,
+        images,
+        attachments: queued.wireAttachments ?? wire.attachments,
+      });
+      applyServerQueue(items);
+      await removeAgentMessageOutboxItem(serverId, agentId, queued.id);
+    },
+    [agentId, applyServerQueue, client, serverId, supportsForgeSearch, t],
+  );
+
+  useEffect(() => {
+    if (!client || !isConnected || !supportsAgentMessageQueue) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [items, outbox] = await Promise.all([
+          client.getAgentMessageQueue(agentId),
+          listAgentMessageOutbox(serverId, agentId),
+        ]);
+        if (cancelled) return;
+        const serverMessageIds = new Set(items.map((item) => item.id));
+        const pendingById = new Map(outbox.map((item) => [item.id, item]));
+        for (const local of queueWriter.read(agentId)) {
+          if (!serverMessageIds.has(local.id) && !pendingById.has(local.id)) {
+            pendingById.set(local.id, { ...local, serverId, agentId });
+          }
+        }
+        applyServerQueue(items);
+        for (const queued of pendingById.values()) {
+          if (cancelled) return;
+          await persistAgentMessageOutboxItem(queued);
+          await enqueueOnServer(queued);
+        }
+      } catch (error) {
+        console.warn("[Composer] Failed to synchronize server message queue", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    agentId,
+    applyServerQueue,
+    client,
+    enqueueOnServer,
+    isConnected,
+    queueWriter,
+    serverId,
+    supportsAgentMessageQueue,
+  ]);
+
   const queueMessage = useCallback(
     (queuedMessage: string, queuedAttachments: ComposerAttachment[]) => {
       const result = queueComposerMessage({
@@ -1270,19 +1378,41 @@ export function Composer({
         queue: queueWriter,
       });
       if (!result.queued) return;
+      const queued = result.queued;
 
       setUserInput("");
       setSelectedAttachments([]);
       resetSuppression();
       clearSentAttachments(queuedAttachments);
+      if (client && supportsAgentMessageQueue) {
+        void (async () => {
+          try {
+            await persistAgentMessageOutboxItem({
+              ...queued,
+              serverId,
+              agentId,
+            });
+            await enqueueOnServer(queued);
+          } catch (error) {
+            setSendError(
+              error instanceof Error ? error.message : t("composer.errors.failedToSend"),
+            );
+          }
+        })();
+      }
     },
     [
       agentId,
       clearSentAttachments,
+      client,
+      enqueueOnServer,
       queueWriter,
       resetSuppression,
       setSelectedAttachments,
       setUserInput,
+      serverId,
+      supportsAgentMessageQueue,
+      t,
     ],
   );
 
@@ -1570,6 +1700,7 @@ export function Composer({
 
   const handleEditQueuedMessage = useCallback(
     (id: string) => {
+      const queued = queueWriter.read(agentId).find((item) => item.id === id);
       const result = editQueuedComposerMessage({
         agentId,
         messageId: id,
@@ -1578,14 +1709,47 @@ export function Composer({
       if (!result) return;
       setUserInput(result.text);
       setSelectedAttachments(result.attachments);
+      if (client && supportsAgentMessageQueue) {
+        void Promise.all([
+          client.removeQueuedAgentMessage(agentId, id),
+          removeAgentMessageOutboxItem(serverId, agentId, id),
+        ]).catch((error) => {
+          if (queued) {
+            queueWriter.write((current) => {
+              const next = new Map(current);
+              next.set(agentId, [queued, ...(current.get(agentId) ?? [])]);
+              return next;
+            });
+          }
+          setSendError(error instanceof Error ? error.message : t("composer.errors.failedToSend"));
+        });
+      }
     },
-    [agentId, queueWriter, setSelectedAttachments, setUserInput],
+    [
+      agentId,
+      client,
+      queueWriter,
+      setSelectedAttachments,
+      setUserInput,
+      serverId,
+      supportsAgentMessageQueue,
+      t,
+    ],
   );
 
   const handleSendQueuedNow = useCallback(
     async (id: string) => {
+      if (client && supportsAgentMessageQueue) {
+        try {
+          const queued = queueWriter.read(agentId).find((item) => item.id === id);
+          if (queued) await enqueueOnServer(queued);
+          applyServerQueue(await client.steerQueuedAgentMessage(agentId, id));
+        } catch (error) {
+          setSendError(error instanceof Error ? error.message : t("composer.errors.failedToSend"));
+        }
+        return;
+      }
       if (!sendAgentMessageRef.current && !onSubmitMessageRef.current) return;
-      // Reuse the regular send path; server-side send atomically interrupts any active run.
       const result = await sendQueuedComposerMessageNow({
         agentId,
         messageId: id,
@@ -1598,7 +1762,16 @@ export function Composer({
         setSendError(result.errorMessage);
       }
     },
-    [agentId, queueWriter, submitMessage, t],
+    [
+      agentId,
+      applyServerQueue,
+      client,
+      enqueueOnServer,
+      queueWriter,
+      submitMessage,
+      supportsAgentMessageQueue,
+      t,
+    ],
   );
 
   const handleQueue = useCallback(

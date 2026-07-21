@@ -47,9 +47,18 @@ The daemon validates that the epoch is current and the exact source sequence sti
 
 ## Resume behavior
 
-When a client resumes with a known cursor, it catches up after that cursor to completion. It does not replace the view with a latest tail page, because tail pagination can skip the middle of a long background run.
+When a client resumes a viewed agent, it fetches and displays the latest bounded tail page first.
+History before that tail remains available through user-driven upward pagination. This keeps a long
+background run from forcing the user to wait while the app replays every page between an old local
+cursor and the current conclusion.
 
-When a client resumes without a cursor, it fetches the latest tail page.
+If the fetched tail is structurally identical to the tail already on screen, the reducer preserves
+the existing stream array identities. The authoritative sync still completes, but React subscribers
+do not receive a replacement conversation and the user's scroll position remains untouched.
+
+Sequence gaps detected while the agent is actively viewed still catch up after the known cursor to
+completion. That path preserves continuous delivery for an already-open conversation; it is distinct
+from returning to a conversation, where latest-content latency takes priority.
 
 ## Selective and legacy delivery
 

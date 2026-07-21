@@ -20,6 +20,10 @@ export const CLIENT_CAPS = {
   providerSubagents: "provider_subagents",
   // COMPAT(projectUpdates): added in v0.1.109, remove gate after 2027-01-15.
   projectUpdates: "project_updates",
+  // COMPAT(agentMessageQueue): added in v0.1.X. The daemon only broadcasts
+  // queue snapshots to clients whose outbound schema includes these messages.
+  // Remove the gate after 2027-01-20.
+  agentMessageQueue: "agent_message_queue",
   browserHost: "browser_host",
 } as const;
 

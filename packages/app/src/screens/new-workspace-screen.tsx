@@ -57,6 +57,7 @@ import { normalizeWorkspaceDescriptor, useSessionStore } from "@/stores/session-
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
 import { useDraftStore } from "@/stores/draft-store";
+import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { isActiveCreateFlowForDraft, useCreateFlowStore } from "@/stores/create-flow-store";
 import {
@@ -70,6 +71,7 @@ import { getForgePresentation } from "@/git/forge";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { generateMessageId } from "@/types/stream";
 import { toErrorMessage } from "@/utils/error-messages";
+import { orderHostsByPreference } from "@/utils/host-order";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import {
   getHostProjectSourceDirectory,
@@ -1331,7 +1333,9 @@ function useNewWorkspaceInitialContext({
   projectId,
   displayName: displayNameProp,
 }: NewWorkspaceScreenProps): NewWorkspaceInitialContextState {
-  const allHosts = useHosts();
+  const hosts = useHosts();
+  const hostOrder = useSidebarOrderStore((state) => state.hostOrder);
+  const allHosts = useMemo(() => orderHostsByPreference(hosts, hostOrder), [hostOrder, hosts]);
   const allServerIds = useMemo(() => allHosts.map((h) => h.serverId), [allHosts]);
   const projects = useHostProjects(allServerIds);
   const routeDisplayName = displayNameProp?.trim() ?? "";
@@ -1508,6 +1512,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         open={host.openState}
         onOpenChange={host.onOpenChange}
         anchorRef={host.anchorRef}
+        reorderable
         searchable={false}
         title="Host"
         desktopPlacement="bottom-start"

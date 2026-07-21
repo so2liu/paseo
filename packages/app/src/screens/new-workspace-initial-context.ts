@@ -147,13 +147,6 @@ export function resolveNewWorkspaceInitialServerId(input: NewWorkspaceInitialSer
     projects: input.projects,
     workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
   });
-  if (
-    lastActiveProjectServerId &&
-    isOnline(input.hostConnectionStatusByServerId, lastActiveProjectServerId)
-  ) {
-    return lastActiveProjectServerId;
-  }
-
   if (onlineServerIdsWithProjects.length > 0) {
     return onlineServerIdsWithProjects[0] ?? "";
   }
@@ -168,7 +161,7 @@ export function resolveNewWorkspaceInitialServerId(input: NewWorkspaceInitialSer
   const reachableServerIdsWithProjects = serverIdsWithProjects.filter(
     (serverId) => !isKnownUnreachable(input.hostConnectionStatusByServerId, serverId),
   );
-  if (reachableServerIdsWithProjects.length === 1) {
+  if (reachableServerIdsWithProjects.length > 0) {
     return reachableServerIdsWithProjects[0] ?? "";
   }
 

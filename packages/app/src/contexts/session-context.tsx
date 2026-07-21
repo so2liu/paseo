@@ -25,7 +25,11 @@ import {
   type TimelineDeliveryMode,
   type ViewedTimelineSync,
 } from "@/timeline/viewed-timeline-sync";
-import type { AgentAttachment, SessionOutboundMessage } from "@getpaseo/protocol/messages";
+import type {
+  AgentAttachment,
+  AgentMessageQueueItem,
+  SessionOutboundMessage,
+} from "@getpaseo/protocol/messages";
 import { parseServerInfoStatusPayload } from "@getpaseo/protocol/messages";
 import {
   buildAgentAttentionNotificationPayload,
@@ -60,6 +64,7 @@ import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
 import { useProviderSubagentStore } from "@/subagents/provider-store";
 import { revalidateSessionAfterResume } from "@/contexts/session-resume-revalidation";
+import type { QueuedComposerMessage } from "@/composer/actions";
 
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
@@ -75,6 +80,26 @@ export type {
 } from "@/stores/session-store";
 
 type AudioOutputPayload = Extract<SessionOutboundMessage, { type: "audio_output" }>["payload"];
+
+function queuedMessagesFromWire(
+  items: AgentMessageQueueItem[],
+  current: readonly QueuedComposerMessage[],
+): QueuedComposerMessage[] {
+  return items.map((item) => {
+    const local = current.find((candidate) => candidate.id === item.id);
+    return {
+      id: item.id,
+      text: item.text,
+      attachments:
+        local?.attachments ??
+        (item.attachments ?? [])
+          .filter((attachment) => attachment.type === "uploaded_file")
+          .map((attachment) => ({ kind: "file" as const, attachment })),
+      wireImages: item.images ?? [],
+      wireAttachments: item.attachments ?? [],
+    };
+  });
+}
 
 interface BufferedAudioChunk {
   chunkIndex: number;
@@ -410,6 +435,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const setWorkspaces = useSessionStore((state) => state.setWorkspaces);
   const flushAgentLastActivity = useSessionStore((state) => state.flushAgentLastActivity);
   const setPendingPermissions = useSessionStore((state) => state.setPendingPermissions);
+  const setQueuedMessages = useSessionStore((state) => state.setQueuedMessages);
   const updateSessionClient = useSessionStore((state) => state.updateSessionClient);
   const updateSessionServerInfo = useSessionStore((state) => state.updateSessionServerInfo);
   const setViewedTimelineSync = useSessionStore((state) => state.setViewedTimelineSync);
@@ -824,6 +850,16 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       // on status changes, which is sufficient for sorting and display purposes.
     });
 
+    const unsubAgentMessageQueue = client.on("agent.message_queue.updated", (message) => {
+      if (message.type !== "agent.message_queue.updated") return;
+      const { agentId, items } = message.payload;
+      setQueuedMessages(serverId, (current) => {
+        const next = new Map(current);
+        next.set(agentId, queuedMessagesFromWire(items, current.get(agentId) ?? []));
+        return next;
+      });
+    });
+
     const unsubAgentAttention = client.onAgentAttentionRequired((notification) => {
       if (notification.shouldNotify) {
         notifyAgentAttention(notification);
@@ -1128,6 +1164,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
     return () => {
       unsubAgentStream();
+      unsubAgentMessageQueue();
       unsubAgentTimeline();
       unsubProviderSubagentUpdate();
       unsubAgentAttention();
@@ -1162,6 +1199,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     setAgents,
     setWorkspaces,
     setPendingPermissions,
+    setQueuedMessages,
     notifyAgentAttention,
     recoverTimelineGap,
     applyWorkspaceSetupProgress,

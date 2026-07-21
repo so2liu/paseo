@@ -2121,6 +2121,19 @@ class ClaudeAgentSession implements AgentSession {
     return { turnId };
   }
 
+  async steer(prompt: AgentPromptInput): Promise<void> {
+    if (!this.activeForegroundTurnId) {
+      throw new Error("Claude has no active turn to steer");
+    }
+    await this.ensureQuery();
+    if (!this.input) {
+      throw new Error("Claude session input stream not initialized");
+    }
+    const message = this.toSdkUserMessage(prompt);
+    message.priority = "now";
+    this.input.push(message);
+  }
+
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
     this.subscribers.add(callback);
     return () => {

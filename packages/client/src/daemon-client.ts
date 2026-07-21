@@ -97,6 +97,7 @@ import type {
   PaseoConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
+  AgentMessageQueueItem,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -2827,6 +2828,56 @@ export class DaemonClient {
     await this.sendAgentMessage(agentId, text, options);
   }
 
+  async getAgentMessageQueue(agentId: string): Promise<AgentMessageQueueItem[]> {
+    const payload = await this.sendCorrelatedSessionRequest<"agent.message_queue.get.response">({
+      message: { type: "agent.message_queue.get.request", agentId },
+      responseType: "agent.message_queue.get.response",
+    });
+    if (!payload.success) throw new Error(payload.error ?? "Failed to load message queue");
+    return payload.items;
+  }
+
+  async enqueueAgentMessage(input: {
+    id: string;
+    agentId: string;
+    text: string;
+    images?: Array<{ data: string; mimeType: string }>;
+    attachments?: SendMessageOptions["attachments"];
+  }): Promise<AgentMessageQueueItem[]> {
+    const payload = await this.sendCorrelatedSessionRequest<"agent.message_queue.enqueue.response">(
+      {
+        message: { type: "agent.message_queue.enqueue.request", item: input },
+        responseType: "agent.message_queue.enqueue.response",
+      },
+    );
+    if (!payload.success) throw new Error(payload.error ?? "Failed to queue message");
+    return payload.items;
+  }
+
+  async removeQueuedAgentMessage(
+    agentId: string,
+    messageId: string,
+  ): Promise<AgentMessageQueueItem[]> {
+    const payload = await this.sendCorrelatedSessionRequest<"agent.message_queue.remove.response">({
+      message: { type: "agent.message_queue.remove.request", agentId, messageId },
+      responseType: "agent.message_queue.remove.response",
+    });
+    if (!payload.success) throw new Error(payload.error ?? "Failed to remove queued message");
+    return payload.items;
+  }
+
+  async steerQueuedAgentMessage(
+    agentId: string,
+    messageId: string,
+  ): Promise<AgentMessageQueueItem[]> {
+    const payload = await this.sendCorrelatedSessionRequest<"agent.message_queue.steer.response">({
+      message: { type: "agent.message_queue.steer.request", agentId, messageId },
+      responseType: "agent.message_queue.steer.response",
+    });
+    if (!payload.success) throw new Error(payload.error ?? "Failed to steer queued message");
+    return payload.items;
+  }
+
   async rewindAgent(
     agentId: string,
     messageId: string,
@@ -5144,6 +5195,7 @@ export class DaemonClient {
             [CLIENT_CAPS.terminalReflowableSnapshot]: true,
             [CLIENT_CAPS.providerSubagents]: true,
             [CLIENT_CAPS.projectUpdates]: true,
+            [CLIENT_CAPS.agentMessageQueue]: true,
             ...this.config.capabilities,
           },
           ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),

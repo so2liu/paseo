@@ -664,6 +664,7 @@ test("advertises client capabilities in hello", async () => {
     clientType: "cli",
     protocolVersion: 1,
     capabilities: {
+      agent_message_queue: true,
       custom_mode_icons: true,
       project_updates: true,
       provider_subagents: true,

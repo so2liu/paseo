@@ -1,4 +1,4 @@
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { AgentAttachment, ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -26,6 +26,8 @@ export interface QueuedComposerMessage {
   id: string;
   text: string;
   attachments: ComposerAttachment[];
+  wireImages?: Array<{ data: string; mimeType: string }>;
+  wireAttachments?: AgentAttachment[];
 }
 
 export interface AttachmentPersister {

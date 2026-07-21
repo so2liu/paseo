@@ -487,6 +487,7 @@ export const zhCN: TranslationResources = {
         copyResumeCommand: "复制恢复命令",
         copyAgentId: "复制 Agent ID",
         copyFilePath: "Copy file path",
+        downloadFile: "下载到本机",
         rename: "重命名",
         closeAbove: "关闭上方标签",
         closeBelow: "关闭下方标签",
@@ -1829,6 +1830,7 @@ export const zhCN: TranslationResources = {
         title: "配对设备",
         rowTitle: "配对设备",
         rowHint: "扫描二维码或复制链接，将手机连接到这个 Host",
+        updateRequired: "更新这个 Host 后即可重新获取添加链接",
       },
       orchestration: {
         title: "编排",

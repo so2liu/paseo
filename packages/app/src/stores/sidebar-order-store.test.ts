@@ -15,10 +15,19 @@ describe("migrateSidebarOrderState", () => {
     });
 
     expect(migrated).toEqual({
+      hostOrder: [],
       projectOrder: ["project-a"],
       workspaceOrderByProject: {
         "project-a": ["host-a:main", "host-a:feature", "host-b:main"],
       },
+    });
+  });
+
+  it("preserves a stored host order", () => {
+    expect(migrateSidebarOrderState({ hostOrder: ["host-b", "host-a", "host-b", ""] })).toEqual({
+      hostOrder: ["host-b", "host-a"],
+      projectOrder: [],
+      workspaceOrderByProject: {},
     });
   });
 });

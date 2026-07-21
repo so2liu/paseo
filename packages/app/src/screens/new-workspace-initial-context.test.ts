@@ -94,20 +94,20 @@ describe("resolveNewWorkspaceInitialServerId", () => {
     ).toBe("connecting");
   });
 
-  it("prefers the online last active project over another hydrated online project", () => {
+  it("prefers the first ordered online project host over the last active project host", () => {
     expect(
       resolveNewWorkspaceInitialServerId({
         allServerIds: ["host-a", "host-b"],
         routeServerId: null,
         lastActiveProject: projectFor("host-b", "remembered"),
-        projects: [projectFor("host-a")],
+        projects: [projectFor("host-a"), projectFor("host-b", "remembered")],
         hostConnectionStatusByServerId: statuses({
           "host-a": "online",
           "host-b": "online",
         }),
         workspaceMultiplicityByServerId: multiplicity(),
       }),
-    ).toBe("host-b");
+    ).toBe("host-a");
   });
 
   it("falls back to the only online host even before projects have hydrated", () => {
