@@ -41,6 +41,20 @@ describe("resolveNewWorkspaceInitialServerId", () => {
     ).toBe("offline");
   });
 
+  it("prefers a remembered project host when no route host is explicit", () => {
+    expect(
+      resolveNewWorkspaceInitialServerId({
+        allServerIds: ["host-a", "host-b"],
+        routeServerId: null,
+        preferredServerId: "host-b",
+        lastActiveProject: null,
+        projects: [projectFor("host-a"), projectFor("host-b")],
+        hostConnectionStatusByServerId: statuses({ "host-a": "online", "host-b": "online" }),
+        workspaceMultiplicityByServerId: multiplicity(),
+      }),
+    ).toBe("host-b");
+  });
+
   it("prefers the sole online host over a stale offline project", () => {
     expect(
       resolveNewWorkspaceInitialServerId({

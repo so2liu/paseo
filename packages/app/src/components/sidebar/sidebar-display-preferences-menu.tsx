@@ -22,6 +22,7 @@ const filterColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMu
 const GROUP_MODE_ITEMS: Array<{ value: SidebarGroupMode; label: string }> = [
   { value: "project", label: "Project" },
   { value: "status", label: "Status" },
+  { value: "device", label: "Device" },
 ];
 
 const WORKSPACE_TITLE_SOURCE_ITEMS: Array<{ value: WorkspaceTitleSource; label: string }> = [

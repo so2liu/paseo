@@ -34,6 +34,15 @@ const formPreferencesSchema = z.object({
     )
     .optional(),
   isolation: z.enum(["local", "worktree"]).optional(),
+  workspaceByProject: z
+    .record(
+      z.string(),
+      z.object({
+        serverId: z.string().optional(),
+        isolation: z.enum(["local", "worktree"]).optional(),
+      }),
+    )
+    .optional(),
 });
 
 export type ProviderPreferences = z.infer<typeof providerPreferencesSchema>;

@@ -18,7 +18,13 @@ import {
 export interface SidebarProjection {
   pinnedGroups: PinnedSidebarGroups;
   statusGroups: StatusGroup[];
+  deviceGroups: SidebarDeviceGroup[];
   shortcutModel: SidebarShortcutModel;
+}
+
+export interface SidebarDeviceGroup {
+  serverId: string;
+  rows: SidebarWorkspaceEntry[];
 }
 
 export function buildSidebarProjection(input: {
@@ -45,6 +51,14 @@ export function buildSidebarProjection(input: {
           input.projectNamesByKey,
         )
       : [];
+  const deviceGroups =
+    input.groupMode === "device"
+      ? buildDeviceGroups(
+          Array.from(input.workspaceEntriesByKey.values()).filter(
+            (workspace) => !pinnedWorkspaceKeys.has(workspace.workspaceKey),
+          ),
+        )
+      : [];
 
   const sections: SidebarShortcutSection[] = [];
   if (!input.pinnedCollapsed) {
@@ -57,6 +71,8 @@ export function buildSidebarProjection(input: {
         collapsed: input.collapsedStatusGroupKeys.has(group.bucket),
       })),
     );
+  } else if (input.groupMode === "device") {
+    sections.push(...deviceGroups.map((group) => ({ workspaces: group.rows })));
   } else {
     sections.push(
       ...pinnedGroups.unpinnedProjects.map((project) => ({
@@ -69,6 +85,23 @@ export function buildSidebarProjection(input: {
   return {
     pinnedGroups,
     statusGroups,
+    deviceGroups,
     shortcutModel: buildSidebarShortcutSections({ sections }),
   };
+}
+
+export function buildDeviceGroups(workspaces: SidebarWorkspaceEntry[]): SidebarDeviceGroup[] {
+  const rowsByServerId = new Map<string, SidebarWorkspaceEntry[]>();
+  for (const workspace of workspaces) {
+    const rows = rowsByServerId.get(workspace.serverId) ?? [];
+    rows.push(workspace);
+    rowsByServerId.set(workspace.serverId, rows);
+  }
+  return Array.from(rowsByServerId, ([serverId, rows]) => ({
+    serverId,
+    rows: rows.sort((left, right) => {
+      const projectOrder = left.projectName.localeCompare(right.projectName);
+      return projectOrder || left.name.localeCompare(right.name);
+    }),
+  }));
 }

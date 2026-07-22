@@ -37,7 +37,6 @@ import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import { COMPACT_FORM_FACTOR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
-import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
 import { useAgentInitialization } from "@/hooks/use-agent-initialization";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
 import {
@@ -123,6 +122,8 @@ function resolveChatAgentFromSession(
   const session = state.sessions[serverId];
   return session?.agents?.get(agentId) ?? session?.agentDetails?.get(agentId) ?? null;
 }
+
+const noopAttentionClear = () => {};
 
 const EMPTY_CHAT_AGENT_STATE: ChatAgentSelectedState = {
   serverId: null,
@@ -727,8 +728,6 @@ function ChatAgentContent({
   const { api: toastApi, toast: toastState, dismiss: dismissToast } = useToastHost();
   const { isArchivingAgent } = useArchiveAgent();
   const streamViewRef = useRef<AgentStreamViewHandle>(null);
-  const clearOnAgentBlurRef = useRef<() => void>(() => {});
-  const wasPaneFocusedRef = useRef(isPaneFocused);
   const reconnectToastArmedRef = useRef(false);
   const initAttemptTokenRef = useRef(0);
   const routeBottomAnchorRequestRef = useRef<{
@@ -801,18 +800,6 @@ function ChatAgentContent({
 
   const hasHydratedHistoryBefore = hasAppliedAuthoritativeHistory;
 
-  const attentionController = useAgentAttentionClear({
-    agentId,
-    client,
-    isConnected,
-    requiresAttention: agentState.requiresAttention,
-    attentionReason: agentState.attentionReason,
-    isScreenFocused: isPaneFocused,
-  });
-  useEffect(() => {
-    clearOnAgentBlurRef.current = attentionController.clearOnAgentBlur;
-  }, [attentionController.clearOnAgentBlur]);
-
   const { style: animatedKeyboardStyle } = useKeyboardShiftStyle({
     mode: "translate",
   });
@@ -838,21 +825,6 @@ function ChatAgentContent({
   }, [connectionStatus, dismissToast, toastApi, t]);
 
   const isArchivingCurrentAgent = Boolean(agentId && isArchivingAgent({ serverId, agentId }));
-
-  useEffect(() => {
-    if (wasPaneFocusedRef.current && !isPaneFocused) {
-      clearOnAgentBlurRef.current();
-    }
-    wasPaneFocusedRef.current = isPaneFocused;
-  }, [isPaneFocused]);
-
-  useEffect(() => {
-    return () => {
-      if (wasPaneFocusedRef.current) {
-        clearOnAgentBlurRef.current();
-      }
-    };
-  }, []);
 
   const isInitializing = agentId ? isInitializingFromMap : false;
   const isHistorySyncing = useMemo(() => {
@@ -1063,8 +1035,8 @@ function ChatAgentContent({
       showHistorySyncOverlay={showHistorySyncOverlay}
       showHistorySyncError={showHistorySyncError}
       cwd={agentCwd}
-      onAttentionInputFocus={attentionController.clearOnInputFocus}
-      onAttentionPromptSend={attentionController.clearOnPromptSend}
+      onAttentionInputFocus={noopAttentionClear}
+      onAttentionPromptSend={noopAttentionClear}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
     />
   );

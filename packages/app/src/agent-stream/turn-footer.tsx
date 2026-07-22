@@ -6,6 +6,7 @@ import type { Theme } from "@/styles/theme";
 import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
 import {
+  collectAssistantTurnConclusionForStreamRenderStrategy,
   collectAssistantTurnContentForStreamRenderStrategy,
   type StreamStrategy,
 } from "./strategy";
@@ -155,6 +156,15 @@ function CompletedTurnFooter({
       }),
     [strategy, items, startIndex],
   );
+  const getConclusion = useCallback(
+    () =>
+      collectAssistantTurnConclusionForStreamRenderStrategy({
+        strategy,
+        items,
+        startIndex,
+      }),
+    [strategy, items, startIndex],
+  );
   const boundary = resolveAssistantTurnForkBoundary({
     items,
     startIndex,
@@ -172,7 +182,8 @@ function CompletedTurnFooter({
   return (
     <View style={stylesheet.turnFooterSlot}>
       <AssistantTurnFooter
-        getContent={getContent}
+        getConclusion={getConclusion}
+        getFullContent={getContent}
         completedAt={timing?.completedAt}
         durationMs={timing?.durationMs}
         onFork={boundary && onForkAssistantTurn ? handleFork : undefined}

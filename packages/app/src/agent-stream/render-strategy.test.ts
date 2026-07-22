@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
 import {
+  collectAssistantTurnConclusionForStreamRenderStrategy,
   collectAssistantTurnContentForStreamRenderStrategy,
   getBottomOffsetForStreamRenderStrategy,
   getFrameChildOrderForStreamRenderStrategy,
@@ -194,6 +195,36 @@ describe("neighbor and traversal semantics", () => {
         startIndex: invertedStartIndex,
       }),
     ).toBe("assistant-1\n\nassistant-2");
+  });
+
+  it("collects only the final non-empty assistant message as the conclusion", () => {
+    const items = [
+      userMessage("u1", "question", 1),
+      assistantMessage("a1", "intermediate", 2),
+      assistantMessage("a2", "", 3),
+      assistantMessage("a3", "final conclusion", 4),
+    ];
+    const forward = resolveStreamRenderStrategy({ platform: "web", isMobileBreakpoint: false });
+    expect(
+      collectAssistantTurnConclusionForStreamRenderStrategy({
+        strategy: forward,
+        items,
+        startIndex: 3,
+      }),
+    ).toBe("final conclusion");
+
+    const inverted = resolveStreamRenderStrategy({ platform: "ios", isMobileBreakpoint: false });
+    const invertedItems = orderTailForStreamRenderStrategy({
+      strategy: inverted,
+      streamItems: items,
+    });
+    expect(
+      collectAssistantTurnConclusionForStreamRenderStrategy({
+        strategy: inverted,
+        items: invertedItems,
+        startIndex: 0,
+      }),
+    ).toBe("final conclusion");
   });
 
   it("returns undefined neighbor when index would be out of bounds", () => {

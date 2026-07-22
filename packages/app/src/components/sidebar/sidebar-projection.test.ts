@@ -52,7 +52,7 @@ function makeProject(workspaces: SidebarWorkspacePlacement[]): SidebarProjectEnt
 }
 
 function projectionInput(options?: {
-  groupMode?: "project" | "status";
+  groupMode?: "project" | "status" | "device";
   pinnedCollapsed?: boolean;
 }) {
   const pinned = makeWorkspace("pinned", "running");
@@ -110,6 +110,23 @@ describe("buildSidebarProjection", () => {
 
     expect(projection.shortcutModel.shortcutTargets).toEqual([
       { serverId: "srv", workspaceId: "unpinned" },
+    ]);
+  });
+
+  it("groups unpinned workspaces by device", () => {
+    const input = projectionInput({ groupMode: "device" });
+    const second = makeWorkspace("other-host");
+    second.entry.serverId = "srv-b";
+    second.entry.workspaceKey = "srv-b:other-host";
+    input.workspaceEntriesByKey.set(second.entry.workspaceKey, second.entry);
+
+    const projection = buildSidebarProjection(input);
+
+    expect(projection.deviceGroups.map((group) => group.serverId)).toEqual(["srv", "srv-b"]);
+    expect(projection.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv", workspaceId: "pinned" },
+      { serverId: "srv", workspaceId: "unpinned" },
+      { serverId: "srv-b", workspaceId: "other-host" },
     ]);
   });
 });

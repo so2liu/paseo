@@ -537,6 +537,11 @@ These small files are not validated as full Zod schemas but are persisted under 
 
 These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the daemon filesystem.
 
+New-workspace form preferences are app-local. In addition to provider/model controls, they keep a
+`workspaceByProject` record keyed by stable project key. Each entry may remember the preferred
+`serverId` and `local | worktree` isolation for that project; unavailable hosts are ignored when the
+form chooses its initial target.
+
 ### Keying convention: directory-backed vs workspace-owned
 
 Right-sidebar client state splits on whether it is determined by the directory or owned by the workspace (two workspaces can share one `cwd`). The split is enforced by the cache key, so changing a key changes the sharing semantics — see [architecture.md](architecture.md#right-sidebar-boundary-directory-backed-vs-workspace-owned) for the full table.

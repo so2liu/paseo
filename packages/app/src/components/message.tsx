@@ -561,7 +561,8 @@ export const UserMessage = memo(function UserMessage({
 });
 
 interface AssistantTurnFooterProps {
-  getContent: () => string;
+  getConclusion: () => string;
+  getFullContent: () => string;
   completedAt?: Date;
   durationMs?: number;
   onFork?: (target: AssistantForkTarget) => Promise<void> | void;
@@ -573,12 +574,33 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
-  copyButton: {
-    alignSelf: "center",
-    padding: theme.spacing[1],
-    paddingTop: theme.spacing[1],
-    marginTop: 0,
-    marginLeft: -theme.spacing[1],
+  copyActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  copyAction: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+  },
+  copyActionConfirmed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  copyActionSecondary: {
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+  },
+  copyActionHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
+  copyActionLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: STREAM_METADATA_FONT_SIZE,
+    fontWeight: "500",
   },
   labelWrapper: {
     position: "relative",
@@ -606,7 +628,8 @@ const TIMESTAMP_REVEAL_MS = 3000;
  * visible text swaps.
  */
 export const AssistantTurnFooter = memo(function AssistantTurnFooter({
-  getContent,
+  getConclusion,
+  getFullContent,
   completedAt,
   durationMs,
   onFork,
@@ -659,10 +682,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
 
   return (
     <View style={assistantTurnFooterStylesheet.container}>
-      <TurnCopyButton
-        getContent={getContent}
-        containerStyle={assistantTurnFooterStylesheet.copyButton}
-      />
+      <AssistantTurnCopyActions getConclusion={getConclusion} getFullContent={getFullContent} />
       {canFork ? <AssistantForkMenu onFork={handleFork} /> : null}
       {durationLabel ? (
         <Pressable
@@ -687,6 +707,112 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
     </View>
   );
 });
+
+const COPY_FEEDBACK_MS = 1800;
+
+function AssistantTurnCopyActions({
+  getConclusion,
+  getFullContent,
+}: {
+  getConclusion: () => string;
+  getFullContent: () => string;
+}) {
+  const { t } = useTranslation();
+  const [showFullCopy, setShowFullCopy] = useState(false);
+  const [copiedTarget, setCopiedTarget] = useState<"conclusion" | "full" | null>(null);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const copy = useCallback(async (target: "conclusion" | "full", getContent: () => string) => {
+    const content = getContent();
+    if (!content) return;
+    await writeMarkdownToRichClipboard(content, getDefaultMarkdownClipboardEnvironment());
+    setCopiedTarget(target);
+    setShowFullCopy(true);
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = setTimeout(() => {
+      setCopiedTarget(null);
+      feedbackTimerRef.current = null;
+    }, COPY_FEEDBACK_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    },
+    [],
+  );
+
+  const copyConclusion = useCallback(
+    () => copy("conclusion", getConclusion),
+    [copy, getConclusion],
+  );
+  const copyFull = useCallback(() => copy("full", getFullContent), [copy, getFullContent]);
+  const conclusionCopied = copiedTarget === "conclusion";
+  const fullCopied = copiedTarget === "full";
+
+  return (
+    <View style={assistantTurnFooterStylesheet.copyActions}>
+      <Pressable
+        onPress={copyConclusion}
+        accessibilityRole="button"
+        accessibilityLabel={
+          conclusionCopied
+            ? t("message.actions.copiedConclusion")
+            : t("message.actions.copyConclusion")
+        }
+        testID="assistant-copy-conclusion"
+      >
+        {({ hovered }) => (
+          <View
+            style={[
+              assistantTurnFooterStylesheet.copyAction,
+              conclusionCopied && assistantTurnFooterStylesheet.copyActionConfirmed,
+              hovered && assistantTurnFooterStylesheet.copyActionHovered,
+            ]}
+          >
+            {conclusionCopied ? (
+              <>
+                <Check size={15} color={assistantTurnFooterStylesheet.copyActionLabel.color} />
+                <Text style={assistantTurnFooterStylesheet.copyActionLabel}>
+                  {t("message.actions.copiedConclusion")}
+                </Text>
+              </>
+            ) : (
+              <Copy size={16} color={assistantTurnFooterStylesheet.copyActionLabel.color} />
+            )}
+          </View>
+        )}
+      </Pressable>
+      {showFullCopy ? (
+        <Pressable
+          onPress={copyFull}
+          accessibilityRole="button"
+          accessibilityLabel={
+            fullCopied ? t("message.actions.copiedFull") : t("message.actions.copyFull")
+          }
+          testID="assistant-copy-full"
+        >
+          {({ hovered }) => (
+            <View
+              style={[
+                assistantTurnFooterStylesheet.copyAction,
+                assistantTurnFooterStylesheet.copyActionSecondary,
+                hovered && assistantTurnFooterStylesheet.copyActionHovered,
+              ]}
+            >
+              {fullCopied ? (
+                <Check size={14} color={assistantTurnFooterStylesheet.copyActionLabel.color} />
+              ) : null}
+              <Text style={assistantTurnFooterStylesheet.copyActionLabel}>
+                {fullCopied ? t("message.actions.copiedFull") : t("message.actions.copyFull")}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
 
 interface LiveElapsedProps {
   startedAt: Date;

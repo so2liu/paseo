@@ -28,6 +28,7 @@ import {
   SidebarWorkspaceTrailingActionOverlay,
   SidebarWorkspaceTrailingActionSlot,
 } from "@/components/sidebar/sidebar-workspace-row-content";
+import { SidebarWorkspaceReviewSwipe } from "@/components/sidebar/sidebar-workspace-review-swipe";
 
 function noop() {}
 
@@ -288,57 +289,61 @@ function WorkspaceRowBody({
         }
         const workspaceRowStyle = getWorkspaceRowStyle({ isDragging, selected, isHovered });
         return (
-          <View
-            {...(draggable ? dragAttributes : {})}
-            {...(draggable ? dragHandleProps?.listeners : {})}
-            ref={
-              draggable ? (dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>) : undefined
-            }
-            style={styles.workspaceRowContainer}
-            {...hoverHandlers}
-          >
-            <Pressable
-              disabled={isArchiving}
-              aria-selected={selected}
-              accessibilityRole="button"
-              accessibilityState={accessibilityState}
-              style={workspaceRowStyle}
-              onPressIn={draggable ? interaction.handlePressIn : undefined}
-              onTouchMove={draggable ? interaction.handleTouchMove : undefined}
-              onPressOut={draggable ? interaction.handlePressOut : undefined}
-              onPress={handlePress}
-              testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
+          <SidebarWorkspaceReviewSwipe onMarkDone={onMarkAsRead}>
+            <View
+              {...(draggable ? dragAttributes : {})}
+              {...(draggable ? dragHandleProps?.listeners : {})}
+              ref={
+                draggable
+                  ? (dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>)
+                  : undefined
+              }
+              style={styles.workspaceRowContainer}
+              {...hoverHandlers}
             >
-              <SidebarWorkspaceRowContent
-                workspace={workspace}
-                subtitle={subtitle}
-                scriptIconKind={scriptIconKind}
-                isHovered={isHovered}
-                isLoading={isArchiving || isCreating}
-                isCreating={isCreating}
-                shortcutNumber={shortcutNumber}
-                showShortcutBadge={showShortcutBadge}
+              <Pressable
+                disabled={isArchiving}
+                aria-selected={selected}
+                accessibilityRole="button"
+                accessibilityState={accessibilityState}
+                style={workspaceRowStyle}
+                onPressIn={draggable ? interaction.handlePressIn : undefined}
+                onTouchMove={draggable ? interaction.handleTouchMove : undefined}
+                onPressOut={draggable ? interaction.handlePressOut : undefined}
+                onPress={handlePress}
+                testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
               >
-                <WorkspaceRowTrailingActions
+                <SidebarWorkspaceRowContent
                   workspace={workspace}
+                  subtitle={subtitle}
+                  scriptIconKind={scriptIconKind}
                   isHovered={isHovered}
-                  isTouchPlatform={isTouchPlatform}
+                  isLoading={isArchiving || isCreating}
                   isCreating={isCreating}
-                  showShortcutBadge={showShortcutBadge}
                   shortcutNumber={shortcutNumber}
-                  archiveLabel={archiveLabel}
-                  archiveStatus={archiveStatus}
-                  archivePendingLabel={archivePendingLabel}
-                  archiveShortcutKeys={archiveShortcutKeys}
-                  onArchive={onArchive}
-                  onCopyBranchName={onCopyBranchName}
-                  onCopyPath={onCopyPath}
-                  onRename={onRename}
-                  onMarkAsRead={onMarkAsRead}
-                />
-              </SidebarWorkspaceRowContent>
-            </Pressable>
-          </View>
+                  showShortcutBadge={showShortcutBadge}
+                >
+                  <WorkspaceRowTrailingActions
+                    workspace={workspace}
+                    isHovered={isHovered}
+                    isTouchPlatform={isTouchPlatform}
+                    isCreating={isCreating}
+                    showShortcutBadge={showShortcutBadge}
+                    shortcutNumber={shortcutNumber}
+                    archiveLabel={archiveLabel}
+                    archiveStatus={archiveStatus}
+                    archivePendingLabel={archivePendingLabel}
+                    archiveShortcutKeys={archiveShortcutKeys}
+                    onArchive={onArchive}
+                    onCopyBranchName={onCopyBranchName}
+                    onCopyPath={onCopyPath}
+                    onRename={onRename}
+                    onMarkAsRead={onMarkAsRead}
+                  />
+                </SidebarWorkspaceRowContent>
+              </Pressable>
+            </View>
+          </SidebarWorkspaceReviewSwipe>
         );
       }}
     </SidebarWorkspaceRowFrame>

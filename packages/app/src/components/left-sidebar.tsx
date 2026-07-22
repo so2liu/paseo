@@ -74,6 +74,7 @@ type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
 interface SidebarSharedProps {
   theme: SidebarTheme;
   statusGroups: StatusGroup[];
+  deviceGroups: ReturnType<typeof useSidebarModel>["deviceGroups"];
   pinnedGroups: PinnedSidebarGroups;
   projects: SidebarProjectEntry[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
@@ -137,6 +138,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     isRevalidating,
     refreshAll,
     statusGroups,
+    deviceGroups,
     pinnedGroups,
     collapsedProjectKeys,
     toggleProjectCollapsed,
@@ -235,6 +237,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const sharedProps = {
     theme,
     statusGroups,
+    deviceGroups,
     pinnedGroups,
     projects,
     workspaceEntriesByKey,
@@ -533,6 +536,7 @@ function SidebarFooter({
 function MobileSidebar({
   theme,
   statusGroups,
+  deviceGroups,
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
@@ -649,6 +653,7 @@ function MobileSidebar({
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
             groupMode={groupMode}
             statusGroups={statusGroups}
+            deviceGroups={deviceGroups}
             pinnedGroups={pinnedGroups}
             projects={projects}
             workspaceEntriesByKey={workspaceEntriesByKey}
@@ -679,6 +684,7 @@ function MobileSidebar({
 function DesktopSidebar({
   theme,
   statusGroups,
+  deviceGroups,
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
@@ -816,6 +822,7 @@ function DesktopSidebar({
             shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
             groupMode={groupMode}
             statusGroups={statusGroups}
+            deviceGroups={deviceGroups}
             pinnedGroups={pinnedGroups}
             projects={projects}
             workspaceEntriesByKey={workspaceEntriesByKey}

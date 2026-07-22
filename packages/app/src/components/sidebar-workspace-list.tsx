@@ -90,6 +90,7 @@ import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { SidebarStatusWorkspaceList } from "@/components/sidebar/sidebar-status-list";
+import type { SidebarDeviceGroup } from "@/components/sidebar/sidebar-projection";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
@@ -226,6 +227,7 @@ function selectionForSelectedWorkspace(
 
 interface SidebarWorkspaceListProps {
   statusGroups: StatusGroup[];
+  deviceGroups: SidebarDeviceGroup[];
   pinnedGroups: PinnedSidebarGroups;
   projects: SidebarProjectEntry[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
@@ -233,7 +235,7 @@ interface SidebarWorkspaceListProps {
   collapsedProjectKeys: ReadonlySet<string>;
   onToggleProjectCollapsed: (projectKey: string) => void;
   shortcutIndexByWorkspaceKey: Map<string, number>;
-  groupMode: "project" | "status";
+  groupMode: "project" | "status" | "device";
   isRefreshing?: boolean;
   onRefresh?: () => void;
   onWorkspacePress?: () => void;
@@ -1902,6 +1904,7 @@ const MemoProjectBlock = memo(ProjectBlock, areProjectBlockPropsEqual);
 
 export function SidebarWorkspaceList({
   statusGroups,
+  deviceGroups,
   pinnedGroups,
   projects,
   workspaceEntriesByKey,
@@ -1934,9 +1937,18 @@ export function SidebarWorkspaceList({
   const showHostLabels = useMemo(() => shouldShowSidebarHostLabels(projects), [projects]);
 
   const content =
-    groupMode === "status" ? (
+    groupMode === "status" || groupMode === "device" ? (
       <SidebarStatusModeWrapper
-        statusGroups={statusGroups}
+        statusGroups={
+          groupMode === "device"
+            ? deviceGroups.map((group) => ({
+                bucket: group.serverId,
+                label: hostLabelByServerId.get(group.serverId) ?? group.serverId,
+                rows: group.rows,
+              }))
+            : statusGroups
+        }
+        isDeviceMode={groupMode === "device"}
         pinnedGroups={pinnedGroups}
         workspaceEntriesByKey={workspaceEntriesByKey}
         projectNamesByKey={projectNamesByKey}
@@ -1975,6 +1987,7 @@ export function SidebarWorkspaceList({
 
 function SidebarStatusModeWrapper({
   statusGroups,
+  isDeviceMode,
   pinnedGroups,
   workspaceEntriesByKey,
   projectNamesByKey,
@@ -1986,7 +1999,8 @@ function SidebarStatusModeWrapper({
   onToggleWorkspacePin,
   listHeaderComponent,
 }: {
-  statusGroups: StatusGroup[];
+  statusGroups: Array<{ bucket: string; label: string; rows: SidebarWorkspaceEntry[] }>;
+  isDeviceMode: boolean;
   pinnedGroups: PinnedSidebarGroups;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectNamesByKey: Map<string, string>;
@@ -2003,6 +2017,7 @@ function SidebarStatusModeWrapper({
   return (
     <SidebarStatusWorkspaceList
       groups={statusGroups}
+      isDeviceMode={isDeviceMode}
       pinnedWorkspaces={pinnedGroups.pinnedChats.flatMap((workspace) => {
         const entry = workspaceEntriesByKey.get(workspace.workspaceKey);
         return entry ? [entry] : [];
@@ -2040,7 +2055,7 @@ function ProjectModeList({
   onToggleWorkspacePin,
 }: Omit<
   SidebarWorkspaceListProps,
-  "statusGroups" | "projectNamesByKey" | "groupMode" | "isRefreshing" | "onRefresh"
+  "statusGroups" | "deviceGroups" | "projectNamesByKey" | "groupMode" | "isRefreshing" | "onRefresh"
 > & {
   pathname: string;
   hostLabelByServerId: ReadonlyMap<string, string>;

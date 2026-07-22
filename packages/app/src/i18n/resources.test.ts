@@ -347,6 +347,11 @@ describe("translation resources", () => {
     expect(en.message.actions.copyCode).toBe("Copy code");
     expect(en.message.actions.copyTurn).toBe("Copy turn");
     expect(en.message.actions.copyMessage).toBe("Copy message");
+    expect(en.message.actions.copyConclusion).toBe("Copy conclusion");
+    expect(en.message.actions.copiedConclusion).toBe("Copied conclusion");
+    expect(en.message.actions.copyFull).toBe("Copy full response");
+    expect(zhCN.message.actions.copyConclusion).toBe("复制结论");
+    expect(zhCN.message.actions.copyFull).toBe("复制全文");
     expect(en.message.actions.copied).toBe("Copied");
     expect(en.message.attachments.dismissImage).toBe("Dismiss image");
     expect(en.message.attachments.closeImage).toBe("Close image");

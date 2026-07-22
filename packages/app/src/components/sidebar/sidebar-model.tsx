@@ -10,12 +10,13 @@ import { usePinnedSidebarKeys, type PinnedSidebarGroups } from "@/hooks/use-side
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import { useSidebarViewStore, type SidebarGroupMode } from "@/stores/sidebar-view-store";
 import type { SidebarShortcutModel } from "@/utils/sidebar-shortcuts";
-import { buildSidebarProjection } from "./sidebar-projection";
+import { buildSidebarProjection, type SidebarDeviceGroup } from "./sidebar-projection";
 
 interface SidebarModel extends SidebarWorkspacesListResult {
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   groupMode: SidebarGroupMode;
   statusGroups: StatusGroup[];
+  deviceGroups: SidebarDeviceGroup[];
   pinnedGroups: PinnedSidebarGroups;
   collapsedProjectKeys: ReadonlySet<string>;
   toggleProjectCollapsed: (projectKey: string) => void;
@@ -44,12 +45,12 @@ export function SidebarModelProvider({
   const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleProjectCollapsed,
   );
-  const isStatusMode = groupMode === "status";
+  const isDerivedGroupMode = groupMode === "status" || groupMode === "device";
   const workspaceEntriesByKey = useSidebarWorkspaceEntries(
     list.workspacePlacements,
-    active !== false || isStatusMode,
+    active !== false || isDerivedGroupMode,
   );
-  const projectionWorkspaceEntriesByKey = isStatusMode
+  const projectionWorkspaceEntriesByKey = isDerivedGroupMode
     ? workspaceEntriesByKey
     : EMPTY_WORKSPACE_ENTRIES;
   const pinnedKeys = usePinnedSidebarKeys(list.projects);
@@ -82,6 +83,7 @@ export function SidebarModelProvider({
       workspaceEntriesByKey,
       groupMode,
       statusGroups: projection.statusGroups,
+      deviceGroups: projection.deviceGroups,
       pinnedGroups: projection.pinnedGroups,
       collapsedProjectKeys,
       toggleProjectCollapsed,

@@ -94,6 +94,7 @@ export interface StreamStrategy {
     relation: NeighborRelation,
   ) => StreamItem | undefined;
   collectAssistantTurnContent: (items: StreamItem[], startIndex: number) => string;
+  collectAssistantTurnConclusion: (items: StreamItem[], startIndex: number) => string;
   isNearBottom: (input: StreamNearBottomInput) => boolean;
   getBottomOffset: (metrics: StreamViewportMetrics) => number;
   getEdgeSlotProps: (
@@ -174,6 +175,20 @@ export function createStreamStrategy(config: StreamStrategyConfig): StreamStrate
         }
       }
       return messages.toReversed().join("\n\n");
+    },
+    collectAssistantTurnConclusion: (items, startIndex) => {
+      for (
+        let index = startIndex;
+        index >= 0 && index < items.length;
+        index += config.assistantTurnTraversalStep
+      ) {
+        const currentItem = items[index];
+        if (currentItem.kind === "user_message") break;
+        if (currentItem.kind === "assistant_message" && currentItem.text.trim()) {
+          return currentItem.text;
+        }
+      }
+      return "";
     },
     isNearBottom: (input) => config.isNearBottom(input),
     getBottomOffset: (metrics) => config.getBottomOffset(metrics),
@@ -274,6 +289,14 @@ export function collectAssistantTurnContentForStreamRenderStrategy(params: {
   startIndex: number;
 }): string {
   return params.strategy.collectAssistantTurnContent(params.items, params.startIndex);
+}
+
+export function collectAssistantTurnConclusionForStreamRenderStrategy(params: {
+  strategy: StreamStrategy;
+  items: StreamItem[];
+  startIndex: number;
+}): string {
+  return params.strategy.collectAssistantTurnConclusion(params.items, params.startIndex);
 }
 
 export function isNearBottomForStreamRenderStrategy(
