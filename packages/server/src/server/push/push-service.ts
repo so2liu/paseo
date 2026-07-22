@@ -22,6 +22,14 @@ interface ExpoPushTicket {
   details?: { error?: string };
 }
 
+interface ExpoPushApiError {
+  code?: string;
+}
+
+interface ExpoPushErrorResponse {
+  errors?: ExpoPushApiError[];
+}
+
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const MAX_BATCH_SIZE = 100;
 
@@ -60,7 +68,7 @@ export class PushService {
     await Promise.all(batches.map((batch) => this.sendBatch(batch)));
   }
 
-  private async sendBatch(messages: ExpoPushMessage[]): Promise<void> {
+  private async sendBatch(messages: ExpoPushMessage[], canSplitByProject = true): Promise<void> {
     try {
       const response = await fetch(EXPO_PUSH_URL, {
         method: "POST",
@@ -72,6 +80,18 @@ export class PushService {
       });
 
       if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as ExpoPushErrorResponse | null;
+        const hasMixedProjects = result?.errors?.some(
+          (error) => error.code === "PUSH_TOO_MANY_EXPERIENCE_IDS",
+        );
+        if (canSplitByProject && messages.length > 1 && hasMixedProjects) {
+          this.logger.warn(
+            { tokenCount: messages.length },
+            "Expo push batch spans multiple projects; retrying separately",
+          );
+          await Promise.all(messages.map((message) => this.sendBatch([message], false)));
+          return;
+        }
         this.logger.error(
           { status: response.status, statusText: response.statusText },
           "Expo push API error",
