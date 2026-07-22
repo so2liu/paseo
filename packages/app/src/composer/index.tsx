@@ -126,30 +126,9 @@ import { getForgePresentation } from "@/git/forge";
 import { ForgeBrandIcon } from "@/git/forge-icon";
 import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
+import { queuedMessagesFromServer } from "@/composer/message-queue";
 
 type QueuedMessage = QueuedComposerMessage;
-
-function queuedMessagesFromServer(
-  items: AgentMessageQueueItem[],
-  existing: readonly QueuedComposerMessage[],
-): QueuedComposerMessage[] {
-  const existingById = new Map(existing.map((item) => [item.id, item]));
-  const result: QueuedComposerMessage[] = [];
-  for (const item of items) {
-    const attachments: ComposerAttachment[] = [];
-    for (const attachment of item.attachments ?? []) {
-      if (attachment.type === "uploaded_file") attachments.push({ kind: "file", attachment });
-    }
-    result.push({
-      id: item.id,
-      text: item.text,
-      attachments: existingById.get(item.id)?.attachments ?? attachments,
-      wireImages: item.images ?? [],
-      wireAttachments: item.attachments ?? [],
-    });
-  }
-  return result;
-}
 
 type AttachmentListUpdater =
   | UserComposerAttachment[]
@@ -586,6 +565,15 @@ function QueuedMessageRow({
   }, [onSendNow, item.id]);
   return (
     <View style={styles.queueItem}>
+      <View
+        style={[
+          styles.queueStatusDot,
+          item.serverAcknowledged
+            ? styles.queueStatusDotAcknowledged
+            : styles.queueStatusDotPending,
+        ]}
+        accessible={false}
+      />
       <Text style={styles.queueText} numberOfLines={2} ellipsizeMode="tail">
         {item.text}
       </Text>
@@ -2387,6 +2375,20 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flex: 1,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
+  },
+  queueStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: theme.borderRadius.full,
+    flexShrink: 0,
+  },
+  queueStatusDotPending: {
+    backgroundColor: "transparent",
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.foregroundMuted,
+  },
+  queueStatusDotAcknowledged: {
+    backgroundColor: theme.colors.statusSuccess,
   },
   queueActions: {
     flexDirection: "row",

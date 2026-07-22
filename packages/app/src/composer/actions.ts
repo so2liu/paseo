@@ -28,6 +28,7 @@ export interface QueuedComposerMessage {
   attachments: ComposerAttachment[];
   wireImages?: Array<{ data: string; mimeType: string }>;
   wireAttachments?: AgentAttachment[];
+  serverAcknowledged?: boolean;
 }
 
 export interface AttachmentPersister {

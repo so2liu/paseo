@@ -25,11 +25,7 @@ import {
   type TimelineDeliveryMode,
   type ViewedTimelineSync,
 } from "@/timeline/viewed-timeline-sync";
-import type {
-  AgentAttachment,
-  AgentMessageQueueItem,
-  SessionOutboundMessage,
-} from "@getpaseo/protocol/messages";
+import type { AgentAttachment, SessionOutboundMessage } from "@getpaseo/protocol/messages";
 import { parseServerInfoStatusPayload } from "@getpaseo/protocol/messages";
 import {
   buildAgentAttentionNotificationPayload,
@@ -64,7 +60,7 @@ import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
 import { useProviderSubagentStore } from "@/subagents/provider-store";
 import { revalidateSessionAfterResume } from "@/contexts/session-resume-revalidation";
-import type { QueuedComposerMessage } from "@/composer/actions";
+import { queuedMessagesFromServer } from "@/composer/message-queue";
 
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
@@ -80,26 +76,6 @@ export type {
 } from "@/stores/session-store";
 
 type AudioOutputPayload = Extract<SessionOutboundMessage, { type: "audio_output" }>["payload"];
-
-function queuedMessagesFromWire(
-  items: AgentMessageQueueItem[],
-  current: readonly QueuedComposerMessage[],
-): QueuedComposerMessage[] {
-  return items.map((item) => {
-    const local = current.find((candidate) => candidate.id === item.id);
-    return {
-      id: item.id,
-      text: item.text,
-      attachments:
-        local?.attachments ??
-        (item.attachments ?? [])
-          .filter((attachment) => attachment.type === "uploaded_file")
-          .map((attachment) => ({ kind: "file" as const, attachment })),
-      wireImages: item.images ?? [],
-      wireAttachments: item.attachments ?? [],
-    };
-  });
-}
 
 interface BufferedAudioChunk {
   chunkIndex: number;
@@ -855,7 +831,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       const { agentId, items } = message.payload;
       setQueuedMessages(serverId, (current) => {
         const next = new Map(current);
-        next.set(agentId, queuedMessagesFromWire(items, current.get(agentId) ?? []));
+        next.set(agentId, queuedMessagesFromServer(items, current.get(agentId) ?? []));
         return next;
       });
     });
