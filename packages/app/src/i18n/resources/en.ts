@@ -1648,8 +1648,8 @@ export const en = {
       importTitle: "Import servers",
       importDescription:
         "Merge a server backup into this device without replacing existing servers.",
-      importHelp: "Paste server data copied from another Paseo client.",
-      placeholder: "Paste Paseo server data",
+      importHelp: "Paste Paseo server JSON or one Relay pairing link per line.",
+      placeholder: "Paste server JSON or Relay links, one per line",
       importAction: "Import",
       importing: "Importing...",
       invalid: "Invalid server data",
