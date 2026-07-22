@@ -55,7 +55,7 @@ type StoredAppSettings = Partial<AppSettings> & { compactToolCalls?: unknown };
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   theme: "auto",
   language: "system",
-  sendBehavior: "interrupt",
+  sendBehavior: "queue",
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
   uiFontFamily: "",

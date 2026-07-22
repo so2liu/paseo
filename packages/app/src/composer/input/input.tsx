@@ -1189,7 +1189,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     voiceServerId: props.voiceServerId,
     voiceAgentId: props.voiceAgentId,
     isAgentRunning: props.isAgentRunning ?? false,
-    defaultSendBehavior: props.defaultSendBehavior ?? "interrupt",
+    defaultSendBehavior: props.defaultSendBehavior ?? "queue",
     onQueue: props.onQueue,
     onSubmitLoadingPress: props.onSubmitLoadingPress,
     onKeyPressCallback: props.onKeyPress,
