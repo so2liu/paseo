@@ -9,6 +9,7 @@ Paseo is a mobile app for monitoring and controlling your local AI coding agents
 This repository is our fork of `getpaseo/paseo`, customized according to the owner's preferences. We build and deploy this customized fork on the owner's Mac and to the owner's iPhone for everyday development use.
 
 - Treat `so2liu/paseo` (`origin`) as our fork and `getpaseo/paseo` (`upstream`) as the upstream project.
+- Agents may commit completed, verified, in-scope work and push it to `origin` without waiting for a separate commit or push request. If the owner explicitly asks to keep changes local, leave them uncommitted, create a draft only, or not push, follow that instruction. Never push directly to `upstream`.
 - When the owner asks to pull, sync, or update from upstream, handle the Git operations for them and update from the latest upstream beta release tag, not from an arbitrary `upstream/main` commit. Fetch upstream tags and verify which GitHub prerelease is newest before choosing the base.
 - Preserve our custom features and behavior when updating. Rebase, merge, or port the custom commits onto the selected beta as appropriate, and verify that the resulting tree still contains the intended customizations.
 - When both our fork and upstream contain a fix for the same bug, prefer the upstream implementation. Remove or adapt our redundant fix only after confirming that the upstream fix covers the same behavior; retain unrelated custom behavior.
