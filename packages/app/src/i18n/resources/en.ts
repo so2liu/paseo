@@ -1639,6 +1639,21 @@ export const en = {
         },
       },
     },
+    serverMigration: {
+      title: "Server migration",
+      copyTitle: "Copy all servers",
+      copyAction: "Copy",
+      copied: "Copied",
+      securityHint: "Includes saved passwords and pairing keys. Keep it private.",
+      importTitle: "Import servers",
+      importDescription:
+        "Merge a server backup into this device without replacing existing servers.",
+      importHelp: "Paste server data copied from another Paseo client.",
+      placeholder: "Paste Paseo server data",
+      importAction: "Import",
+      importing: "Importing...",
+      invalid: "Invalid server data",
+    },
     diagnostics: {
       title: "Diagnostics",
       testAudio: "Test audio",

@@ -16,6 +16,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Buffer } from "buffer";
+import * as Clipboard from "expo-clipboard";
 import {
   ArrowLeft,
   Settings,
@@ -64,6 +65,8 @@ import { ScreenHeader } from "@/components/headers/screen-header";
 import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
+import { HostTransferModal } from "@/components/host-transfer-modal";
+import { serializeHostTransfer } from "@/utils/host-transfer";
 import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-section";
 import { Button } from "@/components/ui/button";
 import { CommunityLinks } from "@/components/community-links";
@@ -434,6 +437,53 @@ function GeneralSection({
           />
         </View>
       </View>
+    </SettingsSection>
+  );
+}
+
+function ServerMigrationSection() {
+  const { t } = useTranslation();
+  const hosts = useHosts();
+  const [isImportVisible, setIsImportVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    await Clipboard.setStringAsync(serializeHostTransfer(hosts));
+    setCopied(true);
+  }, [hosts]);
+  const handleCopyPress = useCallback(() => {
+    void handleCopy();
+  }, [handleCopy]);
+  const handleOpenImport = useCallback(() => setIsImportVisible(true), []);
+  const handleCloseImport = useCallback(() => setIsImportVisible(false), []);
+
+  return (
+    <SettingsSection title={t("settings.serverMigration.title")}>
+      <View style={settingsStyles.card}>
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.serverMigration.copyTitle")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.serverMigration.securityHint")}</Text>
+          </View>
+          <Button variant="secondary" size="sm" onPress={handleCopyPress} disabled={!hosts.length}>
+            {copied
+              ? t("settings.serverMigration.copied")
+              : t("settings.serverMigration.copyAction")}
+          </Button>
+        </View>
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.serverMigration.importTitle")}</Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.serverMigration.importDescription")}
+            </Text>
+          </View>
+          <Button variant="secondary" size="sm" onPress={handleOpenImport}>
+            {t("settings.serverMigration.importAction")}
+          </Button>
+        </View>
+      </View>
+      <HostTransferModal visible={isImportVisible} onClose={handleCloseImport} />
     </SettingsSection>
   );
 }
@@ -1399,6 +1449,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
                 handleLanguageChange={handleLanguageChange}
                 handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
               />
+              <ServerMigrationSection />
               {isDesktopApp ? <BrowserDataSection /> : null}
             </>
           );

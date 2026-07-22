@@ -1797,6 +1797,22 @@ export class HostRuntimeStore {
     await this.persistHosts();
   }
 
+  async importHosts(importedHosts: HostProfile[]): Promise<void> {
+    let next = this.hosts;
+    for (const host of importedHosts) {
+      for (const connection of host.connections) {
+        next = upsertHostConnectionInProfiles({
+          profiles: next,
+          serverId: host.serverId,
+          label: host.label,
+          connection,
+        });
+      }
+    }
+    this.setHostsAndSync(next);
+    await this.persistHosts();
+  }
+
   async removeConnection(serverId: string, connectionId: string): Promise<void> {
     const now = new Date().toISOString();
     const next = this.hosts
@@ -2387,6 +2403,7 @@ export interface HostMutations {
   ) => Promise<HostProfile>;
   renameHost: (serverId: string, label: string) => Promise<void>;
   removeHost: (serverId: string) => Promise<void>;
+  importHosts: (hosts: HostProfile[]) => Promise<void>;
   removeConnection: (serverId: string, connectionId: string) => Promise<void>;
 }
 
@@ -2401,6 +2418,7 @@ export function useHostMutations(): HostMutations {
       upsertConnectionFromOfferUrl: (url, label) => store.upsertConnectionFromOfferUrl(url, label),
       renameHost: (serverId, label) => store.renameHost(serverId, label),
       removeHost: (serverId) => store.removeHost(serverId),
+      importHosts: (hosts) => store.importHosts(hosts),
       removeConnection: (serverId, connectionId) => store.removeConnection(serverId, connectionId),
     }),
     [store],
