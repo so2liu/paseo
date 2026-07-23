@@ -21,7 +21,7 @@ the agent runs through `ensureAgentLoaded()`, which resumes the durable provider
 same Paseo agent ID. Provider history is not appended again when the canonical timeline is already
 primed.
 
-The daemon collects an eligible idle runtime after two minutes and sweeps every 15 seconds. Only
+The daemon collects an eligible idle runtime after one hour and sweeps every 15 seconds. Only
 unarchived, non-internal agents that are exactly `idle`, have no active or pending run, replacement,
 or permission, and have not been activated during the idle window are eligible. `running`,
 `initializing`, and `error` agents stay resident. Subagents are considered independently; collection
