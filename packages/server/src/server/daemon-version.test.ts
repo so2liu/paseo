@@ -31,7 +31,7 @@ describe("resolveDaemonVersion", () => {
     mkdirSync(nestedDir, { recursive: true });
 
     const moduleUrl = pathToFileURL(path.join(nestedDir, "index.js")).href;
-    expect(resolveDaemonVersion(moduleUrl)).toBe("9.8.7");
+    expect(resolveDaemonVersion(moduleUrl)).toBe("9.8.7+LY");
   });
 
   it("throws when @getpaseo/server package metadata cannot be resolved", () => {

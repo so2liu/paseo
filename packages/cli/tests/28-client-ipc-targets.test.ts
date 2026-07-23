@@ -116,7 +116,7 @@ console.log("=== CLI IPC Target Helpers ===\n");
 
 {
   console.log("Test 8: CLI app version resolves for daemon hello compatibility");
-  assert.match(resolveCliVersion(), /^\d+\.\d+\.\d+/);
+  assert.match(resolveCliVersion(), /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\+LY$/);
   console.log("✓ CLI app version resolves for daemon hello compatibility\n");
 }
 

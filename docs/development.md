@@ -210,6 +210,15 @@ Check `$PASEO_HOME/daemon.log` for daemon logs. The default level is `info`; set
 `PASEO_LOG_LEVEL=trace` before launching the daemon when you need full provider,
 session, and agent-manager traces for stuck-state debugging.
 
+### Custom fork build identity
+
+CLI and daemon builds from this fork append the SemVer build metadata `+LY` to
+the workspace version at runtime. For example, upstream version
+`0.2.0-beta.1` is reported as `0.2.0-beta.1+LY`. Keep the package manifests on
+the upstream version so release tooling and dependency ranges remain compatible.
+Manually packaged daemon archives use `-LY-` in the filename, for example
+`paseo-daemon-<commit>-LY-darwin-arm64.tar.gz`.
+
 The supervisor rotates `daemon.log`. Persisted `log.file.rotate` settings in
 `$PASEO_HOME/config.json` win first. Without persisted config, the optional
 `PASEO_LOG_ROTATE_SIZE` and `PASEO_LOG_ROTATE_COUNT` env vars override the

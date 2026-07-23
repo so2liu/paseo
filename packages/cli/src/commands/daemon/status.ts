@@ -1,8 +1,8 @@
 import type { Command } from "commander";
-import { createRequire } from "node:module";
 import { getOrCreateServerId, findExecutable, execCommand } from "@getpaseo/server";
 import { connectToDaemon } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema } from "../../output/index.js";
+import { resolveCliVersion } from "../../version.js";
 import { resolveLocalDaemonState, resolveTcpHostFromListen } from "./local-daemon.js";
 import { resolveNodePathFromPid } from "./runtime-toolchain.js";
 
@@ -41,12 +41,6 @@ interface StatusRow {
   value: string;
 }
 
-interface CliPackageJson {
-  version?: unknown;
-}
-
-const require = createRequire(import.meta.url);
-
 function normalizeError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -66,18 +60,6 @@ function appendNote(current: string | undefined, next: string | undefined): stri
   if (!next) return current;
   if (!current) return next;
   return `${current}; ${next}`;
-}
-
-function resolveCliVersion(): string {
-  try {
-    const packageJson = require("../../../package.json") as CliPackageJson;
-    if (typeof packageJson.version === "string" && packageJson.version.trim().length > 0) {
-      return packageJson.version.trim();
-    }
-  } catch {
-    // Fall through.
-  }
-  return "unknown";
 }
 
 function createStatusSchema(status: DaemonStatus): OutputSchema<StatusRow> {
