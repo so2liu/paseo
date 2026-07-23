@@ -228,6 +228,14 @@ fork commit unless the owner explicitly asks for a narrower scope:
 - `ly-mbp`: the macOS Desktop installer and the separate `darwin-arm64` daemon
   archive.
 
+In owner deployment language, a **Desktop upgrade** means a whole-machine Paseo
+upgrade on `ly-mbp`: install both the macOS Desktop app and the separately
+installed macOS daemon from the same customized-fork commit, restart the daemon,
+and verify the installed app plus CLI/daemon versions. This definition also
+applies to requests to build, install, or update "Desktop" unless the owner
+explicitly narrows the scope. Replacing `/Applications/Paseo.app` alone is not a
+completed Desktop upgrade.
+
 The Desktop app may report `desktopManaged: false` when it connects to the
 standalone daemon on `ly-mbp`. Replacing `/Applications/Paseo.app` does not
 upgrade that daemon: install the new release under `~/paseo-releases/<commit>`,
