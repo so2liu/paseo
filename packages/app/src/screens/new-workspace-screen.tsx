@@ -1631,8 +1631,8 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
 
   return isCompact ? (
     <View testID="new-workspace-ref-picker-row" style={styles.formStack}>
-      <FormRow>{projectControl}</FormRow>
       {hostControl ? <FormRow>{hostControl}</FormRow> : null}
+      <FormRow>{projectControl}</FormRow>
       {/* Keep fixed row height when git-only controls are hidden. */}
       {isolationControl ? (
         <FormRow>{isolationControl}</FormRow>
@@ -1643,8 +1643,8 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
     </View>
   ) : (
     <View testID="new-workspace-ref-picker-row" style={styles.formStackDesktop}>
-      {projectControl}
       {hostControl}
+      {projectControl}
       {isolationControl}
       {baseControl}
     </View>

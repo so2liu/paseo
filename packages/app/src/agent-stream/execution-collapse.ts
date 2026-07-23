@@ -22,6 +22,28 @@ function findFinalAssistant(items: readonly StreamItem[]): StreamItem | null {
   return null;
 }
 
+function findLastToolCallAssistant(items: readonly StreamItem[]): StreamItem | null {
+  let lastToolCallIndex = -1;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (items[index].kind === "tool_call") {
+      lastToolCallIndex = index;
+      break;
+    }
+  }
+  if (lastToolCallIndex < 0) return null;
+
+  let firstToolCallIndex = lastToolCallIndex;
+  while (firstToolCallIndex > 0 && items[firstToolCallIndex - 1].kind === "tool_call") {
+    firstToolCallIndex -= 1;
+  }
+
+  const precedingItem = items[firstToolCallIndex - 1];
+  if (precedingItem?.kind === "assistant_message" && precedingItem.text.trim()) {
+    return precedingItem;
+  }
+  return null;
+}
+
 export function buildExecutionCollapseProjection(input: {
   items: readonly StreamItem[];
   isRunning: boolean;
@@ -41,7 +63,11 @@ export function buildExecutionCollapseProjection(input: {
     const turnItems = input.items.slice(userIndex + 1, nextUserIndex);
     const finalAssistant = findFinalAssistant(turnItems);
     if (!finalAssistant) continue;
-    const collapsibleItems = turnItems.filter((item) => item.id !== finalAssistant.id);
+    const lastToolCallAssistant = findLastToolCallAssistant(turnItems);
+    const visibleItemIds = new Set(
+      [finalAssistant, lastToolCallAssistant].flatMap((item) => (item ? [item.id] : [])),
+    );
+    const collapsibleItems = turnItems.filter((item) => !visibleItemIds.has(item.id));
     if (collapsibleItems.length === 0) continue;
 
     const group: ExecutionCollapseGroup = {

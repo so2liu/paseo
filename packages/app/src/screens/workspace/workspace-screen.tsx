@@ -45,6 +45,7 @@ import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { ScreenTitle } from "@/components/headers/screen-title";
+import { HostStatusDot } from "@/components/host-status-dot";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Shortcut } from "@/components/ui/shortcut";
 import type { ShortcutKey } from "@/utils/format-shortcut";
@@ -1185,6 +1186,7 @@ interface WorkspaceHeaderTitleBarProps {
   title: string;
   subtitle: string;
   showSubtitle: boolean;
+  hostLabel: string;
   currentBranchName: string | null;
   normalizedServerId: string;
   normalizedWorkspaceId: string;
@@ -1220,6 +1222,7 @@ function WorkspaceHeaderTitleBar({
   title,
   subtitle,
   showSubtitle,
+  hostLabel,
   currentBranchName,
   normalizedServerId,
   normalizedWorkspaceId,
@@ -1258,14 +1261,33 @@ function WorkspaceHeaderTitleBar({
       ) : (
         <View style={styles.headerTitleTextGroup}>
           <ScreenTitle testID="workspace-header-title">{title}</ScreenTitle>
-          {showSubtitle ? (
-            <Text
-              testID="workspace-header-subtitle"
-              style={styles.headerProjectTitle}
-              numberOfLines={1}
-            >
-              {subtitle}
-            </Text>
+          {showSubtitle || isMobile ? (
+            <View style={styles.headerContextRow}>
+              {showSubtitle ? (
+                <Text
+                  testID="workspace-header-subtitle"
+                  style={styles.headerProjectTitle}
+                  numberOfLines={1}
+                >
+                  {subtitle}
+                </Text>
+              ) : null}
+              {isMobile ? (
+                <>
+                  {showSubtitle ? <Text style={styles.headerContextSeparator}>·</Text> : null}
+                  <View style={styles.headerHostContext}>
+                    <HostStatusDot serverId={normalizedServerId} />
+                    <Text
+                      testID="workspace-header-host"
+                      style={styles.headerHostLabel}
+                      numberOfLines={1}
+                    >
+                      {hostLabel}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
+            </View>
           ) : null}
         </View>
       )}
@@ -3678,6 +3700,7 @@ function WorkspaceScreenContent({
                 title={workspaceHeaderTitle}
                 subtitle={workspaceHeaderSubtitle}
                 showSubtitle={shouldShowWorkspaceHeaderSubtitle}
+                hostLabel={getHostDisplayName(daemonProfile ?? null, normalizedServerId)}
                 currentBranchName={currentBranchName}
                 normalizedServerId={normalizedServerId}
                 normalizedWorkspaceId={normalizedWorkspaceId}
@@ -3894,6 +3917,30 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minWidth: 0,
     maxWidth: "60%",
+  },
+  headerContextRow: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  headerContextSeparator: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  headerHostContext: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  headerHostLabel: {
+    minWidth: 0,
+    flexShrink: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   headerTitleSkeleton: {
     width: 220,
