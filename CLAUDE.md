@@ -14,6 +14,7 @@ This repository is our fork of `getpaseo/paseo`, customized according to the own
 - Preserve our custom features and behavior when updating. Rebase, merge, or port the custom commits onto the selected beta as appropriate, and verify that the resulting tree still contains the intended customizations.
 - When both our fork and upstream contain a fix for the same bug, prefer the upstream implementation. Remove or adapt our redundant fix only after confirming that the upstream fix covers the same behavior; retain unrelated custom behavior.
 - Every daemon deployment and every iOS build or installation for the owner's iPhone must be produced from the current customized fork state. Never deploy an unmodified upstream checkout, upstream tag, or upstream prebuilt artifact in place of our customized version.
+- Treat owner fleet upgrades as a matched deployment unless the owner explicitly narrows the scope: update the Linux daemon on `box`, and update both the macOS Desktop app and the separately installed macOS daemon on `ly-mbp`, all from the same customized-fork commit. Installing the Desktop app alone does not update an already-running external daemon.
 
 ## Repository map
 

@@ -221,6 +221,20 @@ Manually packaged daemon archives use `-LY-` in the filename, for example
 macOS desktop installers also carry `-LY-` in the artifact filename, for
 example `Paseo-0.2.0-beta.1-LY-arm64.dmg`.
 
+For owner fleet upgrades, build and deploy a matched set from one customized
+fork commit unless the owner explicitly asks for a narrower scope:
+
+- `box`: the `linux-x64` daemon archive.
+- `ly-mbp`: the macOS Desktop installer and the separate `darwin-arm64` daemon
+  archive.
+
+The Desktop app may report `desktopManaged: false` when it connects to the
+standalone daemon on `ly-mbp`. Replacing `/Applications/Paseo.app` does not
+upgrade that daemon: install the new release under `~/paseo-releases/<commit>`,
+atomically repoint `~/.local/bin/paseo`, restart the daemon, and verify that
+both CLI and daemon report the same `+LY` version. Keep the previous release
+available as the rollback target.
+
 The supervisor rotates `daemon.log`. Persisted `log.file.rotate` settings in
 `$PASEO_HOME/config.json` win first. Without persisted config, the optional
 `PASEO_LOG_ROTATE_SIZE` and `PASEO_LOG_ROTATE_COUNT` env vars override the
