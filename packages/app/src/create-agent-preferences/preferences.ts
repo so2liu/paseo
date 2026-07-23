@@ -38,7 +38,6 @@ const formPreferencesSchema = z.object({
     .record(
       z.string(),
       z.object({
-        serverId: z.string().optional(),
         isolation: z.enum(["local", "worktree"]).optional(),
       }),
     )

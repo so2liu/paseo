@@ -538,9 +538,9 @@ These small files are not validated as full Zod schemas but are persisted under 
 These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the daemon filesystem.
 
 New-workspace form preferences are app-local. In addition to provider/model controls, they keep a
-`workspaceByProject` record keyed by stable project key. Each entry may remember the preferred
-`serverId` and `local | worktree` isolation for that project; unavailable hosts are ignored when the
-form chooses its initial target.
+`workspaceByProject` record keyed by stable project key. Each entry may remember the
+`local | worktree` isolation for that project. Host selection is never stored per project:
+New Workspace resolves or accepts the host first, then limits project selection to that host.
 
 ### Keying convention: directory-backed vs workspace-owned
 

@@ -140,4 +140,18 @@ describe("create agent preferences", () => {
   it("rejects an unknown isolation value as invalid stored preferences", () => {
     expect(parseFormPreferences({ provider: "codex", isolation: "sandbox" })).toEqual({});
   });
+
+  it("drops legacy per-project host preferences while preserving isolation", () => {
+    expect(
+      parseFormPreferences({
+        workspaceByProject: {
+          paseo: { serverId: "mbp", isolation: "worktree" },
+        },
+      }),
+    ).toEqual({
+      workspaceByProject: {
+        paseo: { isolation: "worktree" },
+      },
+    });
+  });
 });

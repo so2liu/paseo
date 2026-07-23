@@ -198,7 +198,10 @@ export async function expectNewWorkspaceDraft(page: Page, draft: string): Promis
 
 export async function selectNewWorkspaceHost(page: Page, hostLabel: string): Promise<void> {
   await page.getByTestId("host-picker-trigger").click();
-  await page.getByText(hostLabel, { exact: true }).click();
+  await page
+    .locator('[data-testid^="new-workspace-host-picker-option-"]:visible')
+    .getByText(hostLabel, { exact: true })
+    .click();
 }
 
 export async function submitNewWorkspacePrompt(
