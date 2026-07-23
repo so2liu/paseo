@@ -246,6 +246,20 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
           reason,
         });
       },
+      scrollToItem: (itemId) => {
+        const historyIndex = historyRows.findIndex((item) => item.id === itemId);
+        if (historyIndex >= 0) {
+          flatListRef.current?.scrollToIndex({
+            index: historyIndex,
+            animated: true,
+            viewPosition: 0.5,
+          });
+          return;
+        }
+        if (segments.liveHead.some((item) => item.id === itemId)) {
+          scrollToBottom(true);
+        }
+      },
       prepareForViewportChange: () => {
         bottomAnchorController.prepareForStickyViewportChange();
         markNativeViewportSettling();
@@ -257,7 +271,15 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
         viewportRef.current = null;
       }
     };
-  }, [agentId, bottomAnchorController, markNativeViewportSettling, viewportRef]);
+  }, [
+    agentId,
+    bottomAnchorController,
+    historyRows,
+    markNativeViewportSettling,
+    scrollToBottom,
+    segments.liveHead,
+    viewportRef,
+  ]);
 
   const handleScroll = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -352,6 +374,14 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       return (rendered ?? null) as ReactElement | null;
     },
   );
+  const handleScrollToIndexFailed = useStableEvent(
+    (info: { index: number; averageItemLength: number }) => {
+      flatListRef.current?.scrollToOffset({
+        offset: Math.max(0, info.index * info.averageItemLength),
+        animated: true,
+      });
+    },
+  );
 
   const liveHeaderContent = useMemo(() => {
     // Stable render events read the latest expansion state; this revision makes
@@ -414,6 +444,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       onScroll={handleScroll}
       scrollEventThrottle={16}
       onContentSizeChange={handleContentSizeChange}
+      onScrollToIndexFailed={handleScrollToIndexFailed}
       maintainVisibleContentPosition={DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION}
       initialNumToRender={40}
       maxToRenderPerBatch={40}

@@ -175,6 +175,10 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    execution: {
+      expand: "Show execution details ({{count}})",
+      collapse: "Hide execution details",
+    },
     permission: {
       plan: "Plan",
       required: "Permission Required",

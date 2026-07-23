@@ -52,6 +52,7 @@ describe("createWebStreamStrategy", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
   let originalScrollTo: HTMLElement["scrollTo"] | undefined;
+  let originalScrollIntoView: HTMLElement["scrollIntoView"] | undefined;
   let originalOffsetHeight: PropertyDescriptor | undefined;
 
   beforeEach(() => {
@@ -69,6 +70,8 @@ describe("createWebStreamStrategy", () => {
     });
     originalScrollTo = HTMLElement.prototype.scrollTo;
     HTMLElement.prototype.scrollTo = vi.fn();
+    originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = vi.fn();
     originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
     Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
       configurable: true,
@@ -91,6 +94,11 @@ describe("createWebStreamStrategy", () => {
       HTMLElement.prototype.scrollTo = originalScrollTo;
     } else {
       Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+    }
+    if (originalScrollIntoView) {
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
     }
     if (originalOffsetHeight) {
       Object.defineProperty(HTMLElement.prototype, "offsetHeight", originalOffsetHeight);
@@ -197,6 +205,54 @@ describe("createWebStreamStrategy", () => {
 
     expect(container.textContent).toContain("expanded");
     expect(renderLiveHeadRow).toHaveBeenCalledTimes(2);
+  });
+
+  it("scrolls to a mounted message by id", () => {
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: false });
+    const viewportRef = React.createRef<StreamViewportHandle>();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        strategy.render({
+          agentId: "agent",
+          segments: {
+            historyVirtualized: [],
+            historyMounted: [userMessage(1), userMessage(2)],
+            liveHead: [],
+          },
+          boundary: {
+            hasVirtualizedHistory: false,
+            hasMountedHistory: true,
+            hasLiveHead: false,
+          },
+          renderers: createRenderers(vi.fn()),
+          listEmptyComponent: null,
+          viewportRef,
+          routeBottomAnchorRequest: null,
+          isAuthoritativeHistoryReady: true,
+          onNearBottomChange: vi.fn(),
+          onNearHistoryStart: vi.fn(),
+          isLoadingOlderHistory: false,
+          hasOlderHistory: false,
+          scrollEnabled: true,
+          listStyle: null,
+          baseListContentContainerStyle: null,
+          forwardListContentContainerStyle: null,
+        }),
+      );
+    });
+
+    act(() => {
+      viewportRef.current?.scrollToItem("message-2");
+    });
+
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "center",
+    });
   });
 
   it("fires near-history-start when the user scrolls near the top", async () => {

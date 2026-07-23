@@ -177,6 +177,10 @@ export const ja: TranslationResources = {
   agentStream: {
     empty: "このエージェントとチャットを始めましょう...",
     scrollToBottom: "下にスクロール",
+    execution: {
+      expand: "実行の詳細を表示（{{count}}）",
+      collapse: "実行の詳細を非表示",
+    },
     permission: {
       plan: "プラン",
       required: "権限が必要です",

@@ -1,5 +1,4 @@
 import React, {
-  Fragment,
   type CSSProperties,
   useCallback,
   useEffect,
@@ -471,6 +470,19 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         cancelPendingStickToBottom();
         forceStickToBottom();
       },
+      scrollToItem: (itemId) => {
+        setFollowOutput(false);
+        cancelPendingStickToBottom();
+        const virtualIndex = segments.historyVirtualized.findIndex((item) => item.id === itemId);
+        if (virtualIndex >= 0) {
+          rowVirtualizer.scrollToIndex(virtualIndex, { align: "center", behavior: "smooth" });
+          return;
+        }
+        const element = Array.from(
+          contentRef.current?.querySelectorAll<HTMLElement>("[data-stream-item-id]") ?? [],
+        ).find((candidate) => candidate.dataset.streamItemId === itemId);
+        element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      },
       prepareForViewportChange: () => {
         if (!followOutputRef.current) {
           return;
@@ -485,7 +497,14 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       }
       cancelPendingStickToBottom();
     };
-  }, [cancelPendingStickToBottom, forceStickToBottom, scheduleStickToBottom, viewportRef]);
+  }, [
+    cancelPendingStickToBottom,
+    forceStickToBottom,
+    rowVirtualizer,
+    scheduleStickToBottom,
+    segments.historyVirtualized,
+    viewportRef,
+  ]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
     return {
@@ -529,15 +548,17 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   );
   const mountedHistoryRows = useMemo(() => {
     return segments.historyMounted.map((item, index) => (
-      <Fragment key={item.id}>
+      <div key={item.id} data-stream-item-id={item.id}>
         {renderHistoryMountedRow(item, index, segments.historyMounted)}
-      </Fragment>
+      </div>
     ));
   }, [renderHistoryMountedRow, segments.historyMounted]);
   const liveHeadRows = useMemo(() => {
     void liveHeadRowRevision;
     return segments.liveHead.map((item, index) => (
-      <Fragment key={item.id}>{renderLiveHeadRow(item, index, segments.liveHead)}</Fragment>
+      <div key={item.id} data-stream-item-id={item.id}>
+        {renderLiveHeadRow(item, index, segments.liveHead)}
+      </div>
     ));
   }, [liveHeadRowRevision, renderLiveHeadRow, segments.liveHead]);
   const liveAuxiliary = useMemo(() => {

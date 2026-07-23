@@ -88,6 +88,7 @@ import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
+import type { StreamItem } from "@/types/stream";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
@@ -127,6 +128,11 @@ import { ForgeBrandIcon } from "@/git/forge-icon";
 import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
 import { queuedMessagesFromServer } from "@/composer/message-queue";
+import {
+  collectUserInputHistory,
+  navigateInputHistory,
+  type InputHistoryNavigationState,
+} from "@/composer/input-history";
 
 type QueuedMessage = QueuedComposerMessage;
 
@@ -823,6 +829,7 @@ interface ComposerProps {
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
 const EMPTY_ARRAY: readonly QueuedMessage[] = [];
+const EMPTY_STREAM_ITEMS: readonly StreamItem[] = [];
 const StableMessageInput = memo(MessageInput);
 
 function resolveContextWindowValues(
@@ -1047,6 +1054,15 @@ export function Composer({
     state.sessions[serverId]?.queuedMessages?.get(agentId),
   );
   const queuedMessages = queuedMessagesRaw ?? EMPTY_ARRAY;
+  const inputHistory = useSessionStore(
+    useShallow((state) => {
+      const session = state.sessions[serverId];
+      return collectUserInputHistory(
+        session?.agentStreamTail?.get(agentId) ?? EMPTY_STREAM_ITEMS,
+        session?.agentStreamHead?.get(agentId) ?? EMPTY_STREAM_ITEMS,
+      );
+    }),
+  );
 
   const setQueuedMessages = useSessionStore((state) => state.setQueuedMessages);
   const setAgentStreamTail = useSessionStore((state) => state.setAgentStreamTail);
@@ -1093,6 +1109,10 @@ export function Composer({
     setAttachments: setSelectedAttachments,
   });
   const [cursorIndex, setCursorIndex] = useState(0);
+  const inputHistoryStateRef = useRef<InputHistoryNavigationState>({
+    index: null,
+    draft: "",
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [isCancellingAgent, setIsCancellingAgent] = useState(false);
@@ -1461,6 +1481,7 @@ export function Composer({
 
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
+      inputHistoryStateRef.current = { index: null, draft: "" };
       const outgoingAttachments = buildOutgoingAttachments(attachments);
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
@@ -1781,9 +1802,49 @@ export function Composer({
 
   // Handle keyboard navigation for command autocomplete.
   const handleCommandKeyPress = useCallback(
-    (event: { key: string; preventDefault: () => void }) =>
-      autocompleteOnKeyPressRef.current(event),
-    [],
+    (event: { key: string; preventDefault: () => void }) => {
+      if (autocompleteOnKeyPressRef.current(event)) {
+        return true;
+      }
+      let direction: "older" | "newer" | null = null;
+      if (event.key === "ArrowUp") {
+        direction = "older";
+      } else if (event.key === "ArrowDown") {
+        direction = "newer";
+      }
+      if (!direction) {
+        return false;
+      }
+      if (direction === "older" && cursorIndex !== 0) {
+        return false;
+      }
+      if (direction === "newer" && cursorIndex !== userInput.length) {
+        return false;
+      }
+      const result = navigateInputHistory({
+        direction,
+        history: inputHistory,
+        currentText: userInput,
+        state: inputHistoryStateRef.current,
+      });
+      if (!result.handled) {
+        return false;
+      }
+      event.preventDefault();
+      inputHistoryStateRef.current = { index: result.index, draft: result.draft };
+      setUserInput(result.text);
+      setCursorIndex(result.text.length);
+      return true;
+    },
+    [cursorIndex, inputHistory, setUserInput, userInput],
+  );
+
+  const handleUserInputChange = useCallback(
+    (text: string) => {
+      inputHistoryStateRef.current = { index: null, draft: "" };
+      setUserInput(text);
+    },
+    [setUserInput],
   );
 
   const cancelButtonStyle = useMemo(
@@ -2158,7 +2219,7 @@ export function Composer({
               <StableMessageInput
                 ref={messageInputRef}
                 value={userInput}
-                onChangeText={setUserInput}
+                onChangeText={handleUserInputChange}
                 onSubmit={handleSubmit}
                 hasExternalContent={hasExternalContent}
                 allowEmptySubmit={allowEmptySubmit}

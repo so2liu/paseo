@@ -154,9 +154,8 @@ function resolveCatchingUpUi(args: {
   hadInitialSyncFailure: boolean;
 }): "overlay" | "silent" {
   if (args.hasOptimisticCreateContinuity) return "silent";
-  if (args.hasHydratedHistoryBefore && args.needsAuthoritativeSync) return "silent";
-  if (args.isVisibilityCatchUpPending) return "overlay";
   if (args.hasHydratedHistoryBefore) return "silent";
+  if (args.isVisibilityCatchUpPending) return "overlay";
   if (args.hadInitialSyncFailure) return "silent";
   return "overlay";
 }

@@ -26,7 +26,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { Check, ChevronDown, X } from "lucide-react-native";
+import { Check, ChevronDown, ChevronRight, X } from "lucide-react-native";
 import { usePanelStore } from "@/stores/panel-store";
 import {
   AssistantMessage,
@@ -102,6 +102,52 @@ import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 import { toErrorMessage } from "@/utils/error-messages";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
+import {
+  buildExecutionCollapseProjection,
+  type ExecutionCollapseGroup,
+} from "./execution-collapse";
+
+const executionToggleStyle = ({ pressed }: PressableStateCallbackType) => [
+  stylesheet.executionToggle,
+  pressed ? stylesheet.executionTogglePressed : null,
+];
+
+function ExecutionProcessToggle({
+  group,
+  expanded,
+  onPress,
+}: {
+  group: ExecutionCollapseGroup;
+  expanded: boolean;
+  onPress: (groupId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => onPress(group.id), [group.id, onPress]);
+  const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={accessibilityState}
+      onPress={handlePress}
+      style={executionToggleStyle}
+      testID={`execution-process-toggle-${group.id}`}
+    >
+      {expanded ? (
+        <ChevronDown size={16} color={stylesheet.executionToggleText.color} />
+      ) : (
+        <ChevronRight size={16} color={stylesheet.executionToggleText.color} />
+      )}
+      <Text style={stylesheet.executionToggleText}>
+        {expanded
+          ? t("agentStream.execution.collapse", { defaultValue: "Hide execution details" })
+          : t("agentStream.execution.expand", {
+              count: group.itemCount,
+              defaultValue: "Show execution details ({{count}})",
+            })}
+      </Text>
+    </Pressable>
+  );
+}
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -229,6 +275,7 @@ function renderLiveHeadStreamItem(input: {
 
 export interface AgentStreamViewHandle {
   scrollToBottom(reason?: BottomAnchorLocalRequest["reason"]): void;
+  scrollToMessage(messageId: string): void;
   prepareForViewportChange(): void;
 }
 
@@ -317,6 +364,61 @@ function buildForkDraftTabTarget(
   return setup ? { kind: "draft", draftId, setup } : { kind: "draft", draftId };
 }
 
+function UserMessageLocatorTick({
+  message,
+  index,
+  count,
+  onSelect,
+}: {
+  message: Extract<StreamItem, { kind: "user_message" }>;
+  index: number;
+  count: number;
+  onSelect: (messageId: string) => void;
+}) {
+  const handlePress = useCallback(() => onSelect(message.id), [message.id, onSelect]);
+  const positionStyle = useMemo(
+    () => [stylesheet.messageLocatorHit, { top: `${(index / (count - 1)) * 100}%` as const }],
+    [count, index],
+  );
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={message.text.trim().slice(0, 80)}
+      onPress={handlePress}
+      hitSlop={6}
+      style={positionStyle}
+      testID={`user-message-locator-${message.id}`}
+    >
+      <View style={stylesheet.messageLocatorTick} />
+    </Pressable>
+  );
+}
+
+function UserMessageLocator({
+  messages,
+  onSelect,
+}: {
+  messages: readonly Extract<StreamItem, { kind: "user_message" }>[];
+  onSelect: (messageId: string) => void;
+}) {
+  if (messages.length < 2) {
+    return null;
+  }
+  return (
+    <View style={stylesheet.messageLocator} pointerEvents="box-none">
+      {messages.map((message, index) => (
+        <UserMessageLocatorTick
+          key={message.id}
+          message={message}
+          index={index}
+          count={messages.length}
+          onSelect={onSelect}
+        />
+      ))}
+    </View>
+  );
+}
+
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
   function AgentStreamView(
     {
@@ -354,6 +456,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       new Set(),
     );
     const [expandedToolCallGroupIds, setExpandedToolCallGroupIds] = useState<Set<string>>(
+      new Set(),
+    );
+    const [expandedExecutionGroupIds, setExpandedExecutionGroupIds] = useState<Set<string>>(
       new Set(),
     );
     const openFileExplorerForCheckout = usePanelStore((state) => state.openFileExplorerForCheckout);
@@ -409,6 +514,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       setIsNearBottom(true);
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
+      setExpandedExecutionGroupIds(new Set());
     }, [agentId]);
 
     const handleInlinePathPress = useStableEvent(
@@ -552,6 +658,33 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     }
     const effectiveStreamItems = isActive ? streamItems : frozenStreamItemsRef.current;
     const effectiveStreamHead = isActive ? streamHead : frozenStreamHeadRef.current;
+    const userMessages = useMemo(
+      () =>
+        [...effectiveStreamItems, ...(effectiveStreamHead ?? EMPTY_STREAM_HEAD)].filter(
+          (item): item is Extract<StreamItem, { kind: "user_message" }> =>
+            item.kind === "user_message",
+        ),
+      [effectiveStreamHead, effectiveStreamItems],
+    );
+    const executionCollapseProjection = useMemo(
+      () =>
+        buildExecutionCollapseProjection({
+          items: [...effectiveStreamItems, ...(effectiveStreamHead ?? EMPTY_STREAM_HEAD)],
+          isRunning: context.status === "running",
+        }),
+      [context.status, effectiveStreamHead, effectiveStreamItems],
+    );
+    const toggleExecutionGroup = useCallback((groupId: string) => {
+      setExpandedExecutionGroupIds((previous) => {
+        const next = new Set(previous);
+        if (next.has(groupId)) {
+          next.delete(groupId);
+        } else {
+          next.add(groupId);
+        }
+        return next;
+      });
+    }, []);
     // Keep retained history outside the 48ms live-head flush path.
     const preparedToolCallHistory = useMemo(
       () => prepareToolCallHistory(toolCallDetailLevel, effectiveStreamItems),
@@ -607,6 +740,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         scrollToBottom(reason = "jump-to-bottom") {
           viewportRef.current?.scrollToBottom(reason);
         },
+        scrollToMessage(messageId) {
+          viewportRef.current?.scrollToItem(messageId);
+        },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
         },
@@ -616,6 +752,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const scrollToBottom = useCallback(() => {
       viewportRef.current?.scrollToBottom("jump-to-bottom");
+    }, []);
+    const scrollToMessage = useCallback((messageId: string) => {
+      viewportRef.current?.scrollToItem(messageId);
     }, []);
 
     const setInlineDetailsExpanded = useCallback(
@@ -804,7 +943,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ],
     );
 
-    const renderStreamItemContent = useCallback(
+    const renderUncollapsedStreamItemContent = useCallback(
       (layoutItem: StreamLayoutItem) => {
         const item = layoutItem.item;
         switch (item.kind) {
@@ -847,6 +986,43 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         }
       },
       [renderUserMessageItem, renderAssistantMessageItem, renderThoughtItem, renderToolCallItem],
+    );
+
+    const renderStreamItemContent = useCallback(
+      (layoutItem: StreamLayoutItem) => {
+        const item = layoutItem.item;
+        const executionGroup = executionCollapseProjection.groupByItemId.get(item.id);
+        if (executionGroup) {
+          const expanded = expandedExecutionGroupIds.has(executionGroup.id);
+          if (!expanded && item.id !== executionGroup.hostItemId) {
+            return null;
+          }
+          const toggle =
+            item.id === executionGroup.hostItemId ? (
+              <ExecutionProcessToggle
+                group={executionGroup}
+                expanded={expanded}
+                onPress={toggleExecutionGroup}
+              />
+            ) : null;
+          if (!expanded) {
+            return toggle;
+          }
+          return (
+            <>
+              {toggle}
+              {renderUncollapsedStreamItemContent(layoutItem)}
+            </>
+          );
+        }
+        return renderUncollapsedStreamItemContent(layoutItem);
+      },
+      [
+        executionCollapseProjection.groupByItemId,
+        expandedExecutionGroupIds,
+        toggleExecutionGroup,
+        renderUncollapsedStreamItemContent,
+      ],
     );
 
     const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;
@@ -1001,13 +1177,27 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const streamScrollEnabled =
       !streamRenderStrategy.shouldDisableParentScrollOnInlineDetailsExpansion() ||
       expandedInlineToolCallIds.size === 0;
+    const expandedExecutionItemIds = useMemo(() => {
+      const itemIds = new Set<string>();
+      for (const group of executionCollapseProjection.groups) {
+        if (!expandedExecutionGroupIds.has(group.id)) continue;
+        for (const itemId of group.itemIds) {
+          itemIds.add(itemId);
+        }
+      }
+      return itemIds;
+    }, [executionCollapseProjection.groups, expandedExecutionGroupIds]);
+    const revisedHistoryDisplayStateIds = useMemo(
+      () => new Set([...expandedToolCallGroupIds, ...expandedExecutionItemIds]),
+      [expandedExecutionItemIds, expandedToolCallGroupIds],
+    );
     const historyRowRevision = useMemo(
       () => ({
         contentById: projectedToolCalls.historyGroupUpdatesByHostId,
-        displayStateById: expandedToolCallGroupIds,
+        displayStateById: revisedHistoryDisplayStateIds,
         globalDisplayState: isMobile,
       }),
-      [expandedToolCallGroupIds, isMobile, projectedToolCalls.historyGroupUpdatesByHostId],
+      [isMobile, projectedToolCalls.historyGroupUpdatesByHostId, revisedHistoryDisplayStateIds],
     );
 
     return (
@@ -1018,7 +1208,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               agentId,
               segments: renderModel.segments,
               historyRowRevision,
-              liveHeadRowRevision: expandedToolCallGroupIds,
+              liveHeadRowRevision: revisedHistoryDisplayStateIds,
               boundary,
               renderers,
               listEmptyComponent,
@@ -1050,6 +1240,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               </Animated.View>
             </View>
           )}
+          <UserMessageLocator messages={userMessages} onSelect={scrollToMessage} />
         </View>
       </ToolCallSheetProvider>
     );
@@ -1531,6 +1722,47 @@ const stylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     textAlign: "center",
+  },
+  executionToggle: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    minHeight: 32,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface1,
+  },
+  executionTogglePressed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  executionToggleText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  messageLocator: {
+    position: "absolute",
+    top: 24,
+    right: 2,
+    bottom: 88,
+    width: 24,
+    zIndex: 3,
+  },
+  messageLocatorHit: {
+    position: "absolute",
+    right: 0,
+    width: 24,
+    height: 14,
+    marginTop: -7,
+    alignItems: "flex-end",
+    justifyContent: "center",
+    paddingRight: 4,
+  },
+  messageLocatorTick: {
+    width: 10,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: theme.colors.foregroundMuted,
   },
   scrollToBottomContainer: {
     position: "absolute",

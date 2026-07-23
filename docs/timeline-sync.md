@@ -55,6 +55,8 @@ cursor and the current conclusion.
 If the fetched tail is structurally identical to the tail already on screen, the reducer preserves
 the existing stream array identities. The authoritative sync still completes, but React subscribers
 do not receive a replacement conversation and the user's scroll position remains untouched.
+Once an agent has hydrated history, later visibility-driven catch-up keeps that history visible and
+refreshes silently; the blocking timeline overlay is only for agents without displayable history.
 
 Sequence gaps detected while the agent is actively viewed still catch up after the known cursor to
 completion. That path preserves continuous delivery for an already-open conversation; it is distinct
@@ -76,6 +78,14 @@ The app chooses one delivery policy from `server_info.features.selectiveAgentTim
 
 This policy is owned by `viewed-timeline-sync.ts`; downstream reducers do not branch on daemon
 version.
+
+## Execution-detail collapse is presentation-only
+
+Completed-turn execution details are collapsed by default in the app, and hidden Markdown and tool
+components are not mounted until the user expands them. Timeline fetches still carry the full
+projected items because the current protocol has no summary-only page or detail-on-demand RPC.
+Reducing network transfer would require a daemon capability plus a separate detail fetch; do not
+describe the client-side lazy rendering as transport-level lazy loading.
 
 ## Projected pages reconcile with live presentation
 
