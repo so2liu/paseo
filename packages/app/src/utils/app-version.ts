@@ -1,5 +1,6 @@
 import Constants from "expo-constants";
 import appPackage from "../../package.json";
+import { withCustomBuildTag } from "./custom-build-version";
 
 function toVersionOrNull(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -33,4 +34,9 @@ export function resolveAppVersion(): string | null {
   }
 
   return null;
+}
+
+export function resolveDisplayAppVersion(): string | null {
+  const version = resolveAppVersion();
+  return version ? withCustomBuildTag(version) : null;
 }

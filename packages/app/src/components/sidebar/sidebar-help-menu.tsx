@@ -24,7 +24,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
-import { resolveAppVersion } from "@/utils/app-version";
+import { resolveDisplayAppVersion } from "@/utils/app-version";
 import { openExternalUrl } from "@/utils/open-external-url";
 
 const DISCORD_URL = "https://discord.gg/jz8T2uahpH";
@@ -83,7 +83,7 @@ export function SidebarHelpMenu() {
   const setShortcutsDialogOpen = useKeyboardShortcutsStore((state) => state.setShortcutsDialogOpen);
   const [open, setOpen] = useState(false);
   const showKeyboardShortcuts = !isNative && !isCompactLayout;
-  const version = formatVersionWithPrefix(resolveAppVersion());
+  const version = formatVersionWithPrefix(resolveDisplayAppVersion());
   const hosts = useHosts();
 
   const openKeyboardShortcuts = useCallback(() => {

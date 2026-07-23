@@ -10,7 +10,7 @@ import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime
 import { AddHostModal } from "./add-host-modal";
 import { PairLinkModal } from "./pair-link-modal";
 import { Button } from "@/components/ui/button";
-import { resolveAppVersion } from "@/utils/app-version";
+import { resolveDisplayAppVersion } from "@/utils/app-version";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { PaseoLogo } from "@/components/icons/paseo-logo";
@@ -162,7 +162,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const appVersion = resolveAppVersion();
+  const appVersion = resolveDisplayAppVersion();
   const appVersionText = formatVersionWithPrefix(appVersion);
   const [isDirectOpen, setIsDirectOpen] = useState(false);
   const [isPasteLinkOpen, setIsPasteLinkOpen] = useState(false);

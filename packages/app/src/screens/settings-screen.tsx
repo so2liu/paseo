@@ -78,7 +78,7 @@ import { IntegrationsSection } from "@/desktop/components/integrations-section";
 import { isElectronRuntime } from "@/desktop/host";
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
-import { resolveAppVersion } from "@/utils/app-version";
+import { resolveDisplayAppVersion } from "@/utils/app-version";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { settingsStyles } from "@/styles/settings";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
@@ -1181,7 +1181,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const [playbackTestResult, setPlaybackTestResult] = useState<string | null>(null);
   const lastOpenedAddHostIntentRef = useRef<string | null>(null);
   const isDesktopApp = isElectronRuntime();
-  const appVersion = resolveAppVersion();
+  const appVersion = resolveDisplayAppVersion();
   const appVersionText = formatVersionWithPrefix(appVersion);
   const isCompactLayout = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
