@@ -804,11 +804,10 @@ function isolationLabel(t: TFunction, isolation: "local" | "worktree"): string {
 
 function useProjectWorkspaceIsolationPreference(input: {
   project: HostProjectListItem | null;
-  serverId: string;
   preferences: ReturnType<typeof useFormPreferences>["preferences"];
   updatePreferences: ReturnType<typeof useFormPreferences>["updatePreferences"];
 }) {
-  const { project, serverId, preferences, updatePreferences } = input;
+  const { project, preferences, updatePreferences } = input;
   const rememberedIsolation = project
     ? preferences.workspaceByProject?.[project.projectKey]?.isolation
     : undefined;
@@ -821,13 +820,12 @@ function useProjectWorkspaceIsolationPreference(input: {
           ...current.workspaceByProject,
           [project.projectKey]: {
             ...current.workspaceByProject?.[project.projectKey],
-            serverId,
             isolation,
           },
         },
       }));
     },
-    [project, serverId, updatePreferences],
+    [project, updatePreferences],
   );
   return { rememberedIsolation, rememberIsolation };
 }
@@ -1253,7 +1251,6 @@ function useNewWorkspaceHostSelector(input: {
   lastActiveProject: HostProjectListItem | null;
   hostConnectionStatusByServerId: ReadonlyMap<string, HostRuntimeConnectionStatus>;
   workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>;
-  preferredServerId?: string | null;
 }) {
   const routeServerId = input.initialServerId.trim();
   const defaultServerId = useMemo(
@@ -1265,7 +1262,6 @@ function useNewWorkspaceHostSelector(input: {
         projects: input.projects,
         hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
         workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
-        preferredServerId: input.preferredServerId,
       }),
     [
       input.allServerIds,
@@ -1274,7 +1270,6 @@ function useNewWorkspaceHostSelector(input: {
       input.lastActiveProject,
       input.projects,
       input.workspaceMultiplicityByServerId,
-      input.preferredServerId,
     ],
   );
   const [automaticSelection, setAutomaticSelection] = useState(() => ({
@@ -1298,7 +1293,6 @@ function useNewWorkspaceHostSelector(input: {
               projects: input.projects,
               hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
               workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
-              preferredServerId: input.preferredServerId,
               currentServerId: current.serverId,
               nextServerId: defaultServerId,
             })
@@ -1318,7 +1312,6 @@ function useNewWorkspaceHostSelector(input: {
     input.lastActiveProject,
     input.projects,
     input.workspaceMultiplicityByServerId,
-    input.preferredServerId,
     routeServerId,
   ]);
 
@@ -1381,7 +1374,6 @@ function useNewWorkspaceInitialContext({
   const allHosts = useMemo(() => orderHostsByPreference(hosts, hostOrder), [hostOrder, hosts]);
   const allServerIds = useMemo(() => allHosts.map((h) => h.serverId), [allHosts]);
   const projects = useHostProjects(allServerIds);
-  const { preferences } = useFormPreferences();
   const routeDisplayName = displayNameProp?.trim() ?? "";
   const routeProject = useMemo(
     () =>
@@ -1410,10 +1402,6 @@ function useNewWorkspaceInitialContext({
         : null,
     [lastWorkspace, lastWorkspaceServerId],
   );
-  const preferenceProjectKey = routeProject?.projectKey ?? lastActiveProject?.projectKey ?? null;
-  const preferredServerId = preferenceProjectKey
-    ? preferences.workspaceByProject?.[preferenceProjectKey]?.serverId
-    : null;
   const hostConnectionStatusByServerId = useHostRuntimeConnectionStatuses(allServerIds);
   const workspaceMultiplicityByServerId = useHostFeatureMap(allServerIds, "workspaceMultiplicity");
   const {
@@ -1429,7 +1417,6 @@ function useNewWorkspaceInitialContext({
     lastActiveProject,
     hostConnectionStatusByServerId,
     workspaceMultiplicityByServerId,
-    preferredServerId,
   });
 
   return {
@@ -1808,7 +1795,6 @@ export function NewWorkspaceScreen({
   const currentBranch = checkoutStatusQuery.data?.currentBranch ?? null;
   const { rememberedIsolation, rememberIsolation } = useProjectWorkspaceIsolationPreference({
     project: selectedProject,
-    serverId: selectedServerId,
     preferences,
     updatePreferences,
   });
@@ -1922,51 +1908,19 @@ export function NewWorkspaceScreen({
       // multiplicity is off, any project when it's on); don't re-gate here on
       // canCreateWorktree or non-git projects become unselectable.
       selectProjectOption(id);
-      const project = projectByOptionId.get(id);
-      const preferredHost = project
-        ? preferences.workspaceByProject?.[project.projectKey]?.serverId
-        : null;
-      if (preferredHost && allHosts.some((host) => host.serverId === preferredHost)) {
-        handleSelectHost(preferredHost);
-      }
+      // Host is selected before project; changing projects must never change it.
       setProjectPickerOpen(false);
       clearManualPickerSelectionForTargetChange(selectedProjectOptionId, id);
     },
-    [
-      allHosts,
-      clearManualPickerSelectionForTargetChange,
-      handleSelectHost,
-      preferences.workspaceByProject,
-      projectByOptionId,
-      selectProjectOption,
-      selectedProjectOptionId,
-    ],
+    [clearManualPickerSelectionForTargetChange, selectProjectOption, selectedProjectOptionId],
   );
 
   const handleSelectWorkspaceHost = useCallback(
     (id: string) => {
       handleSelectHost(id);
-      if (selectedProject) {
-        void updatePreferences((current) => ({
-          ...current,
-          workspaceByProject: {
-            ...current.workspaceByProject,
-            [selectedProject.projectKey]: {
-              ...current.workspaceByProject?.[selectedProject.projectKey],
-              serverId: id,
-            },
-          },
-        }));
-      }
       clearManualPickerSelectionForTargetChange(selectedServerId, id);
     },
-    [
-      clearManualPickerSelectionForTargetChange,
-      handleSelectHost,
-      selectedProject,
-      selectedServerId,
-      updatePreferences,
-    ],
+    [clearManualPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
   );
 
   const handleAddProject = useCallback(() => {

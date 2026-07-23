@@ -1,6 +1,8 @@
-import { test } from "./fixtures";
+import { expect, test } from "./fixtures";
+import { waitForConnectedHost } from "./helpers/add-project-flow";
 import { gotoAppShell } from "./helpers/app";
 import { getE2EDaemonPort } from "./helpers/daemon-port";
+import { startIsolatedHostDaemon } from "./helpers/isolated-host-daemon";
 import {
   expectNewWorkspaceDraft,
   expectNewWorkspaceProjectSelected,
@@ -10,7 +12,7 @@ import {
   selectNewWorkspaceHost,
   selectNewWorkspaceProject,
 } from "./helpers/new-workspace";
-import { seedWorkspace, type SeededWorkspace } from "./helpers/seed-client";
+import { connectSeedClient, seedWorkspace, type SeededWorkspace } from "./helpers/seed-client";
 import { getServerId } from "./helpers/server-id";
 import { seedSavedSettingsHosts } from "./helpers/settings";
 import { waitForSidebarHydration } from "./helpers/workspace-ui";
@@ -83,6 +85,68 @@ test.describe("New workspace composer draft", () => {
       await expectNewWorkspaceDraft(page, DRAFT);
     } finally {
       await project.cleanup();
+    }
+  });
+
+  test("keeps the explicitly selected host when the project changes", async ({ page }) => {
+    const firstProject = await seedWorkspace({
+      repoPrefix: "new-workspace-host-priority-a-",
+    });
+    const targetProject = await seedWorkspace({
+      repoPrefix: "new-workspace-host-priority-b-",
+    });
+    const secondaryServerId = "new-workspace-host-priority-secondary";
+    const secondaryHost = await startIsolatedHostDaemon(secondaryServerId);
+    const secondaryClient = await connectSeedClient({ port: secondaryHost.port });
+    let secondaryProjectId: string | null = null;
+
+    try {
+      await secondaryClient.connect();
+      const secondaryWorkspace = await secondaryClient.createWorkspace({
+        source: { kind: "directory", path: targetProject.repoPath },
+      });
+      expect(secondaryWorkspace.workspace).not.toBeNull();
+      secondaryProjectId = secondaryWorkspace.workspace?.projectId ?? null;
+
+      await seedSavedSettingsHosts(page, [
+        {
+          serverId: getServerId(),
+          label: "Primary host",
+          endpoint: `127.0.0.1:${getE2EDaemonPort()}`,
+        },
+        {
+          serverId: secondaryServerId,
+          label: "Secondary host",
+          endpoint: `127.0.0.1:${secondaryHost.port}`,
+        },
+      ]);
+      await gotoAppShell(page);
+      await waitForConnectedHost(page, {
+        serverId: secondaryServerId,
+        endpoint: `localhost:${secondaryHost.port}`,
+      });
+      await waitForSidebarHydration(page);
+      await openNewWorkspaceComposer(page, {
+        projectKey: firstProject.projectId,
+        projectDisplayName: firstProject.projectDisplayName,
+      });
+
+      await selectNewWorkspaceHost(page, "Secondary host");
+      await selectNewWorkspaceHost(page, "Primary host");
+      await selectNewWorkspaceProject(page, {
+        projectKey: targetProject.projectId,
+        projectDisplayName: targetProject.projectDisplayName,
+      });
+
+      await expect(page.getByTestId("host-picker-trigger")).toContainText("Primary host");
+    } finally {
+      if (secondaryProjectId) {
+        await secondaryClient.removeProject(secondaryProjectId).catch(() => undefined);
+      }
+      await secondaryClient.close().catch(() => undefined);
+      await secondaryHost.close().catch(() => undefined);
+      await targetProject.cleanup();
+      await firstProject.cleanup();
     }
   });
 });

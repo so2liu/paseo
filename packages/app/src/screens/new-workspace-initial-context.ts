@@ -11,7 +11,6 @@ export interface NewWorkspaceInitialServerInput {
   projects: readonly HostProjectListItem[];
   hostConnectionStatusByServerId: ReadonlyMap<string, HostRuntimeConnectionStatus>;
   workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>;
-  preferredServerId?: string | null;
 }
 
 function knownServerId(serverIds: ReadonlySet<string>, serverId: string | null | undefined) {
@@ -123,19 +122,6 @@ export function resolveNewWorkspaceInitialServerId(input: NewWorkspaceInitialSer
   if (routeServerId) {
     return routeServerId;
   }
-  const preferredServerId = knownServerId(serverIds, input.preferredServerId);
-  if (
-    preferredServerId &&
-    !isKnownUnreachable(input.hostConnectionStatusByServerId, preferredServerId) &&
-    hasSelectableProject({
-      projects: input.projects,
-      serverId: preferredServerId,
-      workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
-    })
-  ) {
-    return preferredServerId;
-  }
-
   const onlineServerIds = input.allServerIds.filter((serverId) =>
     isOnline(input.hostConnectionStatusByServerId, serverId),
   );
