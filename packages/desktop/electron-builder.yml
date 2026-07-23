@@ -28,7 +28,7 @@ publish:
   owner: getpaseo
   repo: paseo
 mac:
-  artifactName: "Paseo-${version}-${arch}.${ext}"
+  artifactName: "Paseo-${version}-LY-${arch}.${ext}"
   category: public.app-category.developer-tools
   icon: assets/icon.icns
   hardenedRuntime: true

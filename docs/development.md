@@ -218,6 +218,8 @@ the workspace version at runtime. For example, upstream version
 the upstream version so release tooling and dependency ranges remain compatible.
 Manually packaged daemon archives use `-LY-` in the filename, for example
 `paseo-daemon-<commit>-LY-darwin-arm64.tar.gz`.
+macOS desktop installers also carry `-LY-` in the artifact filename, for
+example `Paseo-0.2.0-beta.1-LY-arm64.dmg`.
 
 The supervisor rotates `daemon.log`. Persisted `log.file.rotate` settings in
 `$PASEO_HOME/config.json` win first. Without persisted config, the optional
