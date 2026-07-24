@@ -1084,6 +1084,9 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   const thinkingAnchorRef = useRef<View | null>(null);
 
   const hasThinking = comboboxThinkingOptions.length > 0;
+  const showThinkingInToolbar = isNative && hasThinking;
+  const hasSheetControls =
+    (!showThinkingInToolbar && hasThinking) || Boolean(modeControl) || Boolean(features?.length);
 
   const handleOpenThinking = useCallback(() => handleOpenSheet("thinking"), [handleOpenSheet]);
   const handleThinkingSheetOpenChange = useCallback(
@@ -1097,9 +1100,9 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     [handleCloseSheet, handleOpenSheet],
   );
 
-  const sheetControls = (
+  const sheetControls = hasSheetControls ? (
     <View style={styles.combinedSheetControls} testID="agent-controls-combined-sheet-controls">
-      {hasThinking ? (
+      {hasThinking && !showThinkingInToolbar ? (
         <>
           <AgentControlTrigger
             ref={thinkingAnchorRef}
@@ -1143,28 +1146,63 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
         />
       ))}
     </View>
-  );
-
-  return canSelectModel ? (
-    <CompactModelSheet
-      providers={modelSelectorProviders}
-      selectedProvider={provider}
-      selectedModel={selectedModelId ?? ""}
-      onSelect={handleSheetModelSelect}
-      favoriteKeys={favoriteKeys}
-      onToggleFavorite={onToggleFavoriteModel}
-      isLoading={isModelLoading}
-      disabled={modelDisabled}
-      onOpen={onModelSelectorOpen}
-      onClose={onDropdownClose}
-      onRetryProvider={onRetryModelProvider}
-      isRetryingProvider={isRetryingModelProvider}
-      serverId={modelSelectorServerId}
-      glyphSize={glyphSize}
-    >
-      {sheetControls}
-    </CompactModelSheet>
   ) : null;
+
+  return (
+    <>
+      {canSelectModel ? (
+        <CompactModelSheet
+          providers={modelSelectorProviders}
+          selectedProvider={provider}
+          selectedModel={selectedModelId ?? ""}
+          onSelect={handleSheetModelSelect}
+          favoriteKeys={favoriteKeys}
+          onToggleFavorite={onToggleFavoriteModel}
+          isLoading={isModelLoading}
+          disabled={modelDisabled}
+          onOpen={onModelSelectorOpen}
+          onClose={onDropdownClose}
+          onRetryProvider={onRetryModelProvider}
+          isRetryingProvider={isRetryingModelProvider}
+          serverId={modelSelectorServerId}
+          glyphSize={glyphSize}
+        >
+          {sheetControls}
+        </CompactModelSheet>
+      ) : null}
+
+      {showThinkingInToolbar ? (
+        <>
+          <AgentControlTrigger
+            ref={thinkingAnchorRef}
+            icon={Brain}
+            surface="toolbar"
+            label={t("agentControls.thinking.title")}
+            value={displayThinking}
+            showToolbarLabel
+            open={activeSheet === "thinking"}
+            onPress={handleOpenThinking}
+            disabled={disabled || !canSelectThinking}
+            accessibilityLabel={t("agentControls.thinking.selectWithValue", {
+              value: displayThinking,
+            })}
+            testID="agent-controls-thinking"
+          />
+          <Combobox
+            options={comboboxThinkingOptions}
+            value={selectedThinkingOptionId ?? ""}
+            onSelect={handleSelectThinkingAndClose}
+            searchable={false}
+            title={t("agentControls.thinking.title")}
+            open={activeSheet === "thinking"}
+            onOpenChange={handleThinkingSheetOpenChange}
+            anchorRef={thinkingAnchorRef}
+            renderOption={renderThinkingOption}
+          />
+        </>
+      ) : null}
+    </>
+  );
 }
 
 function DesktopFeatureItem({

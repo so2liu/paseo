@@ -23,6 +23,9 @@ File browsing is intentionally on demand. Assistant file links can still open a 
 workspace does not mount the file explorer or proactively query terminal, checkout, or provider
 configuration data.
 
+The native composer keeps model and thinking strength visible as separate controls beside the input.
+Lower-frequency mode and feature controls remain in the model sheet.
+
 ## Background and notifications
 
 When the app backgrounds, selective timeline membership is cleared immediately. Agent attention

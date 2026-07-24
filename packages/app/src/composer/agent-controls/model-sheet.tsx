@@ -33,7 +33,7 @@ interface CompactModelSheetProps {
   disabled?: boolean;
   serverId?: string | null;
   glyphSize: number;
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 function shortModelLabel(label: string): string {
@@ -74,7 +74,7 @@ export function CompactModelSheet({
     selectedProvider.trim().length > 0 ? getProviderIcon(selectedProvider) : null;
   const compactFooter = useMemo(
     () =>
-      usesBottomSheet ? (
+      usesBottomSheet && children ? (
         <View style={styles.compactFooter} testID="agent-controls-settings-list">
           <View style={styles.modelViewportDivider} />
           <View style={[styles.controlsContent, styles.compactControlsContent]}>{children}</View>
@@ -174,7 +174,7 @@ export function CompactModelSheet({
             scrolling="independent"
           />
         </View>
-        {!usesBottomSheet ? (
+        {!usesBottomSheet && children ? (
           <>
             <View style={styles.modelViewportDivider} />
             <ScrollView
