@@ -143,6 +143,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
       <View style={styles.workspaceRowMain}>
         <WorkspaceStatusIndicator
           bucket={workspace.statusBucket}
+          attentionUnread={workspace.hasUnreadAttention}
           workspaceKind={workspace.workspaceKind}
           loading={isLoading}
           reserveIdleSpace={reserveIdleStatusIndicatorSpace}
@@ -239,11 +240,13 @@ function MarkDoneButton({ onPress }: { onPress: () => void }) {
 
 function WorkspaceStatusIndicator({
   bucket,
+  attentionUnread,
   workspaceKind,
   loading = false,
   reserveIdleSpace = true,
 }: {
   bucket: SidebarWorkspaceEntry["statusBucket"];
+  attentionUnread: boolean;
   workspaceKind: SidebarWorkspaceEntry["workspaceKind"];
   loading?: boolean;
   reserveIdleSpace?: boolean;
@@ -274,7 +277,7 @@ function WorkspaceStatusIndicator({
     );
   }
 
-  if (bucket === "attention") {
+  if (bucket === "attention" && attentionUnread) {
     return (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-attention">
         <View style={styles.standaloneStatusDot} />
@@ -282,7 +285,7 @@ function WorkspaceStatusIndicator({
     );
   }
 
-  if (bucket === "done") {
+  if (bucket === "done" || bucket === "attention") {
     return reserveIdleSpace ? (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-done" />
     ) : null;

@@ -64,6 +64,66 @@ describe("createSidebarWorkspaceEntry forge threading", () => {
   });
 });
 
+describe("workspace attention unread state", () => {
+  const attentionEnteredAt = new Date("2026-07-25T08:00:00.000Z");
+
+  it("shows an unread dot for an unseen attention generation", () => {
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: workspace({
+        id: "review",
+        name: "review",
+        projectId: "proj",
+        projectDisplayName: "repo",
+        status: "attention",
+        statusEnteredAt: attentionEnteredAt,
+      }),
+    });
+
+    expect(entry).toMatchObject({
+      statusBucket: "attention",
+      hasUnreadAttention: true,
+    });
+  });
+
+  it("hides only the dot after the same attention generation is viewed", () => {
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: workspace({
+        id: "review",
+        name: "review",
+        projectId: "proj",
+        projectDisplayName: "repo",
+        status: "attention",
+        statusEnteredAt: attentionEnteredAt,
+      }),
+      seenAttentionMarker: attentionEnteredAt.toISOString(),
+    });
+
+    expect(entry).toMatchObject({
+      statusBucket: "attention",
+      hasUnreadAttention: false,
+    });
+  });
+
+  it("shows the dot again for a newer attention generation", () => {
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: workspace({
+        id: "review",
+        name: "review",
+        projectId: "proj",
+        projectDisplayName: "repo",
+        status: "attention",
+        statusEnteredAt: new Date("2026-07-25T09:00:00.000Z"),
+      }),
+      seenAttentionMarker: attentionEnteredAt.toISOString(),
+    });
+
+    expect(entry.hasUnreadAttention).toBe(true);
+  });
+});
+
 interface OrderedItem {
   key: string;
 }

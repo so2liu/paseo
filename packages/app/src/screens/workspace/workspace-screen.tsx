@@ -105,7 +105,9 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { shouldShowWorkspaceSetup, useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
+import { useWorkspaceAttentionViewStore } from "@/stores/workspace-attention-view-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-workspace-terminal-session-retention";
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
@@ -1809,6 +1811,40 @@ function useWorkspaceTerminalTabActions({
   };
 }
 
+function useMarkWorkspaceAttentionViewed(input: {
+  serverId: string;
+  workspaceId: string;
+  workspace: WorkspaceDescriptor | null | undefined;
+  isRouteFocused: boolean;
+}): void {
+  const isAppActivelyVisible = useAppActivelyVisible();
+  const attentionViewStoreHydrated = useWorkspaceAttentionViewStore((state) => state.hasHydrated);
+  const markAttentionSeen = useWorkspaceAttentionViewStore((state) => state.markAttentionSeen);
+
+  useEffect(() => {
+    if (
+      !attentionViewStoreHydrated ||
+      !input.isRouteFocused ||
+      !isAppActivelyVisible ||
+      !input.serverId ||
+      !input.workspaceId ||
+      input.workspace?.status !== "attention"
+    ) {
+      return;
+    }
+    markAttentionSeen(`${input.serverId}:${input.workspaceId}`, input.workspace.statusEnteredAt);
+  }, [
+    attentionViewStoreHydrated,
+    input.isRouteFocused,
+    input.serverId,
+    input.workspace?.status,
+    input.workspace?.statusEnteredAt,
+    input.workspaceId,
+    isAppActivelyVisible,
+    markAttentionSeen,
+  ]);
+}
+
 function WorkspaceScreenContent({
   serverId,
   workspaceId,
@@ -1830,6 +1866,12 @@ function WorkspaceScreenContent({
     [workspaceId],
   );
   const workspaceDescriptor = useWorkspace(normalizedServerId, normalizedWorkspaceId);
+  useMarkWorkspaceAttentionViewed({
+    serverId: normalizedServerId,
+    workspaceId: normalizedWorkspaceId,
+    workspace: workspaceDescriptor,
+    isRouteFocused,
+  });
   const workspaceScripts = getWorkspaceScripts(workspaceDescriptor);
   const { handleRetryHost, handleManageHost, handleDismissMissingWorkspace } =
     useWorkspaceRouteActions(normalizedServerId);

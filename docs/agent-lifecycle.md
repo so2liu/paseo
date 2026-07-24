@@ -118,9 +118,12 @@ Workspace status is an aggregate activity signal computed **per `workspaceId`**.
 ### Ready to review is manually acknowledged
 
 When a root agent transitions from `running` to `idle`, the daemon persists finished attention.
-That attention makes the owning workspace appear under **Ready to review**. Merely opening the
-workspace, focusing its composer, sending another prompt, switching tabs, or leaving the workspace
-must not clear it.
+That attention makes the owning workspace appear under **Ready to review**. The client separately
+persists whether it has displayed that specific attention generation. Opening the workspace while
+the app is active clears only its local green unread dot; the workspace stays under **Ready to
+review**. A later attention generation gets a new `statusEnteredAt` marker and becomes unread again.
+Focusing the composer, sending another prompt, switching tabs, or leaving the workspace must not
+clear the daemon's attention.
 
 The workspace moves to **Done** only after an explicit user gesture sends
 `workspace.clear_attention.request`; this clears all non-permission attention owned by that
