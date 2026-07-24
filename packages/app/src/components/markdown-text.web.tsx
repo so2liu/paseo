@@ -20,6 +20,20 @@ interface MarkdownTextSpanProps {
   accessibilityRole?: TextProps["accessibilityRole"];
 }
 
+export function MarkdownDocumentView({ children }: { children: ReactNode }) {
+  return <View>{children}</View>;
+}
+
+export function MarkdownBodyView({
+  bodyStyle,
+  children,
+}: {
+  bodyStyle: ViewStyle;
+  children: ReactNode;
+}) {
+  return <View style={bodyStyle}>{children}</View>;
+}
+
 // react-native-web renders Text as <span>/<div> with `user-select: text`
 // already applied via markdownStyleMapping. The web bundle must not import
 // react-native-uitextview: its transitive import of codegenNativeComponent

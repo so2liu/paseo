@@ -11,7 +11,12 @@ import {
   type TextStyle,
 } from "react-native";
 import { useTranslation } from "react-i18next";
-import { MarkdownParagraphView, MarkdownTextSpan } from "@/components/markdown-text";
+import {
+  MarkdownBodyView,
+  MarkdownDocumentView,
+  MarkdownParagraphView,
+  MarkdownTextSpan,
+} from "@/components/markdown-text";
 import { MarkdownTableCellText } from "@/components/markdown-text-selection";
 import * as React from "react";
 import {
@@ -102,6 +107,10 @@ import {
   useAssistantLinkPress,
 } from "@/assistant-file-links";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
+import {
+  groupAssistantMessageSelectionBlocks,
+  type AssistantMessageSelectionBlockGroup,
+} from "./assistant-message-selection";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes, persistAttachmentFromDataUrl } from "@/attachments/service";
 import {
@@ -1591,6 +1600,24 @@ interface AssistantMessageBlockContainerProps {
   children: ReactNode;
 }
 
+interface KeyedAssistantMessageSelectionBlockGroup extends AssistantMessageSelectionBlockGroup {
+  key: string;
+  keyedBlocks: Array<{ block: string; key: string }>;
+}
+
+function keyAssistantMessageSelectionBlockGroups(
+  groups: AssistantMessageSelectionBlockGroup[],
+): KeyedAssistantMessageSelectionBlockGroup[] {
+  return groups.map((group, groupIndex) => ({
+    ...group,
+    key: `${groupIndex}:${group.blocks[0].slice(0, 32)}`,
+    keyedBlocks: group.blocks.map((block, blockIndex) => ({
+      block,
+      key: `${blockIndex}:${block.slice(0, 32)}`,
+    })),
+  }));
+}
+
 function AssistantMessageBlockContainer({
   block,
   marginBottom,
@@ -1728,6 +1755,11 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   const markdownRules = useMemo<RenderRules>(() => {
     return {
+      body: (node: ASTNode, children: ReactNode[], _parent: ASTNode[], styles: MarkdownStyles) => (
+        <MarkdownBodyView key={node.key} bodyStyle={styles._VIEW_SAFE_body}>
+          {children}
+        </MarkdownBodyView>
+      ),
       text: (
         node: ASTNode,
         _children: ReactNode[],
@@ -2025,9 +2057,18 @@ export const AssistantMessage = memo(function AssistantMessage({
   }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot]);
 
   const blocks = useMemo(() => splitMarkdownBlocks(message), [message]);
-  const keyedBlocks = useMemo(
-    () => blocks.map((block, index) => ({ key: `${index}:${block.slice(0, 32)}`, block })),
-    [blocks],
+  const blockGroups = useMemo(
+    () =>
+      groupAssistantMessageSelectionBlocks({
+        blocks,
+        parser: markdownParser,
+        enabled: isNative,
+      }),
+    [blocks, markdownParser],
+  );
+  const keyedBlockGroups = useMemo(
+    () => keyAssistantMessageSelectionBlockGroups(blockGroups),
+    [blockGroups],
   );
 
   const assistantContainerStyle = useMemo(
@@ -2043,18 +2084,34 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   return (
     <View testID="assistant-message" style={assistantContainerStyle}>
-      {keyedBlocks.map(({ key, block }, index) => (
+      {keyedBlockGroups.map((group) => (
         <AssistantMessageBlockContainer
-          key={key}
-          block={block}
-          marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
+          key={group.key}
+          block={group.blocks.join("\n\n")}
+          marginBottom={group === keyedBlockGroups.at(-1) ? 0 : 12}
         >
-          <MemoizedMarkdownBlock
-            text={block}
-            rules={markdownRules}
-            parser={markdownParser}
-            onLinkPress={handleMarkdownLinkPress}
-          />
+          {group.spansSelection ? (
+            <MarkdownDocumentView>
+              {group.keyedBlocks.map(({ block, key }, blockIndex) => (
+                <React.Fragment key={key}>
+                  <MemoizedMarkdownBlock
+                    text={block}
+                    rules={markdownRules}
+                    parser={markdownParser}
+                    onLinkPress={handleMarkdownLinkPress}
+                  />
+                  {blockIndex < group.keyedBlocks.length - 1 ? "\n\n" : null}
+                </React.Fragment>
+              ))}
+            </MarkdownDocumentView>
+          ) : (
+            <MemoizedMarkdownBlock
+              text={group.blocks[0]}
+              rules={markdownRules}
+              parser={markdownParser}
+              onLinkPress={handleMarkdownLinkPress}
+            />
+          )}
         </AssistantMessageBlockContainer>
       ))}
     </View>

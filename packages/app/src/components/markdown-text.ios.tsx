@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import {
   Text,
   View,
@@ -27,6 +27,32 @@ interface MarkdownTextSpanProps {
   // AssistantLinkPressProvider (see assistant-file-links/link-press-context).
   onPress?: TextProps["onPress"];
   accessibilityRole?: TextProps["accessibilityRole"];
+}
+
+const MarkdownDocumentSelectionContext = createContext(false);
+
+export function MarkdownDocumentView({ children }: { children: ReactNode }) {
+  return (
+    <MarkdownDocumentSelectionContext value>
+      <UITextView uiTextView selectable>
+        {children}
+      </UITextView>
+    </MarkdownDocumentSelectionContext>
+  );
+}
+
+export function MarkdownBodyView({
+  bodyStyle,
+  children,
+}: {
+  bodyStyle: ViewStyle;
+  children: ReactNode;
+}) {
+  const isDocumentSelection = useContext(MarkdownDocumentSelectionContext);
+  if (isDocumentSelection) {
+    return children;
+  }
+  return <View style={bodyStyle}>{children}</View>;
 }
 
 // Inline span backed by UITextView so iOS gets native word-selection handles.
@@ -78,9 +104,9 @@ interface MarkdownParagraphViewProps {
 
 const MARKDOWN_PARAGRAPH_RESET: ViewStyle = {};
 
-// iOS-only: paragraph wraps in UITextView so the entire paragraph is one
-// native text view. That's what unlocks cross-inline drag selection — handles
-// can span every MarkdownTextSpan child inside this paragraph.
+// A standalone paragraph wraps in UITextView so selection can span every
+// MarkdownTextSpan child. Inside MarkdownDocumentView it becomes part of the
+// shared native text view, allowing the handles to cross adjacent paragraphs.
 // ViewStyle is structurally compatible with the layout props paragraphs use
 // (margin, padding, alignment); the cast lets the existing paragraphStyle
 // flow through unchanged.
@@ -89,6 +115,7 @@ export function MarkdownParagraphView({
   containsImage = false,
   children,
 }: MarkdownParagraphViewProps) {
+  const isDocumentSelection = useContext(MarkdownDocumentSelectionContext);
   const textStyle = useMemo(
     () =>
       resolvePlainMarkdownTextStyle([
@@ -101,6 +128,10 @@ export function MarkdownParagraphView({
 
   if (containsImage) {
     return <View style={viewStyle}>{children}</View>;
+  }
+
+  if (isDocumentSelection) {
+    return <UITextView style={textStyle}>{children}</UITextView>;
   }
 
   return (
