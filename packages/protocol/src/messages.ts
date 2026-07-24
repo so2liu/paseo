@@ -2217,6 +2217,8 @@ export const ClearAgentAttentionMessageSchema = z.object({
   type: z.literal("clear_agent_attention"),
   agentId: z.union([z.string(), z.array(z.string())]),
   requestId: z.string().optional(),
+  // COMPAT(explicitAttentionClear): added in v0.2.0-beta.1, keep optional until 2027-01-24 so older clients still parse and receive a no-op response.
+  explicit: z.boolean().optional(),
 });
 
 export const ClientHeartbeatMessageSchema = z.object({

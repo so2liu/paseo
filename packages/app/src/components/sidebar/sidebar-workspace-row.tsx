@@ -322,6 +322,7 @@ function WorkspaceRowBody({
                   isCreating={isCreating}
                   shortcutNumber={shortcutNumber}
                   showShortcutBadge={showShortcutBadge}
+                  onMarkDone={onMarkAsRead}
                 >
                   <WorkspaceRowTrailingActions
                     workspace={workspace}

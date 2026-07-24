@@ -641,6 +641,7 @@ function StatusWorkspaceRowInner({
                   shortcutNumber={shortcutNumber}
                   showShortcutBadge={showShortcutBadge}
                   reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
+                  onMarkDone={onMarkAsRead}
                 >
                   {shouldRenderActionSlot ? (
                     <StatusWorkspaceActionSlot

@@ -40,6 +40,38 @@ function fetchWorkspacesResponse(workspace: Record<string, unknown>) {
   };
 }
 
+describe("agent attention clear compatibility", () => {
+  test("accepts legacy auto-clear requests without treating them as explicit", () => {
+    const parsed = SessionInboundMessageSchema.parse({
+      type: "clear_agent_attention",
+      agentId: "agent-1",
+      requestId: "clear-1",
+    });
+
+    expect(parsed).toEqual({
+      type: "clear_agent_attention",
+      agentId: "agent-1",
+      requestId: "clear-1",
+    });
+  });
+
+  test("preserves the explicit user-gesture marker", () => {
+    const parsed = SessionInboundMessageSchema.parse({
+      type: "clear_agent_attention",
+      agentId: "agent-1",
+      requestId: "clear-2",
+      explicit: true,
+    });
+
+    expect(parsed).toEqual({
+      type: "clear_agent_attention",
+      agentId: "agent-1",
+      requestId: "clear-2",
+      explicit: true,
+    });
+  });
+});
+
 describe("workspace descriptor message compatibility", () => {
   test("old-shaped fetch_workspaces_response without project still parses", () => {
     const parsed = SessionOutboundMessageSchema.parse(

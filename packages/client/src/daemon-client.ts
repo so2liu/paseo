@@ -1768,6 +1768,7 @@ export class DaemonClient {
       type: "clear_agent_attention",
       agentId,
       requestId,
+      explicit: true,
     });
     await this.sendRequest({
       requestId,

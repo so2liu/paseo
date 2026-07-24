@@ -101,6 +101,19 @@ Agent lifecycle status stays literal: a parent agent is `idle` when its own turn
 
 Workspace status is an aggregate activity signal computed **per `workspaceId`**. Ownership is never derived from `cwd` — many workspaces may share one directory, and same-`cwd` siblings do not clump under one status. Root agents and cross-workspace subagents contribute their normal state bucket to their own workspace. Same-workspace descendants contribute `running` to the nearest ancestor in that workspace; their non-running attention, permission, and error states stay in the parent's subagents track. This makes a cross-workspace subagent behave like a detached agent for workspace visibility and status without removing its parent relationship.
 
+### Ready to review is manually acknowledged
+
+When a root agent transitions from `running` to `idle`, the daemon persists finished attention.
+That attention makes the owning workspace appear under **Ready to review**. Merely opening the
+workspace, focusing its composer, sending another prompt, switching tabs, or leaving the workspace
+must not clear it.
+
+The workspace moves to **Done** only after an explicit user gesture sends
+`workspace.clear_attention.request`; this clears all non-permission attention owned by that
+`workspaceId`. The legacy `clear_agent_attention` RPC remains parseable for protocol compatibility,
+but the daemon only honors it when an updated client marks the request `explicit: true`. Older
+clients that used the same RPC for focus-driven auto-clear receive a successful no-op response.
+
 ## The subagents track
 
 The collapsible track above the composer in an agent's pane (`packages/app/src/subagents/track.tsx`) combines two kinds of children:

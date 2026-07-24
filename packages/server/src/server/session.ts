@@ -1822,7 +1822,7 @@ export class Session {
       case "agent_permission_response":
         return this.handleAgentPermissionResponse(msg.agentId, msg.requestId, msg.response);
       case "clear_agent_attention":
-        return this.handleClearAgentAttention(msg.agentId, msg.requestId);
+        return this.handleClearAgentAttention(msg.agentId, msg.requestId, msg.explicit);
       default:
         return undefined;
     }
@@ -3394,10 +3394,31 @@ export class Session {
   private async handleClearAgentAttention(
     agentId: string | string[],
     requestId?: string,
+    explicit?: boolean,
   ): Promise<void> {
     const agentIds = Array.isArray(agentId) ? agentId : [agentId];
 
     try {
+      // COMPAT(explicitAttentionClear): old clients used this RPC for focus/input
+      // auto-clears. Keep accepting their wire shape, but return the unchanged
+      // snapshots unless the request identifies an explicit user gesture.
+      if (explicit !== true) {
+        if (requestId) {
+          const requestedAgentIds = new Set(agentIds);
+          const agents = (await this.listAgentPayloads()).filter((agent) =>
+            requestedAgentIds.has(agent.id),
+          );
+          this.emit({
+            type: "clear_agent_attention_response",
+            payload: {
+              requestId,
+              agentId,
+              agents,
+            },
+          });
+        }
+        return;
+      }
       await Promise.all(
         agentIds.map((id) =>
           ensureAgentLoaded(id, {

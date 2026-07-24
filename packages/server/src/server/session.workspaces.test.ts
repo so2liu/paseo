@@ -1617,6 +1617,38 @@ test("workspace clear attention clears stored-only agents and responds", async (
   }
 });
 
+test("legacy agent attention clear without an explicit gesture is a successful no-op", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  const agent = makeAgent({
+    id: "legacy-auto-clear-agent",
+    cwd: REPO_CWD,
+    workspaceId: REPO_CWD,
+    status: "idle",
+    requiresAttention: true,
+    attentionReason: "finished",
+  });
+  session.listAgentPayloads = async () => [agent];
+
+  await session.handleMessage({
+    type: "clear_agent_attention",
+    agentId: agent.id,
+    requestId: "legacy-auto-clear",
+  });
+
+  expect(findByType(emitted, "clear_agent_attention_response").payload).toMatchObject({
+    requestId: "legacy-auto-clear",
+    agentId: agent.id,
+    agents: [
+      {
+        id: agent.id,
+        requiresAttention: true,
+        attentionReason: "finished",
+      },
+    ],
+  });
+});
+
 test("workspace clear attention responds with an error instead of timing out", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });

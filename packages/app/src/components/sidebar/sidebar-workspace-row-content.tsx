@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
+  Check,
   CircleAlert,
   ExternalLink,
   Folder,
@@ -53,6 +54,7 @@ const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500
 const purpleColorMapping = (theme: Theme) => ({ color: theme.colors.palette.purple[500] });
 
 const ThemedExternalLink = withUnistyles(ExternalLink);
+const ThemedCheck = withUnistyles(Check);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
@@ -106,6 +108,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   shortcutNumber = null,
   showShortcutBadge = false,
   reserveIdleStatusIndicatorSpace = true,
+  onMarkDone,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -118,6 +121,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   showShortcutBadge?: boolean;
   /** Keep the empty leading slot when the workspace has no active status. */
   reserveIdleStatusIndicatorSpace?: boolean;
+  onMarkDone?: () => void;
   children?: ReactNode;
 }) {
   const {
@@ -158,10 +162,15 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
               {subtitle}
             </Text>
           ) : null}
-          {workspace.prHint ? (
+          {workspace.prHint || onMarkDone ? (
             <View style={styles.workspacePrBadgeRow}>
-              <PrBadge hint={workspace.prHint} />
-              <ChecksBadge checks={workspace.prHint.checks} forge={workspace.prHint.forge} />
+              {workspace.prHint ? (
+                <>
+                  <PrBadge hint={workspace.prHint} />
+                  <ChecksBadge checks={workspace.prHint.checks} forge={workspace.prHint.forge} />
+                </>
+              ) : null}
+              {onMarkDone ? <MarkDoneButton onPress={onMarkDone} /> : null}
             </View>
           ) : null}
         </View>
@@ -188,6 +197,43 @@ function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind })
         <ThemedSquareTerminal size={12} uniProps={blueColorMapping} />
       )}
     </View>
+  );
+}
+
+function MarkDoneButton({ onPress }: { onPress: () => void }) {
+  const [isHovered, setIsHovered] = useState(false);
+  const handlePressIn = useCallback((event: GestureResponderEvent) => {
+    event.stopPropagation();
+  }, []);
+  const handlePress = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      onPress();
+    },
+    [onPress],
+  );
+  const handleHoverIn = useCallback(() => setIsHovered(true), []);
+  const handleHoverOut = useCallback(() => setIsHovered(false), []);
+  const iconUniProps = isHovered ? foregroundColorMapping : greenColorMapping;
+  const textStyle = isHovered
+    ? [markDoneStyles.text, markDoneStyles.textHovered]
+    : markDoneStyles.text;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Mark workspace as done"
+      hitSlop={4}
+      onPressIn={handlePressIn}
+      onPress={handlePress}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
+      style={markDoneStyles.button}
+      testID="sidebar-workspace-mark-done"
+    >
+      <ThemedCheck size={12} uniProps={iconUniProps} />
+      <Text style={textStyle}>Mark as done</Text>
+    </Pressable>
   );
 }
 
@@ -417,6 +463,23 @@ const checksBadgeStyles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
     lineHeight: 14,
     color: theme.colors.palette.red[500],
+  },
+}));
+
+const markDoneStyles = StyleSheet.create((theme) => ({
+  button: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  text: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+    lineHeight: 14,
+    color: theme.colors.palette.green[500],
+  },
+  textHovered: {
+    color: theme.colors.foreground,
   },
 }));
 
