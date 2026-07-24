@@ -44,6 +44,7 @@ import { useSessionStore, type MessageEntry, type SessionState } from "@/stores/
 import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
 import { sendOsNotification } from "@/utils/os-notifications";
 import { getIsAppActivelyVisible, getIsAppVisible } from "@/utils/app-visibility";
+import { isMobileLiteMode, MOBILE_LITE_STREAM_FLUSH_DELAY_MS } from "@/constants/mobile-lite";
 import {
   getInitKey,
   getInitDeferred,
@@ -808,6 +809,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   useEffect(() => {
     const agentStreamReducerQueue = createSessionAgentStreamReducerQueue({
       serverId,
+      flushDelayMs: isMobileLiteMode ? MOBILE_LITE_STREAM_FLUSH_DELAY_MS : undefined,
       setAgentStreamState,
       setAgentTimelineCursor,
       setAgents,
@@ -834,6 +836,14 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         epoch,
         timestamp: parsedTimestamp,
       });
+      if (
+        event.type === "turn_started" ||
+        event.type === "turn_completed" ||
+        event.type === "turn_failed" ||
+        event.type === "turn_canceled"
+      ) {
+        agentStreamReducerQueue.flushAgent(agentId);
+      }
 
       // NOTE: We don't update lastActivityAt on every stream event to prevent
       // cascading rerenders. The agent_update handler updates agent.lastActivityAt

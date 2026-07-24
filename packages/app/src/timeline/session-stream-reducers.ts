@@ -1408,6 +1408,7 @@ interface StreamStatePatch {
 
 export interface CreateSessionAgentStreamReducerQueueInput {
   serverId: string;
+  flushDelayMs?: number;
   setAgentStreamState: (serverId: string, agentId: string, state: StreamStatePatch) => void;
   setAgentTimelineCursor: (
     serverId: string,
@@ -1415,10 +1416,6 @@ export interface CreateSessionAgentStreamReducerQueueInput {
   ) => void;
   setAgents: (serverId: string, state: (prev: Map<string, Agent>) => Map<string, Agent>) => void;
   recoverTimelineGap: (agentId: string, cursor: { epoch: string; endSeq: number }) => void;
-}
-
-function scheduleAgentStreamReducerFlush(callback: () => void): number {
-  return setTimeout(callback, AGENT_STREAM_REDUCER_FLUSH_DELAY_MS) as unknown as number;
 }
 
 function cancelAgentStreamReducerFlush(id: number) {
@@ -1430,6 +1427,7 @@ export function createSessionAgentStreamReducerQueue(
 ): AgentStreamReducerQueue {
   const { serverId, setAgentStreamState, setAgentTimelineCursor, setAgents, recoverTimelineGap } =
     input;
+  const flushDelayMs = input.flushDelayMs ?? AGENT_STREAM_REDUCER_FLUSH_DELAY_MS;
 
   return createAgentStreamReducerQueue({
     getSnapshot: (agentId) => {
@@ -1511,7 +1509,7 @@ export function createSessionAgentStreamReducerQueue(
         }
       }
     },
-    scheduleFlush: scheduleAgentStreamReducerFlush,
+    scheduleFlush: (callback) => setTimeout(callback, flushDelayMs) as unknown as number,
     cancelFlush: cancelAgentStreamReducerFlush,
   });
 }

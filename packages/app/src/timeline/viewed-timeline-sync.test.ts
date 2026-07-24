@@ -442,7 +442,7 @@ test("membership failure autonomously retries without another visibility declara
   });
 });
 
-test("background waits for grace before unsubscribing and catches up on return", async () => {
+test("background unsubscribes immediately and catches up on return", async () => {
   const world = new TimelineWorld();
   world.sync.setConnected(true);
   world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
@@ -452,8 +452,6 @@ test("background waits for grace before unsubscribing and catches up on return",
   initialCatchUp.respond({ hasNewer: false });
 
   world.sync.setActive(false);
-  world.expectNoPendingMembership();
-  world.runUnsubscribeGrace();
   const background = await world.nextMembership();
   background.succeed();
   world.sync.setActive(true);
@@ -468,7 +466,7 @@ test("background waits for grace before unsubscribing and catches up on return",
   });
 });
 
-test("foregrounding within grace preserves the live membership", async () => {
+test("foregrounding after an immediate background unsubscribe restores membership", async () => {
   const world = new TimelineWorld();
   world.sync.setConnected(true);
   world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
@@ -478,8 +476,14 @@ test("foregrounding within grace preserves the live membership", async () => {
   catchUp.respond({ hasNewer: false });
 
   world.sync.setActive(false);
-  world.expectNoPendingMembership();
+  const background = await world.nextMembership();
+  background.succeed();
   world.sync.setActive(true);
+
+  const foreground = await world.nextMembership();
+  foreground.succeed();
+  const resumedCatchUp = await world.nextFetch("agent-a");
+  resumedCatchUp.respond({ hasNewer: false });
 
   world.expectNoPendingUnsubscribe();
   world.expectNoPendingMembership();
@@ -598,7 +602,7 @@ test("a new visible agent subscribes immediately while the previous agent linger
   expect(settledMembership.agentIds).toEqual(["agent-b"]);
 });
 
-test("backgrounding preserves an existing unsubscribe grace period", async () => {
+test("backgrounding cancels an existing unsubscribe grace period", async () => {
   const world = new TimelineWorld();
   world.sync.setConnected(true);
   world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
@@ -609,8 +613,6 @@ test("backgrounding preserves an existing unsubscribe grace period", async () =>
 
   world.sync.replaceVisibleAgentIds("workspace", []);
   world.sync.setActive(false);
-  world.expectNoPendingMembership();
-  world.runUnsubscribeGrace();
   const unsubscribe = await world.nextMembership();
   unsubscribe.succeed();
 

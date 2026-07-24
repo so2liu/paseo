@@ -32,6 +32,9 @@ import {
 } from "@/utils/host-route-browser";
 import { prepareWorkspaceTab } from "@/utils/workspace-navigation";
 import { isWeb } from "@/constants/platform";
+import { isMobileLiteMode } from "@/constants/mobile-lite";
+
+const WORKSPACE_DECK_MOUNT_CAP = isMobileLiteMode ? 1 : WORKSPACE_DECK_MAX_MOUNTED_WORKSPACES;
 
 function getParamValue(value: string | string[] | undefined): string {
   if (typeof value === "string") {
@@ -214,7 +217,7 @@ function WorkspaceDeck({
       pruneMountedWorkspaceSelections({
         currentSelections: mountedSelections,
         activeSelection,
-        maxMountedWorkspaces: WORKSPACE_DECK_MAX_MOUNTED_WORKSPACES,
+        maxMountedWorkspaces: WORKSPACE_DECK_MOUNT_CAP,
       }),
     [activeSelection, mountedSelections],
   );

@@ -77,9 +77,10 @@ session and host-scoped setup state together.
 The app chooses one delivery policy from `server_info.features.selectiveAgentTimeline`:
 
 - Selective daemons receive the union of agents visible in every pane. Additions subscribe and
-  catch up immediately. Every visibility-driven removal, including app backgrounding, stays
-  subscribed for a 30-second grace period so brief tab, pane, route, and app switches do not repeatedly
-  unsubscribe and catch up. Losing window keyboard focus does not make a selected pane invisible.
+  catch up immediately. Pane, tab, and route removals stay subscribed for a 30-second grace period
+  so brief navigation does not repeatedly unsubscribe and catch up. App backgrounding is different:
+  it unsubscribes immediately to stop mobile execution traffic while the separate attention and push
+  notification paths remain available. Losing window keyboard focus does not make a selected pane invisible.
   Disconnecting and disposal clear pending grace because the subscription itself no longer exists.
   After grace has expired, revisiting a retained timeline displays its cached state immediately and
   authoritative catch-up advances it to the current tail.

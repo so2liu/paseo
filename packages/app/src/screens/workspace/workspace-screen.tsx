@@ -181,6 +181,7 @@ import {
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
+import { isMobileLiteMode } from "@/constants/mobile-lite";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import {
   buildHostRootRoute,
@@ -214,6 +215,40 @@ const EMPTY_UI_TABS: WorkspaceTab[] = [];
 const EMPTY_WORKSPACE_SCRIPTS: WorkspaceDescriptor["scripts"] = [];
 const EMPTY_PINNED_AGENT_IDS = new Set<string>();
 const EMPTY_SET = new Set<string>();
+const MOBILE_WORKSPACE_MOUNTED_TAB_CAP = isMobileLiteMode ? 1 : 3;
+
+function getWorkspaceTerminalRetentionScopeKey(
+  serverId: string,
+  workspaceId: string,
+): string | null {
+  if (isMobileLiteMode) {
+    return null;
+  }
+  return buildWorkspaceTerminalScopeKey(serverId, workspaceId);
+}
+
+function shouldLoadFullWorkspaceData(isRouteFocused: boolean): boolean {
+  return isRouteFocused && !isMobileLiteMode;
+}
+
+function shouldShowMobileWorkspaceExplorerToggle(isMobile: boolean): boolean {
+  return isMobile && !isMobileLiteMode;
+}
+
+function getRetainedMobileTabIds(modifiedTabIds: Set<string>): Set<string> {
+  return isMobileLiteMode ? EMPTY_SET : modifiedTabIds;
+}
+
+function shouldShowWorkspaceExplorerSidebarForRuntime(input: {
+  isRouteFocused: boolean;
+  isFocusModeEnabled: boolean;
+  isMobile: boolean;
+}): boolean {
+  if (isMobileLiteMode) {
+    return false;
+  }
+  return shouldShowWorkspaceExplorerSidebar(input);
+}
 
 function getWorkspaceScripts(
   workspaceDescriptor: WorkspaceDescriptor | null | undefined,
@@ -989,6 +1024,7 @@ interface WorkspaceHeaderMenuProps {
   showWorkspaceSetup: boolean;
   showCreateBrowserTab: boolean;
   isMobile: boolean;
+  liteMode: boolean;
   createTerminalDisabled: boolean;
   importAgentDisabled: boolean;
   copyPathDisabled: boolean;
@@ -1070,6 +1106,7 @@ function WorkspaceHeaderMenu({
   showWorkspaceSetup,
   showCreateBrowserTab,
   isMobile,
+  liteMode,
   createTerminalDisabled,
   importAgentDisabled,
   copyPathDisabled,
@@ -1090,7 +1127,7 @@ function WorkspaceHeaderMenu({
 }: WorkspaceHeaderMenuProps) {
   const { t } = useTranslation();
   const router = useRouter();
-  const { config } = useDaemonConfig(normalizedServerId);
+  const { config } = useDaemonConfig(liteMode ? null : normalizedServerId);
   const profiles = useMemo(
     () => resolveTerminalProfiles(config?.terminalProfiles),
     [config?.terminalProfiles],
@@ -1125,7 +1162,7 @@ function WorkspaceHeaderMenu({
         >
           {t("workspace.header.actions.newAgent")}
         </DropdownMenuItem>
-        {showCreateBrowserTab ? (
+        {!liteMode && showCreateBrowserTab ? (
           <DropdownMenuItem
             testID="workspace-header-new-browser"
             leading={menuNewBrowserIcon}
@@ -1134,68 +1171,74 @@ function WorkspaceHeaderMenu({
             {t("workspace.header.actions.newBrowser")}
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem
-          testID="workspace-header-import-agent"
-          leading={menuImportIcon}
-          disabled={importAgentDisabled}
-          onSelect={onOpenImportSheet}
-        >
-          {t("workspace.header.actions.importSession")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID="workspace-header-copy-path"
-          leading={menuCopyIcon}
-          disabled={copyPathDisabled}
-          onSelect={onCopyWorkspacePath}
-        >
-          {t("workspace.header.actions.copyPath")}
-        </DropdownMenuItem>
-        {currentBranchName ? (
-          <DropdownMenuItem
-            testID="workspace-header-copy-branch-name"
-            leading={menuCopyIcon}
-            onSelect={onCopyBranchName}
-          >
-            {t("workspace.header.actions.copyBranchName")}
-          </DropdownMenuItem>
-        ) : null}
-        {showWorkspaceSetup ? (
+        {!liteMode ? (
           <>
+            <DropdownMenuItem
+              testID="workspace-header-import-agent"
+              leading={menuImportIcon}
+              disabled={importAgentDisabled}
+              onSelect={onOpenImportSheet}
+            >
+              {t("workspace.header.actions.importSession")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              testID="workspace-header-copy-path"
+              leading={menuCopyIcon}
+              disabled={copyPathDisabled}
+              onSelect={onCopyWorkspacePath}
+            >
+              {t("workspace.header.actions.copyPath")}
+            </DropdownMenuItem>
+            {currentBranchName ? (
+              <DropdownMenuItem
+                testID="workspace-header-copy-branch-name"
+                leading={menuCopyIcon}
+                onSelect={onCopyBranchName}
+              >
+                {t("workspace.header.actions.copyBranchName")}
+              </DropdownMenuItem>
+            ) : null}
+            {showWorkspaceSetup ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  testID="workspace-header-show-setup"
+                  leading={menuSettingsIcon}
+                  onSelect={onOpenSetupTab}
+                >
+                  {t("workspace.header.actions.showSetup")}
+                </DropdownMenuItem>
+              </>
+            ) : null}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>
+              {t("workspace.tabs.actions.terminalProfilesMenu")}
+            </DropdownMenuLabel>
+            <DropdownMenuItem
+              testID="workspace-header-new-terminal"
+              leading={menuNewTerminalIcon}
+              disabled={createTerminalDisabled}
+              onSelect={onCreateTerminal}
+            >
+              {t("workspace.header.actions.newTerminal")}
+            </DropdownMenuItem>
+            {profiles.map((profile) => (
+              <HeaderMenuProfileItem
+                key={profile.id}
+                profile={profile}
+                disabled={createTerminalDisabled}
+                onCreateTerminalWithProfile={onCreateTerminalWithProfile}
+              />
+            ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              testID="workspace-header-show-setup"
-              leading={menuSettingsIcon}
-              onSelect={onOpenSetupTab}
+              testID="workspace-header-edit-terminal-profiles"
+              onSelect={handleEditProfiles}
             >
-              {t("workspace.header.actions.showSetup")}
+              {t("workspace.tabs.actions.editTerminalProfiles")}
             </DropdownMenuItem>
           </>
         ) : null}
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>{t("workspace.tabs.actions.terminalProfilesMenu")}</DropdownMenuLabel>
-        <DropdownMenuItem
-          testID="workspace-header-new-terminal"
-          leading={menuNewTerminalIcon}
-          disabled={createTerminalDisabled}
-          onSelect={onCreateTerminal}
-        >
-          {t("workspace.header.actions.newTerminal")}
-        </DropdownMenuItem>
-        {profiles.map((profile) => (
-          <HeaderMenuProfileItem
-            key={profile.id}
-            profile={profile}
-            disabled={createTerminalDisabled}
-            onCreateTerminalWithProfile={onCreateTerminalWithProfile}
-          />
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          testID="workspace-header-edit-terminal-profiles"
-          onSelect={handleEditProfiles}
-        >
-          {t("workspace.tabs.actions.editTerminalProfiles")}
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1215,6 +1258,7 @@ interface WorkspaceHeaderTitleBarProps {
   showWorkspaceSetup: boolean;
   showCreateBrowserTab: boolean;
   isMobile: boolean;
+  liteMode: boolean;
   createTerminalDisabled: boolean;
   importAgentDisabled: boolean;
   copyPathDisabled: boolean;
@@ -1251,6 +1295,7 @@ function WorkspaceHeaderTitleBar({
   showWorkspaceSetup,
   showCreateBrowserTab,
   isMobile,
+  liteMode,
   createTerminalDisabled,
   importAgentDisabled,
   copyPathDisabled,
@@ -1318,6 +1363,7 @@ function WorkspaceHeaderTitleBar({
           showWorkspaceSetup={showWorkspaceSetup}
           showCreateBrowserTab={showCreateBrowserTab}
           isMobile={isMobile}
+          liteMode={liteMode}
           createTerminalDisabled={createTerminalDisabled}
           importAgentDisabled={importAgentDisabled}
           copyPathDisabled={copyPathDisabled}
@@ -1336,7 +1382,7 @@ function WorkspaceHeaderTitleBar({
           onCopyBranchName={onCopyBranchName}
           onOpenSetupTab={onOpenSetupTab}
         />
-        {isMobile && workspaceScripts.length > 0 ? (
+        {isMobile && !liteMode && workspaceScripts.length > 0 ? (
           <WorkspaceScriptsButton
             serverId={normalizedServerId}
             workspaceId={normalizedWorkspaceId}
@@ -1789,7 +1835,7 @@ function WorkspaceScreenContent({
     useWorkspaceRouteActions(normalizedServerId);
 
   const workspaceTerminalScopeKey = useMemo(
-    () => buildWorkspaceTerminalScopeKey(normalizedServerId, normalizedWorkspaceId),
+    () => getWorkspaceTerminalRetentionScopeKey(normalizedServerId, normalizedWorkspaceId),
     [normalizedServerId, normalizedWorkspaceId],
   );
   useWorkspaceTerminalSessionRetention({
@@ -1804,6 +1850,7 @@ function WorkspaceScreenContent({
   );
   const startDownload = useDownloadStore((state) => state.startDownload);
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
+  const loadFullWorkspaceData = shouldLoadFullWorkspaceData(isRouteFocused);
   const workspaceDirectory = workspaceDescriptor?.workspaceDirectory || null;
   const isMissingWorkspaceDirectory = Boolean(workspaceDescriptor) && !workspaceDirectory;
   const [isImportSheetVisible, setIsImportSheetVisible] = useState(false);
@@ -1818,7 +1865,7 @@ function WorkspaceScreenContent({
   // Warm the workspace-scoped provider snapshot so the model picker is ready when opened.
   useProvidersSnapshot(normalizedServerId, {
     cwd: workspaceDirectory,
-    enabled: isRouteFocused,
+    enabled: loadFullWorkspaceData,
   });
 
   const persistenceKey = useMemo(
@@ -1905,7 +1952,7 @@ function WorkspaceScreenContent({
   } = useWorkspaceTerminals({
     client,
     isConnected,
-    isRouteFocused,
+    isRouteFocused: loadFullWorkspaceData,
     normalizedServerId,
     normalizedWorkspaceId,
     workspaceDirectory,
@@ -1923,7 +1970,7 @@ function WorkspaceScreenContent({
   const { checkoutQuery, isCheckoutStatusLoading } = useWorkspaceCheckoutStatus({
     client,
     isConnected,
-    isRouteFocused,
+    isRouteFocused: loadFullWorkspaceData,
     normalizedServerId,
     normalizedWorkspaceId,
     workspaceDirectory,
@@ -3380,8 +3427,8 @@ function WorkspaceScreenContent({
   const { mountedTabIds: mountedFocusedPaneTabIdsSet } = useMountedTabSet({
     activeTabId,
     allTabIds: focusedPaneTabIds,
-    retainedTabIds: modifiedFocusedPaneTabIds,
-    cap: 3,
+    retainedTabIds: getRetainedMobileTabIds(modifiedFocusedPaneTabIds),
+    cap: MOBILE_WORKSPACE_MOUNTED_TAB_CAP,
   });
   const mountedFocusedPaneTabIds = useMemo(
     () => focusedPaneTabIds.filter((tabId) => mountedFocusedPaneTabIdsSet.has(tabId)),
@@ -3624,7 +3671,7 @@ function WorkspaceScreenContent({
             }}
           </HeaderToggleButton>
         ) : null}
-        {isMobile ? (
+        {shouldShowMobileWorkspaceExplorerToggle(isMobile) ? (
           <HeaderToggleButton
             testID="workspace-explorer-toggle"
             onPress={handleToggleExplorer}
@@ -3681,7 +3728,12 @@ function WorkspaceScreenContent({
     [isFocusModeEnabled, isMobile],
   );
   const showExplorerSidebar = useMemo(
-    () => shouldShowWorkspaceExplorerSidebar({ isRouteFocused, isFocusModeEnabled, isMobile }),
+    () =>
+      shouldShowWorkspaceExplorerSidebarForRuntime({
+        isRouteFocused,
+        isFocusModeEnabled,
+        isMobile,
+      }),
     [isRouteFocused, isFocusModeEnabled, isMobile],
   );
   const createTerminalDisabled = useMemo(
@@ -3801,6 +3853,7 @@ function WorkspaceScreenContent({
                 showWorkspaceSetup={showWorkspaceSetup}
                 showCreateBrowserTab={showCreateBrowserTab}
                 isMobile={isMobile}
+                liteMode={isMobileLiteMode}
                 createTerminalDisabled={createTerminalDisabled}
                 importAgentDisabled={!canOpenImportSheet}
                 copyPathDisabled={!workspaceDirectory}

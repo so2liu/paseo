@@ -60,6 +60,7 @@ import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
+  type ToolCallDetailProjection,
 } from "@/tool-calls/detail-level/projection";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
@@ -104,8 +105,17 @@ import { toErrorMessage } from "@/utils/error-messages";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
 import {
   buildExecutionCollapseProjection,
+  type ExecutionCollapseProjection,
   type ExecutionCollapseGroup,
 } from "./execution-collapse";
+import { isMobileLiteMode } from "@/constants/mobile-lite";
+import { projectMobileLiteStream } from "./mobile-lite-projection";
+
+const EMPTY_EXECUTION_COLLAPSE_PROJECTION: ExecutionCollapseProjection = {
+  groupByItemId: new Map(),
+  groups: [],
+};
+const EMPTY_TOOL_CALL_GROUPS = new Map();
 
 const executionToggleStyle = ({ pressed }: PressableStateCallbackType) => [
   stylesheet.executionToggle,
@@ -646,7 +656,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     );
 
     // Freeze stream data while this tab slot is hidden to prevent offscreen FlatList
-    // cell-window renders on every 48ms flush from background agents.
+    // cell-window renders on every live-stream flush from background agents.
     // When isActive flips back to true, the context change triggers a re-render and
     // the component reads the current (fresh) streamItems/streamHead from props.
     const isActive = useRetainedPanelActive();
@@ -658,21 +668,35 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     }
     const effectiveStreamItems = isActive ? streamItems : frozenStreamItemsRef.current;
     const effectiveStreamHead = isActive ? streamHead : frozenStreamHeadRef.current;
+    const visibleStreamItems = useMemo(
+      () =>
+        isMobileLiteMode ? projectMobileLiteStream(effectiveStreamItems) : effectiveStreamItems,
+      [effectiveStreamItems],
+    );
+    const visibleStreamHead = useMemo(
+      () =>
+        isMobileLiteMode
+          ? projectMobileLiteStream(effectiveStreamHead ?? EMPTY_STREAM_HEAD)
+          : (effectiveStreamHead ?? EMPTY_STREAM_HEAD),
+      [effectiveStreamHead],
+    );
     const userMessages = useMemo(
       () =>
-        [...effectiveStreamItems, ...(effectiveStreamHead ?? EMPTY_STREAM_HEAD)].filter(
+        [...visibleStreamItems, ...visibleStreamHead].filter(
           (item): item is Extract<StreamItem, { kind: "user_message" }> =>
             item.kind === "user_message",
         ),
-      [effectiveStreamHead, effectiveStreamItems],
+      [visibleStreamHead, visibleStreamItems],
     );
     const executionCollapseProjection = useMemo(
       () =>
-        buildExecutionCollapseProjection({
-          items: [...effectiveStreamItems, ...(effectiveStreamHead ?? EMPTY_STREAM_HEAD)],
-          isRunning: context.status === "running",
-        }),
-      [context.status, effectiveStreamHead, effectiveStreamItems],
+        isMobileLiteMode
+          ? EMPTY_EXECUTION_COLLAPSE_PROJECTION
+          : buildExecutionCollapseProjection({
+              items: [...visibleStreamItems, ...visibleStreamHead],
+              isRunning: context.status === "running",
+            }),
+      [context.status, visibleStreamHead, visibleStreamItems],
     );
     const toggleExecutionGroup = useCallback((groupId: string) => {
       setExpandedExecutionGroupIds((previous) => {
@@ -685,28 +709,35 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         return next;
       });
     }, []);
-    // Keep retained history outside the 48ms live-head flush path.
+    // Keep retained history outside the live-head flush path.
     const preparedToolCallHistory = useMemo(
-      () => prepareToolCallHistory(toolCallDetailLevel, effectiveStreamItems),
-      [effectiveStreamItems, toolCallDetailLevel],
-    );
-    const projectedToolCalls = useMemo(
       () =>
-        projectToolCallDetailLevel({
-          level: toolCallDetailLevel,
-          tail: effectiveStreamItems,
-          head: effectiveStreamHead ?? EMPTY_STREAM_HEAD,
-          preparedHistory: preparedToolCallHistory,
-          isTurnActive: context.status === "running",
-        }),
-      [
-        context.status,
-        effectiveStreamHead,
-        effectiveStreamItems,
-        preparedToolCallHistory,
-        toolCallDetailLevel,
-      ],
+        isMobileLiteMode ? null : prepareToolCallHistory(toolCallDetailLevel, visibleStreamItems),
+      [toolCallDetailLevel, visibleStreamItems],
     );
+    const projectedToolCalls = useMemo<ToolCallDetailProjection>(() => {
+      if (isMobileLiteMode) {
+        return {
+          tail: visibleStreamItems,
+          head: visibleStreamHead,
+          groupsByHostId: EMPTY_TOOL_CALL_GROUPS,
+          historyGroupUpdatesByHostId: EMPTY_TOOL_CALL_GROUPS,
+        };
+      }
+      return projectToolCallDetailLevel({
+        level: toolCallDetailLevel,
+        tail: visibleStreamItems,
+        head: visibleStreamHead,
+        preparedHistory: preparedToolCallHistory,
+        isTurnActive: context.status === "running",
+      });
+    }, [
+      context.status,
+      preparedToolCallHistory,
+      toolCallDetailLevel,
+      visibleStreamHead,
+      visibleStreamItems,
+    ]);
 
     const baseRenderModel = useMemo(() => {
       return buildAgentStreamRenderModel({

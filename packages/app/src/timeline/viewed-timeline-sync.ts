@@ -391,7 +391,10 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
     setActive(nextActive) {
       if (active === nextActive) return;
       active = nextActive;
-      publishVisibleMembership(true);
+      // App backgrounding is a durable visibility boundary. Drop live timeline
+      // delivery immediately so native clients stop receiving execution traffic;
+      // attention notifications use their separate delivery path.
+      publishVisibleMembership(nextActive);
     },
     setConnected(nextConnected) {
       if (connected === nextConnected) return;
