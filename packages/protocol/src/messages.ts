@@ -570,6 +570,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     type: z.literal("user_message"),
     text: z.string(),
     messageId: z.string().optional(),
+    clientMessageId: z.string().optional(),
   }),
   z.object({
     type: z.literal("assistant_message"),
@@ -657,6 +658,7 @@ export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
         body: z.string(),
         data: z.object({
           serverId: z.string(),
+          workspaceId: z.string().optional(),
           agentId: z.string(),
           reason: z.enum(["finished", "error", "permission"]),
         }),
@@ -1774,6 +1776,8 @@ const CheckoutCommitSchema = z.object({
   authorName: z.string(),
   authorDate: z.string(), // ISO 8601
   isOnRemote: z.boolean(), // false = local-only (unpushed)
+  // COMPAT(commitBaseClassification): added in v0.2.0, remove optional after 2027-01-23.
+  isOnBase: z.boolean().optional(),
   files: z.array(CheckoutCommitFileSchema),
 });
 
@@ -2175,6 +2179,7 @@ const FileExplorerFileSchema = z.object({
   mimeType: z.string().optional(),
   size: z.number(),
   modifiedAt: z.string(),
+  revision: z.string().optional(),
 });
 
 const FileExplorerDirectorySchema = z.object({
@@ -2189,6 +2194,52 @@ export const FileExplorerRequestSchema = z.object({
   mode: z.enum(["list", "file"]),
   requestId: z.string(),
   acceptBinary: z.boolean().optional(),
+});
+
+export const FileVersionSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ready"),
+    cwd: z.string(),
+    path: z.string(),
+    size: z.number().int().nonnegative(),
+    modifiedAt: z.string(),
+    revision: z.string().optional(),
+  }),
+  z.object({
+    status: z.literal("missing"),
+    cwd: z.string(),
+    path: z.string(),
+  }),
+  z.object({
+    status: z.literal("error"),
+    cwd: z.string(),
+    path: z.string(),
+    error: z.string(),
+  }),
+]);
+
+export const FileSubscribeRequestSchema = z.object({
+  type: z.literal("fs.file.subscribe.request"),
+  cwd: z.string(),
+  path: z.string(),
+  subscriptionId: z.string(),
+  requestId: z.string(),
+});
+
+export const FileUnsubscribeRequestSchema = z.object({
+  type: z.literal("fs.file.unsubscribe.request"),
+  subscriptionId: z.string(),
+  requestId: z.string(),
+});
+
+export const FileWriteRequestSchema = z.object({
+  type: z.literal("fs.file.write.request"),
+  cwd: z.string(),
+  path: z.string(),
+  content: z.string(),
+  expectedModifiedAt: z.string(),
+  expectedRevision: z.string().optional(),
+  requestId: z.string(),
 });
 
 export const ProjectIconRequestSchema = z.object({
@@ -2512,6 +2563,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceCreateRequestSchema,
   WorkspaceClearAttentionRequestSchema,
   FileExplorerRequestSchema,
+  FileSubscribeRequestSchema,
+  FileUnsubscribeRequestSchema,
+  FileWriteRequestSchema,
   ProjectIconRequestSchema,
   FileDownloadTokenRequestSchema,
   FileUploadRequestSchema,
@@ -2747,6 +2801,8 @@ export const ServerInfoStatusPayloadSchema = z
         worktreeRestore: z.boolean().optional(),
         // COMPAT(workspaceRecovery): added in v0.1.105, remove after 2027-01-11 once daemon floor >= v0.1.105.
         workspaceRecovery: z.boolean().optional(),
+        // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
+        workspaceFileEditing: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
@@ -2775,6 +2831,8 @@ export const ServerInfoStatusPayloadSchema = z
         projectCreateDirectory: z.boolean().optional(),
         // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
         commitsList: z.boolean().optional(),
+        // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
+        commitBaseClassification: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
@@ -3565,6 +3623,7 @@ export const AgentAttentionRequiredMessageSchema = z.object({
         body: z.string(),
         data: z.object({
           serverId: z.string(),
+          workspaceId: z.string().optional(),
           agentId: z.string(),
           reason: z.enum(["finished", "error", "permission"]),
         }),
@@ -4641,6 +4700,50 @@ export const FileExplorerResponseSchema = z.object({
   }),
 });
 
+export const FileSubscribeResponseSchema = z.object({
+  type: z.literal("fs.file.subscribe.response"),
+  payload: z.object({
+    subscriptionId: z.string(),
+    initial: FileVersionSchema,
+    requestId: z.string(),
+  }),
+});
+
+export const FileUnsubscribeResponseSchema = z.object({
+  type: z.literal("fs.file.unsubscribe.response"),
+  payload: z.object({
+    subscriptionId: z.string(),
+    requestId: z.string(),
+  }),
+});
+
+export const FileWriteResultSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("written"),
+    modifiedAt: z.string(),
+    size: z.number(),
+    revision: z.string().optional(),
+  }),
+  z.object({ status: z.literal("conflict"), version: FileVersionSchema }),
+  z.object({ status: z.literal("error"), error: z.string() }),
+]);
+
+export const FileWriteResponseSchema = z.object({
+  type: z.literal("fs.file.write.response"),
+  payload: z.object({
+    result: FileWriteResultSchema,
+    requestId: z.string(),
+  }),
+});
+
+export const FileUpdateSchema = z.object({
+  type: z.literal("fs.file.update"),
+  payload: z.object({
+    subscriptionId: z.string(),
+    version: FileVersionSchema,
+  }),
+});
+
 const ProjectIconSchema = z.object({
   data: z.string(),
   mimeType: z.string(),
@@ -5193,6 +5296,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   PaseoWorktreeArchiveResponseSchema,
   CreatePaseoWorktreeResponseSchema,
   FileExplorerResponseSchema,
+  FileSubscribeResponseSchema,
+  FileUnsubscribeResponseSchema,
+  FileWriteResponseSchema,
+  FileUpdateSchema,
   ProjectIconResponseSchema,
   FileDownloadTokenResponseSchema,
   FileUploadResponseSchema,
@@ -5587,6 +5694,15 @@ export type ArchiveWorkspaceRequest = z.infer<typeof ArchiveWorkspaceRequestSche
 export type WorkspaceClearAttentionRequest = z.infer<typeof WorkspaceClearAttentionRequestSchema>;
 export type FileExplorerRequest = z.infer<typeof FileExplorerRequestSchema>;
 export type FileExplorerResponse = z.infer<typeof FileExplorerResponseSchema>;
+export type FileVersion = z.infer<typeof FileVersionSchema>;
+export type FileSubscribeRequest = z.infer<typeof FileSubscribeRequestSchema>;
+export type FileSubscribeResponse = z.infer<typeof FileSubscribeResponseSchema>;
+export type FileUnsubscribeRequest = z.infer<typeof FileUnsubscribeRequestSchema>;
+export type FileUnsubscribeResponse = z.infer<typeof FileUnsubscribeResponseSchema>;
+export type FileWriteRequest = z.infer<typeof FileWriteRequestSchema>;
+export type FileWriteResponse = z.infer<typeof FileWriteResponseSchema>;
+export type FileWriteResult = z.infer<typeof FileWriteResultSchema>;
+export type FileUpdate = z.infer<typeof FileUpdateSchema>;
 export type ProjectIconRequest = z.infer<typeof ProjectIconRequestSchema>;
 export type ProjectIconResponse = z.infer<typeof ProjectIconResponseSchema>;
 export type ProjectIcon = z.infer<typeof ProjectIconSchema>;

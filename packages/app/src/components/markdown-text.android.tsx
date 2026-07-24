@@ -63,7 +63,7 @@ interface MarkdownParagraphViewProps {
   children: ReactNode;
 }
 
-const MARKDOWN_PARAGRAPH_RESET: ViewStyle = {};
+const MARKDOWN_PARAGRAPH_RESET: TextStyle & ViewStyle = {};
 
 // Paragraph stays a <View>, not a <Text>, for layout fidelity. RN Android's
 // text engine *does* accept inline View children (TextInlineViewPlaceholderSpan
@@ -74,9 +74,16 @@ const MARKDOWN_PARAGRAPH_RESET: ViewStyle = {};
 // document-selection branch above, where nested Text nodes share one scope.
 export function MarkdownParagraphView({ paragraphStyle, children }: MarkdownParagraphViewProps) {
   const isDocumentSelection = useContext(MarkdownDocumentSelectionContext);
-  const style = useMemo(() => [paragraphStyle, MARKDOWN_PARAGRAPH_RESET], [paragraphStyle]);
+  const viewStyle = useMemo(() => [paragraphStyle, MARKDOWN_PARAGRAPH_RESET], [paragraphStyle]);
+  const textStyle = useMemo(
+    // The renderer's paragraph token is shared by the View and Text branches.
+    // CSS interop widens ViewStyle.userSelect to string, while React Native's
+    // TextStyle keeps the equivalent native values as a literal union.
+    () => [paragraphStyle as TextStyle, MARKDOWN_PARAGRAPH_RESET],
+    [paragraphStyle],
+  );
   if (isDocumentSelection) {
-    return <Text style={style}>{children}</Text>;
+    return <Text style={textStyle}>{children}</Text>;
   }
-  return <View style={style}>{children}</View>;
+  return <View style={viewStyle}>{children}</View>;
 }

@@ -409,7 +409,7 @@ function wrapClientProvider(
           launchContext,
         ),
       ),
-    resumeSession: async (handle, overrides, launchContext) =>
+    resumeSession: async (handle, overrides, launchContext, options) =>
       wrapSessionProvider(
         provider,
         await inner.resumeSession(
@@ -424,6 +424,7 @@ function wrapClientProvider(
               }
             : undefined,
           launchContext,
+          options,
         ),
       ),
     fetchCatalog: async (options) => {

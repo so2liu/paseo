@@ -42,6 +42,8 @@ import {
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
+import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
+import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { SidebarWorkspaceReviewSwipe } from "@/components/sidebar/sidebar-workspace-review-swipe";
@@ -103,6 +105,12 @@ export function SidebarStatusWorkspaceList({
   const togglePinnedCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.togglePinnedCollapsed,
   );
+  const {
+    visibleItems: visiblePinnedWorkspaces,
+    expanded: pinnedWorkspacesExpanded,
+    canToggle: canTogglePinnedWorkspaces,
+    toggleExpanded: togglePinnedWorkspacesExpanded,
+  } = useLimitedSidebarGroup(pinnedWorkspaces);
 
   const statusShortcutIndex = showShortcutBadges ? shortcutIndexByWorkspaceKey : new Map();
   const content = (
@@ -110,9 +118,9 @@ export function SidebarStatusWorkspaceList({
       {pinnedWorkspaces.length > 0 ? (
         <View style={styles.pinnedSection} testID="sidebar-pinned-section">
           <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
-          {pinnedCollapsed
-            ? null
-            : pinnedWorkspaces.map((workspace) => (
+          {pinnedCollapsed ? null : (
+            <>
+              {visiblePinnedWorkspaces.map((workspace) => (
                 <StatusWorkspaceRow
                   key={workspace.workspaceKey}
                   workspace={workspace}
@@ -126,10 +134,18 @@ export function SidebarStatusWorkspaceList({
                   showShortcutBadge={showShortcutBadges}
                   canPin={supportsPinningByServerId.get(workspace.serverId) === true}
                   onToggleWorkspacePin={onToggleWorkspacePin}
-                  reserveIdleStatusIndicatorSpace={false}
                   onWorkspacePress={onWorkspacePress}
                 />
               ))}
+              {canTogglePinnedWorkspaces ? (
+                <SidebarGroupToggleRow
+                  expanded={pinnedWorkspacesExpanded}
+                  onPress={togglePinnedWorkspacesExpanded}
+                  testID="sidebar-pinned-show-more"
+                />
+              ) : null}
+            </>
+          )}
         </View>
       ) : null}
       {listHeaderComponent}
@@ -202,41 +218,94 @@ function StatusGroupList({
   return (
     <>
       {groups.map((group) => (
-        <View key={group.bucket} style={styles.statusGroupBlock}>
-          <StatusGroupHeader
-            group={group}
-            collapsed={
-              !isDeviceMode && collapsedStatusGroupKeys.has(group.bucket as StatusGroup["bucket"])
-            }
-            collapsible={!isDeviceMode}
-          />
-          {isDeviceMode || !collapsedStatusGroupKeys.has(group.bucket as StatusGroup["bucket"]) ? (
-            <View
-              style={styles.statusWorkspaceListContainer}
-              testID={`sidebar-status-group-rows-${group.bucket}`}
-            >
-              {group.rows.map((workspace) => (
-                <StatusWorkspaceRow
-                  key={workspace.workspaceKey}
-                  workspace={workspace}
-                  subtitle={buildStatusRowSubtitle({
-                    projectName: projectNamesByKey.get(workspace.projectKey) ?? "",
-                    hostLabel: showHostLabels
-                      ? (hostLabelByServerId.get(workspace.serverId) ?? workspace.serverId)
-                      : null,
-                  })}
-                  shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
-                  showShortcutBadge={showShortcutBadges}
-                  canPin={supportsPinningByServerId.get(workspace.serverId) === true}
-                  onToggleWorkspacePin={onToggleWorkspacePin}
-                  onWorkspacePress={onWorkspacePress}
-                />
-              ))}
-            </View>
-          ) : null}
-        </View>
+        <StatusGroupRows
+          key={group.bucket}
+          group={group}
+          collapsed={
+            !isDeviceMode && collapsedStatusGroupKeys.has(group.bucket as StatusGroup["bucket"])
+          }
+          collapsible={!isDeviceMode}
+          projectNamesByKey={projectNamesByKey}
+          shortcutIndex={shortcutIndex}
+          showShortcutBadges={showShortcutBadges}
+          onWorkspacePress={onWorkspacePress}
+          hostLabelByServerId={hostLabelByServerId}
+          showHostLabels={showHostLabels}
+          supportsPinningByServerId={supportsPinningByServerId}
+          onToggleWorkspacePin={onToggleWorkspacePin}
+        />
       ))}
     </>
+  );
+}
+
+function StatusGroupRows({
+  group,
+  collapsed,
+  collapsible,
+  projectNamesByKey,
+  shortcutIndex,
+  showShortcutBadges,
+  onWorkspacePress,
+  hostLabelByServerId,
+  showHostLabels,
+  supportsPinningByServerId,
+  onToggleWorkspacePin,
+}: {
+  group: WorkspaceDisplayGroup;
+  collapsed: boolean;
+  collapsible: boolean;
+  projectNamesByKey: Map<string, string>;
+  shortcutIndex: Map<string, number>;
+  showShortcutBadges: boolean;
+  onWorkspacePress?: () => void;
+  hostLabelByServerId: ReadonlyMap<string, string>;
+  showHostLabels: boolean;
+  supportsPinningByServerId: ReadonlyMap<string, boolean>;
+  onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+}) {
+  const {
+    visibleItems: visibleWorkspaces,
+    expanded: workspacesExpanded,
+    canToggle: canToggleWorkspaces,
+    toggleExpanded: toggleWorkspacesExpanded,
+  } = useLimitedSidebarGroup(group.rows);
+
+  return (
+    <View style={styles.statusGroupBlock}>
+      <StatusGroupHeader group={group} collapsed={collapsed} collapsible={collapsible} />
+      {!collapsed ? (
+        <View
+          style={styles.statusWorkspaceListContainer}
+          testID={`sidebar-status-group-rows-${group.bucket}`}
+        >
+          {visibleWorkspaces.map((workspace) => (
+            <StatusWorkspaceRow
+              key={workspace.workspaceKey}
+              workspace={workspace}
+              subtitle={buildStatusRowSubtitle({
+                projectName: projectNamesByKey.get(workspace.projectKey) ?? "",
+                hostLabel: showHostLabels
+                  ? (hostLabelByServerId.get(workspace.serverId) ?? workspace.serverId)
+                  : null,
+              })}
+              shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
+              showShortcutBadge={showShortcutBadges}
+              canPin={supportsPinningByServerId.get(workspace.serverId) === true}
+              onToggleWorkspacePin={onToggleWorkspacePin}
+              onWorkspacePress={onWorkspacePress}
+            />
+          ))}
+          {canToggleWorkspaces ? (
+            <SidebarGroupToggleRow
+              expanded={workspacesExpanded}
+              onPress={toggleWorkspacesExpanded}
+              testID={`sidebar-status-show-more-${group.bucket}`}
+            />
+          ) : null}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -757,7 +826,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   listContent: {
     paddingHorizontal: theme.spacing[2],
-    paddingTop: theme.spacing[2],
+    // Keep status mode's Pinned/Workspaces boundary identical to project mode.
+    paddingTop: 2,
     paddingBottom: theme.spacing[4],
   },
   pinnedSection: {

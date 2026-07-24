@@ -495,6 +495,82 @@ describe("processTimelineResponse", () => {
     expect(result.tail).toEqual([optimistic]);
   });
 
+  it("does not move an unmatched submission during timeline replacement", () => {
+    const unmatched = makeOptimisticUserMessage("first submission", "client-first");
+    const acknowledged: StreamItem[] = [
+      {
+        kind: "user_message",
+        id: "provider-second",
+        clientMessageId: "client-second",
+        text: "second submission",
+        timestamp: new Date(2000),
+      },
+      {
+        kind: "user_message",
+        id: "provider-third",
+        clientMessageId: "client-third",
+        text: "third submission",
+        timestamp: new Date(3000),
+      },
+    ];
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [unmatched, ...acknowledged],
+      payload: {
+        ...baseTimelineInput.payload,
+        reset: true,
+        startCursor: { seq: 2 },
+        endCursor: { seq: 4 },
+        entries: [
+          {
+            ...makeTimelineEntry(2, "second submission", "user_message"),
+            item: {
+              type: "user_message",
+              text: "second submission",
+              messageId: "provider-second",
+              clientMessageId: "client-second",
+            },
+          },
+          {
+            ...makeTimelineEntry(3, "third submission", "user_message"),
+            item: {
+              type: "user_message",
+              text: "third submission",
+              messageId: "provider-third",
+              clientMessageId: "client-third",
+            },
+          },
+          {
+            ...makeTimelineEntry(4, "response to all three submissions"),
+            item: {
+              type: "assistant_message",
+              text: "response to all three submissions",
+              messageId: "assistant-response",
+            },
+          },
+        ],
+      },
+    });
+
+    expect(
+      result.tail.map((item) => ({
+        kind: item.kind,
+        id: item.id,
+        text: "text" in item ? item.text : undefined,
+      })),
+    ).toEqual([
+      { kind: "user_message", id: "client-first", text: "first submission" },
+      { kind: "user_message", id: "provider-second", text: "second submission" },
+      { kind: "user_message", id: "provider-third", text: "third submission" },
+      {
+        kind: "assistant_message",
+        id: "assistant-response",
+        text: "response to all three submissions",
+      },
+    ]);
+  });
+
   it("sets cursor to null when reset=true but no cursors in payload", () => {
     const existingTail: StreamItem[] = [
       {
@@ -618,7 +694,7 @@ describe("processTimelineResponse", () => {
     expect(result.error).toBe(null);
   });
 
-  it("reconciles an optimistic user message during an after-page response", () => {
+  it("reconciles a legacy canonical user message by content during an after-page response", () => {
     const existingCursor: TimelineCursor = {
       epoch: "epoch-1",
       startSeq: 1,
@@ -639,7 +715,7 @@ describe("processTimelineResponse", () => {
             item: {
               type: "user_message",
               text: "sent while catching up",
-              messageId: "optimistic-after",
+              messageId: "canonical-after",
             },
           },
         ],
@@ -648,7 +724,42 @@ describe("processTimelineResponse", () => {
 
     const userMessages = result.tail.filter((item) => item.kind === "user_message");
     expect(userMessages).toHaveLength(1);
-    expect(userMessages[0]?.id).toBe("optimistic-after");
+    expect(userMessages[0]?.id).toBe("canonical-after");
+    expect(userMessages[0]?.optimistic).toBeUndefined();
+  });
+
+  it("reconciles an optimistic user message by client message id", () => {
+    const optimistic = makeOptimisticUserMessage("local presentation", "client-message");
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [optimistic],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 1 },
+      payload: {
+        ...baseTimelineInput.payload,
+        epoch: "epoch-1",
+        entries: [
+          {
+            ...makeTimelineEntry(2, "provider presentation", "user_message"),
+            item: {
+              type: "user_message",
+              text: "provider presentation",
+              messageId: "provider-message",
+              clientMessageId: "client-message",
+            },
+          },
+        ],
+      },
+    });
+
+    const userMessages = result.tail.filter((item) => item.kind === "user_message");
+    expect(userMessages).toEqual([
+      expect.objectContaining({
+        id: "provider-message",
+        clientMessageId: "client-message",
+        text: "local presentation",
+      }),
+    ]);
     expect(userMessages[0]?.optimistic).toBeUndefined();
   });
 
@@ -968,7 +1079,7 @@ describe("processTimelineResponse", () => {
     expect(thoughts[0]?.text).toBe("Thinking");
   });
 
-  it("keeps delayed catch-up history before a newly submitted prompt", () => {
+  it("does not move a submitted prompt when catch-up history arrives", () => {
     const prompt = makeOptimisticUserMessage("New prompt", "new-prompt");
 
     const result = processTimelineResponse({
@@ -989,10 +1100,10 @@ describe("processTimelineResponse", () => {
       [...result.tail, ...result.head]
         .filter((item) => item.kind === "assistant_message" || item.kind === "user_message")
         .map((item) => item.text),
-    ).toEqual(["Earlier answer", "Missed answer", "New prompt"]);
+    ).toEqual(["Earlier answer", "New prompt", "Missed answer"]);
   });
 
-  it("keeps delayed catch-up history between a live head and its unmatched head prompt", () => {
+  it("does not move an unmatched head prompt when catch-up history arrives", () => {
     const prompt = makeOptimisticUserMessage("New prompt", "new-prompt");
 
     const result = processTimelineResponse({
@@ -1016,12 +1127,12 @@ describe("processTimelineResponse", () => {
 
     expect([...result.tail, ...result.head].map((item) => item.kind)).toEqual([
       "assistant_message",
-      "tool_call",
       "user_message",
+      "tool_call",
     ]);
   });
 
-  it("keeps delayed catch-up history between a live head and its acknowledged head prompt", () => {
+  it("acknowledges a head prompt in place while catch-up history arrives", () => {
     const prompt = makeOptimisticUserMessage("New prompt", "new-prompt");
 
     const result = processTimelineResponse({
@@ -1053,8 +1164,8 @@ describe("processTimelineResponse", () => {
 
     expect([...result.tail, ...result.head].map((item) => item.kind)).toEqual([
       "assistant_message",
-      "tool_call",
       "user_message",
+      "tool_call",
     ]);
     expect(
       [...result.tail, ...result.head]
@@ -1063,7 +1174,7 @@ describe("processTimelineResponse", () => {
     ).toEqual([undefined]);
   });
 
-  it("keeps unrelated delayed history before the prompt and its live response", () => {
+  it("does not move a prompt around unrelated catch-up history", () => {
     const prompt = makeOptimisticUserMessage("New prompt", "new-prompt");
 
     const result = processTimelineResponse({
@@ -1082,7 +1193,14 @@ describe("processTimelineResponse", () => {
         startCursor: { seq: 3 },
         endCursor: { seq: 4 },
         entries: [
-          makeTimelineEntry(3, "Missed answer"),
+          {
+            ...makeTimelineEntry(3, "Missed answer"),
+            item: {
+              type: "assistant_message",
+              text: "Missed answer",
+              messageId: "missed-answer",
+            },
+          },
           {
             ...makeTimelineEntry(4, "Remote prompt", "user_message"),
             item: {
@@ -1099,10 +1217,10 @@ describe("processTimelineResponse", () => {
       [...result.tail, ...result.head]
         .filter((item) => item.kind === "assistant_message" || item.kind === "user_message")
         .map((item) => item.text),
-    ).toEqual(["Earlier answer", "Missed answer", "Remote prompt", "New prompt", "Live response"]);
+    ).toEqual(["Earlier answer", "New prompt", "Live response", "Missed answer", "Remote prompt"]);
   });
 
-  it("keeps delayed history before a prompt whose live answer has promoted blocks", () => {
+  it("does not move a prompt or its live answer around catch-up history", () => {
     const prompt = makeOptimisticUserMessage("New prompt", "new-prompt");
     const live = processAgentStreamEvents({
       events: [
@@ -1127,7 +1245,16 @@ describe("processTimelineResponse", () => {
         epoch: "epoch-1",
         startCursor: { seq: 3 },
         endCursor: { seq: 3 },
-        entries: [makeTimelineEntry(3, "Missed answer")],
+        entries: [
+          {
+            ...makeTimelineEntry(3, "Missed answer"),
+            item: {
+              type: "assistant_message",
+              text: "Missed answer",
+              messageId: "missed-answer",
+            },
+          },
+        ],
       },
     });
 
@@ -1135,10 +1262,10 @@ describe("processTimelineResponse", () => {
       [...result.tail, ...result.head]
         .filter((item) => item.kind === "assistant_message" || item.kind === "user_message")
         .map((item) => item.text),
-    ).toEqual(["Missed answer", "New prompt", "First paragraph.", "Second paragraph"]);
+    ).toEqual(["New prompt", "First paragraph.", "Second paragraph", "Missed answer"]);
   });
 
-  it("keeps delayed tool history before a prompt whose live answer has promoted blocks", () => {
+  it("does not move a prompt or its live answer around catch-up tool history", () => {
     const prompt = makeOptimisticUserMessage("New prompt", "new-prompt");
     const live = processAgentStreamEvents({
       events: [
@@ -1173,14 +1300,73 @@ describe("processTimelineResponse", () => {
     });
 
     expect([...result.tail, ...result.head].map((item) => item.kind)).toEqual([
-      "tool_call",
       "user_message",
       "assistant_message",
       "assistant_message",
+      "tool_call",
     ]);
   });
 
-  it("matches a local optimistic prompt after an unrelated remote user row", () => {
+  it("never moves submitted messages behind a later assistant response", () => {
+    const unmatched = makeOptimisticUserMessage("first submission", "client-first");
+    const acknowledged: StreamItem[] = [
+      {
+        kind: "user_message",
+        id: "provider-second",
+        clientMessageId: "client-second",
+        text: "second submission",
+        timestamp: new Date(2000),
+      },
+      {
+        kind: "user_message",
+        id: "provider-third",
+        clientMessageId: "client-third",
+        text: "third submission",
+        timestamp: new Date(3000),
+      },
+    ];
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [unmatched, ...acknowledged],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 3 },
+      payload: {
+        ...baseTimelineInput.payload,
+        epoch: "epoch-1",
+        startCursor: { seq: 4 },
+        endCursor: { seq: 4 },
+        entries: [
+          {
+            ...makeTimelineEntry(4, "response to all three submissions"),
+            item: {
+              type: "assistant_message",
+              text: "response to all three submissions",
+              messageId: "assistant-response",
+            },
+          },
+        ],
+      },
+    });
+
+    expect(
+      [...result.tail, ...result.head].map((item) => ({
+        kind: item.kind,
+        id: item.id,
+        text: "text" in item ? item.text : undefined,
+      })),
+    ).toEqual([
+      { kind: "user_message", id: "client-first", text: "first submission" },
+      { kind: "user_message", id: "provider-second", text: "second submission" },
+      { kind: "user_message", id: "provider-third", text: "third submission" },
+      {
+        kind: "assistant_message",
+        id: "assistant-response",
+        text: "response to all three submissions",
+      },
+    ]);
+  });
+
+  it("acknowledges a local prompt in place when a remote user row also arrives", () => {
     const prompt = makeOptimisticUserMessage("Local prompt", "local-prompt");
 
     const result = processTimelineResponse({
@@ -1218,8 +1404,8 @@ describe("processTimelineResponse", () => {
         .filter((item) => item.kind === "user_message")
         .map((item) => ({ text: item.text, optimistic: item.optimistic })),
     ).toEqual([
-      { text: "Remote prompt", optimistic: undefined },
       { text: "Local prompt", optimistic: undefined },
+      { text: "Remote prompt", optimistic: undefined },
     ]);
   });
 
@@ -1253,12 +1439,12 @@ describe("processTimelineResponse", () => {
         .filter((item) => item.kind === "user_message")
         .map((item) => ({ text: item.text, optimistic: item.optimistic })),
     ).toEqual([
-      { text: "Remote prompt", optimistic: undefined },
       { text: "Local prompt", optimistic: true },
+      { text: "Remote prompt", optimistic: undefined },
     ]);
   });
 
-  it("does not match equal prompt text when canonical message ids differ", () => {
+  it("does not match equal prompt text when canonical client message ids differ", () => {
     const prompt = makeOptimisticUserMessage("continue", "local-prompt");
 
     const result = processTimelineResponse({
@@ -1277,6 +1463,7 @@ describe("processTimelineResponse", () => {
               type: "user_message",
               text: "continue",
               messageId: "remote-prompt",
+              clientMessageId: "remote-client-prompt",
             },
           },
         ],
@@ -1288,8 +1475,8 @@ describe("processTimelineResponse", () => {
         .filter((item) => item.kind === "user_message")
         .map((item) => ({ id: item.id, optimistic: item.optimistic })),
     ).toEqual([
-      { id: "remote-prompt", optimistic: undefined },
       { id: "local-prompt", optimistic: true },
+      { id: "remote-prompt", optimistic: undefined },
     ]);
   });
 

@@ -11,7 +11,7 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -24,7 +24,6 @@ import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { SidebarCallout } from "@/components/sidebar-callout";
 import { Composer } from "@/composer";
-import { AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { getProviderIcon } from "@/components/provider-icons";
 import {
@@ -72,7 +71,7 @@ import { buildDraftStoreKey, generateDraftId } from "@/stores/draft-keys";
 import { usePanelStore } from "@/stores/panel-store";
 import { type Agent, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import type { Theme } from "@/styles/theme";
 import {
   useHideFinishedProviderSubagents,
@@ -327,6 +326,7 @@ function useAgentPanelDescriptor(
   return {
     label: label ?? "",
     subtitle: `${formatProviderLabel(provider)} agent`,
+    tooltip: label ?? `${formatProviderLabel(provider)} agent`,
     titleState: label ? "ready" : "loading",
     icon,
     statusBucket: descriptorState.status
@@ -341,13 +341,14 @@ function useAgentPanelDescriptor(
 }
 
 function AgentPanel() {
-  const { serverId, target, openFileInWorkspace } = usePaneContext();
+  const { serverId, workspaceId, target, openFileInWorkspace } = usePaneContext();
   const { isInteractive } = usePaneFocus();
   invariant(target.kind === "agent", "AgentPanel requires agent target");
 
   return (
     <AgentPanelContent
       serverId={serverId}
+      workspaceId={workspaceId}
       agentId={target.agentId}
       isPaneFocused={isInteractive}
       onOpenWorkspaceFile={openFileInWorkspace}
@@ -481,11 +482,13 @@ type AgentLookupState =
 
 function AgentPanelContent({
   serverId,
+  workspaceId,
   agentId,
   isPaneFocused,
   onOpenWorkspaceFile,
 }: {
   serverId: string;
+  workspaceId: string;
   agentId: string;
   isPaneFocused: boolean;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
@@ -535,6 +538,7 @@ function AgentPanelContent({
   return (
     <AgentPanelBody
       serverId={resolvedServerId}
+      workspaceId={workspaceId}
       agentId={resolvedAgentId}
       isPaneFocused={isPaneFocused}
       client={runtimeClient}
@@ -547,6 +551,7 @@ function AgentPanelContent({
 
 function AgentPanelBody({
   serverId,
+  workspaceId,
   agentId,
   isPaneFocused,
   client,
@@ -555,6 +560,7 @@ function AgentPanelBody({
   onOpenWorkspaceFile,
 }: {
   serverId: string;
+  workspaceId: string;
   agentId?: string;
   isPaneFocused: boolean;
   client: ReturnType<typeof useHostRuntimeClient>;
@@ -585,6 +591,8 @@ function AgentPanelBody({
   );
   const [lookupState, setLookupState] = useState<AgentLookupState>({ tag: "idle" });
   const lookupAttemptTokenRef = useRef(0);
+  const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+  const resolvePendingAgent = useWorkspaceLayoutStore((state) => state.resolvePendingAgent);
 
   useEffect(() => {
     lookupAttemptTokenRef.current += 1;
@@ -596,6 +604,9 @@ function AgentPanelBody({
       return;
     }
     if (agentState.id) {
+      if (workspaceKey) {
+        resolvePendingAgent(workspaceKey, agentId);
+      }
       if (lookupState.tag !== "idle") {
         setLookupState({ tag: "idle" });
       }
@@ -618,6 +629,9 @@ function AgentPanelBody({
           return;
         }
         if (!result) {
+          if (workspaceKey) {
+            resolvePendingAgent(workspaceKey, agentId);
+          }
           setLookupState({
             tag: "not_found",
             message: `Agent not found: ${agentId}`,
@@ -626,6 +640,9 @@ function AgentPanelBody({
         }
 
         storeFetchedAgentDetail({ serverId, result });
+        if (workspaceKey) {
+          resolvePendingAgent(workspaceKey, agentId);
+        }
         setLookupState({ tag: "idle" });
         return;
       })
@@ -635,12 +652,25 @@ function AgentPanelBody({
         }
         const message = toErrorMessage(error);
         if (isNotFoundErrorMessage(message)) {
+          if (workspaceKey) {
+            resolvePendingAgent(workspaceKey, agentId);
+          }
           setLookupState({ tag: "not_found", message });
           return;
         }
         setLookupState({ tag: "error", message });
       });
-  }, [agentId, agentState.id, client, hasSession, isConnected, lookupState.tag, serverId]);
+  }, [
+    agentId,
+    agentState.id,
+    client,
+    hasSession,
+    isConnected,
+    lookupState.tag,
+    resolvePendingAgent,
+    serverId,
+    workspaceKey,
+  ]);
 
   if (lookupState.tag === "not_found") {
     return (
@@ -865,6 +895,7 @@ function ChatAgentContent({
     routeKey: `${serverId}:${agentId ?? ""}`,
     input: {
       agent: agent ?? null,
+      isArchived: agentState.archivedAt !== null,
       missingAgentState,
       isConnected,
       isArchivingCurrentAgent,
@@ -916,6 +947,9 @@ function ChatAgentContent({
 
   useEffect(() => {
     if (!agentId) {
+      return;
+    }
+    if (agentState.archivedAt) {
       return;
     }
     if (agentState.id && hasAppliedAuthoritativeHistory) {
@@ -983,6 +1017,7 @@ function ChatAgentContent({
       });
   }, [
     agentState.id,
+    agentState.archivedAt,
     hasAppliedAuthoritativeHistory,
     agentId,
     client,
@@ -995,7 +1030,7 @@ function ChatAgentContent({
   ]);
 
   const animatedContentStyle = useMemo(
-    () => [styles.content, animatedKeyboardStyle],
+    () => [animatedStaticStyles.content, animatedKeyboardStyle],
     [animatedKeyboardStyle],
   );
 
@@ -1096,8 +1131,16 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   });
   // Stabilize the agentInputDraft object identity so that memo(AgentComposerSection) can bail out
   // when only toast state changes (which does not affect any draft field).
-  const { text, setText, attachments, setAttachments, clear, isHydrated, composerState } =
-    rawAgentInputDraft;
+  const {
+    text,
+    setText,
+    attachments,
+    setAttachments,
+    clear,
+    isHydrated,
+    attachmentFocusRequestId,
+    composerState,
+  } = rawAgentInputDraft;
   const agentInputDraft = useMemo(
     (): AgentInputDraft => ({
       text,
@@ -1106,9 +1149,19 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       setAttachments,
       clear,
       isHydrated,
+      attachmentFocusRequestId,
       composerState,
     }),
-    [text, setText, attachments, setAttachments, clear, isHydrated, composerState],
+    [
+      text,
+      setText,
+      attachments,
+      setAttachments,
+      clear,
+      isHydrated,
+      attachmentFocusRequestId,
+      composerState,
+    ],
   );
   const streamSection = (
     <RenderProfile id={`AgentStreamSection:${agentId}`}>
@@ -1439,21 +1492,12 @@ function ActiveAgentComposer({
   });
 
   const inputAreaStyle = useMemo(
-    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
+    () => [
+      animatedStaticStyles.inputAreaWrapper,
+      { paddingBottom: insets.bottom },
+      composerKeyboardStyle,
+    ],
     [insets.bottom, composerKeyboardStyle],
-  );
-
-  const composerFooter = useMemo(
-    () =>
-      isCompactComposerLayout ? (
-        <AgentModeControl
-          serverId={serverId}
-          agentId={agentId}
-          placement="footer"
-          isCompactLayout={isCompactComposerLayout}
-        />
-      ) : undefined,
-    [isCompactComposerLayout, serverId, agentId],
   );
 
   return (
@@ -1469,6 +1513,7 @@ function ActiveAgentComposer({
       <Composer
         agentId={agentId}
         serverId={serverId}
+        workspaceId={workspaceId}
         externalKeyboardShift
         isPaneFocused={isPaneFocused}
         value={agentInputDraft.text}
@@ -1480,13 +1525,13 @@ function ActiveAgentComposer({
         cwd={cwd}
         clearDraft={agentInputDraft.clear}
         autoFocus={isPaneFocused}
+        autoFocusKey={String(agentInputDraft.attachmentFocusRequestId)}
         isSubmitLoading={isSubmitLoading}
         onAttentionInputFocus={onAttentionInputFocus}
         onAttentionPromptSend={onAttentionPromptSend}
         onComposerHeightChange={onComposerHeightChange}
         onMessageSent={onMessageSent}
         onClientSlashCommand={handleClientSlashCommand}
-        footer={composerFooter}
         isCompactLayout={isCompactComposerLayout}
       />
     </ReanimatedAnimated.View>
@@ -1564,6 +1609,15 @@ const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
 });
 
+const animatedStaticStyles = RNStyleSheet.create({
+  content: {
+    flex: 1,
+  },
+  inputAreaWrapper: {
+    width: "100%",
+  },
+});
+
 const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
@@ -1577,13 +1631,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
-  },
-  content: {
-    flex: 1,
-  },
-  inputAreaWrapper: {
-    width: "100%",
-    backgroundColor: theme.colors.surface0,
   },
   historySyncOverlay: {
     position: "absolute",

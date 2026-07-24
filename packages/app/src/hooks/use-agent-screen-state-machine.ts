@@ -41,6 +41,7 @@ export type AgentScreenMissingState =
 
 export interface AgentScreenMachineInput {
   agent: AgentScreenAgent | null;
+  isArchived: boolean;
   missingAgentState: AgentScreenMissingState;
   isConnected: boolean;
   isArchivingCurrentAgent: boolean;
@@ -61,6 +62,7 @@ function hasOptimisticCreateContinuity(input: AgentScreenMachineInput): boolean 
 
 function shouldBlockInitialAuthoritativeReadyState(input: AgentScreenMachineInput): boolean {
   return (
+    !input.isArchived &&
     !hasOptimisticCreateContinuity(input) &&
     !input.hasHydratedHistoryBefore &&
     (input.needsAuthoritativeSync || input.isHistorySyncing)
@@ -150,7 +152,6 @@ function resolveCatchingUpUi(args: {
   hasOptimisticCreateContinuity: boolean;
   isVisibilityCatchUpPending: boolean;
   hasHydratedHistoryBefore: boolean;
-  needsAuthoritativeSync: boolean;
   hadInitialSyncFailure: boolean;
 }): "overlay" | "silent" {
   if (args.hasOptimisticCreateContinuity) return "silent";
@@ -165,6 +166,9 @@ function resolveAgentScreenSync(args: {
   hadInitialSyncFailure: boolean;
 }): AgentScreenReadySyncState {
   const { input, hadInitialSyncFailure } = args;
+  if (input.isArchived) {
+    return { status: "idle" };
+  }
   if (!input.isConnected) {
     return { status: "reconnecting" };
   }
@@ -185,7 +189,6 @@ function resolveAgentScreenSync(args: {
         hasOptimisticCreateContinuity: hasOptimisticCreateContinuity(input),
         isVisibilityCatchUpPending: input.visibilityCatchUpStatus === "pending",
         hasHydratedHistoryBefore: input.hasHydratedHistoryBefore,
-        needsAuthoritativeSync: input.needsAuthoritativeSync,
         hadInitialSyncFailure,
       }),
     };
