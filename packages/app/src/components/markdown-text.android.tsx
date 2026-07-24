@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import {
   Text,
   View,
@@ -16,10 +16,34 @@ interface MarkdownTextSpanProps {
   accessibilityRole?: TextProps["accessibilityRole"];
 }
 
-// Android's <Text selectable> enables per-text-node selection natively. Each
-// sibling Text is its own selection scope — drag can't span across siblings
-// (that requires a single UITextView ancestor and is iOS-only). onPress works
-// natively here, so links routed through this span stay tappable on Android.
+const MarkdownDocumentSelectionContext = createContext(false);
+
+export function MarkdownDocumentView({ children }: { children: ReactNode }) {
+  return (
+    <MarkdownDocumentSelectionContext value>
+      <Text selectable>{children}</Text>
+    </MarkdownDocumentSelectionContext>
+  );
+}
+
+export function MarkdownBodyView({
+  bodyStyle,
+  children,
+}: {
+  bodyStyle: ViewStyle;
+  children: ReactNode;
+}) {
+  const isDocumentSelection = useContext(MarkdownDocumentSelectionContext);
+  if (isDocumentSelection) {
+    return children;
+  }
+  return <View style={bodyStyle}>{children}</View>;
+}
+
+// Android's <Text selectable> enables per-text-node selection natively.
+// MarkdownDocumentView provides one shared ancestor for consecutive prose
+// paragraphs; standalone rich blocks keep their own selection scope. onPress
+// works natively here, so links routed through this span stay tappable.
 export function MarkdownTextSpan({
   style,
   children,
@@ -46,9 +70,13 @@ const MARKDOWN_PARAGRAPH_RESET: ViewStyle = {};
 // in ReactBaseTextShadowNode), so this isn't a crash-avoidance choice — but
 // inline-placeholder spans collapse block-level children (e.g. paragraph
 // images) into one-character placeholders, which destroys image row layout.
-// <View> preserves the original block layout; the trade-off is no cross-span
-// selection on Android (a UITextView-style trick has no Android equivalent).
+// <View> preserves the original block layout. Consecutive prose takes the
+// document-selection branch above, where nested Text nodes share one scope.
 export function MarkdownParagraphView({ paragraphStyle, children }: MarkdownParagraphViewProps) {
+  const isDocumentSelection = useContext(MarkdownDocumentSelectionContext);
   const style = useMemo(() => [paragraphStyle, MARKDOWN_PARAGRAPH_RESET], [paragraphStyle]);
+  if (isDocumentSelection) {
+    return <Text style={style}>{children}</Text>;
+  }
   return <View style={style}>{children}</View>;
 }
