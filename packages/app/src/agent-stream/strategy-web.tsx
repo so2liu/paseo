@@ -34,6 +34,12 @@ const historyStartSlotStyle: CSSProperties = {
   paddingBottom: 8,
 };
 
+const streamRowContainerStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  width: "100%",
+};
+
 function isScrollContainerNearBottom(
   scrollContainer: Pick<HTMLElement, "scrollTop" | "clientHeight" | "scrollHeight">,
   thresholdPx = AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
@@ -548,7 +554,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   );
   const mountedHistoryRows = useMemo(() => {
     return segments.historyMounted.map((item, index) => (
-      <div key={item.id} data-stream-item-id={item.id}>
+      <div key={item.id} data-stream-item-id={item.id} style={streamRowContainerStyle}>
         {renderHistoryMountedRow(item, index, segments.historyMounted)}
       </div>
     ));
@@ -556,7 +562,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const liveHeadRows = useMemo(() => {
     void liveHeadRowRevision;
     return segments.liveHead.map((item, index) => (
-      <div key={item.id} data-stream-item-id={item.id}>
+      <div key={item.id} data-stream-item-id={item.id} style={streamRowContainerStyle}>
         {renderLiveHeadRow(item, index, segments.liveHead)}
       </div>
     ));
