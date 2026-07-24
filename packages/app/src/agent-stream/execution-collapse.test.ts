@@ -8,8 +8,11 @@ function user(id: string): StreamItem {
   return { kind: "user_message", id, text: id, timestamp };
 }
 
-function assistant(id: string): StreamItem {
-  return { kind: "assistant_message", id, text: id, timestamp };
+function assistant(
+  id: string,
+  identity?: { messageId?: string; blockGroupId?: string; blockIndex?: number },
+): StreamItem {
+  return { kind: "assistant_message", id, text: id, timestamp, ...identity };
 }
 
 function thought(id: string): StreamItem {
@@ -89,5 +92,71 @@ describe("execution collapse projection", () => {
     });
 
     expect(projection.groups).toHaveLength(0);
+  });
+
+  it("preserves every rendered block belonging to the final logical assistant message", () => {
+    const projection = buildExecutionCollapseProjection({
+      items: [
+        user("u1"),
+        assistant("final:block:0", {
+          messageId: "final-message",
+          blockGroupId: "final",
+          blockIndex: 0,
+        }),
+        assistant("final:block:1", {
+          messageId: "final-message",
+          blockGroupId: "final",
+          blockIndex: 1,
+        }),
+        assistant("final:block:2", {
+          messageId: "final-message",
+          blockGroupId: "final-resumed",
+          blockIndex: 2,
+        }),
+      ],
+      isRunning: false,
+    });
+
+    expect(projection.groups).toHaveLength(0);
+  });
+
+  it("does not count rendered blocks as separate execution items", () => {
+    const projection = buildExecutionCollapseProjection({
+      items: [
+        user("u1"),
+        assistant("progress:block:0", {
+          messageId: "progress-message",
+          blockGroupId: "progress",
+          blockIndex: 0,
+        }),
+        assistant("progress:block:1", {
+          messageId: "progress-message",
+          blockGroupId: "progress",
+          blockIndex: 1,
+        }),
+        thought("work"),
+        assistant("final:block:0", {
+          messageId: "final-message",
+          blockGroupId: "final",
+          blockIndex: 0,
+        }),
+        assistant("final:block:1", {
+          messageId: "final-message",
+          blockGroupId: "final",
+          blockIndex: 1,
+        }),
+      ],
+      isRunning: false,
+    });
+
+    expect(projection.groups).toHaveLength(1);
+    expect([...projection.groups[0].itemIds]).toEqual([
+      "progress:block:0",
+      "progress:block:1",
+      "work",
+    ]);
+    expect(projection.groups[0].itemCount).toBe(2);
+    expect(projection.groupByItemId.has("final:block:0")).toBe(false);
+    expect(projection.groupByItemId.has("final:block:1")).toBe(false);
   });
 });

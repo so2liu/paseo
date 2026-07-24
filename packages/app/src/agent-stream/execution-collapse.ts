@@ -44,6 +44,47 @@ function findLastToolCallAssistant(items: readonly StreamItem[]): StreamItem | n
   return null;
 }
 
+function isSameLogicalAssistantMessage(item: StreamItem, target: StreamItem): boolean {
+  if (item.kind !== "assistant_message" || target.kind !== "assistant_message") {
+    return false;
+  }
+  if (target.messageId !== undefined) {
+    return item.messageId === target.messageId;
+  }
+  if (target.blockGroupId !== undefined) {
+    return item.blockGroupId === target.blockGroupId;
+  }
+  return item.id === target.id;
+}
+
+function collectLogicalAssistantItemIds(
+  items: readonly StreamItem[],
+  assistant: StreamItem | null,
+): string[] {
+  if (!assistant) return [];
+  return items.flatMap((item) => (isSameLogicalAssistantMessage(item, assistant) ? [item.id] : []));
+}
+
+function countLogicalItems(items: readonly StreamItem[]): number {
+  const logicalItemIds = new Set<string>();
+  for (const item of items) {
+    if (item.kind !== "assistant_message") {
+      logicalItemIds.add(item.id);
+      continue;
+    }
+    if (item.messageId !== undefined) {
+      logicalItemIds.add(`assistant-message:${item.messageId}`);
+      continue;
+    }
+    if (item.blockGroupId !== undefined) {
+      logicalItemIds.add(`assistant-block-group:${item.blockGroupId}`);
+      continue;
+    }
+    logicalItemIds.add(item.id);
+  }
+  return logicalItemIds.size;
+}
+
 export function buildExecutionCollapseProjection(input: {
   items: readonly StreamItem[];
   isRunning: boolean;
@@ -64,9 +105,10 @@ export function buildExecutionCollapseProjection(input: {
     const finalAssistant = findFinalAssistant(turnItems);
     if (!finalAssistant) continue;
     const lastToolCallAssistant = findLastToolCallAssistant(turnItems);
-    const visibleItemIds = new Set(
-      [finalAssistant, lastToolCallAssistant].flatMap((item) => (item ? [item.id] : [])),
-    );
+    const visibleItemIds = new Set([
+      ...collectLogicalAssistantItemIds(turnItems, finalAssistant),
+      ...collectLogicalAssistantItemIds(turnItems, lastToolCallAssistant),
+    ]);
     const collapsibleItems = turnItems.filter((item) => !visibleItemIds.has(item.id));
     if (collapsibleItems.length === 0) continue;
 
@@ -74,7 +116,7 @@ export function buildExecutionCollapseProjection(input: {
       id: input.items[userIndex].id,
       hostItemId: collapsibleItems[0].id,
       itemIds: new Set(collapsibleItems.map((item) => item.id)),
-      itemCount: collapsibleItems.length,
+      itemCount: countLogicalItems(collapsibleItems),
     };
     groups.push(group);
     for (const item of collapsibleItems) {
