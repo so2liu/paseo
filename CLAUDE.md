@@ -93,6 +93,7 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
 ## Critical rules
 
 - **NEVER restart the main Paseo daemon on port 6767 without permission** — it manages all running agents. If you're an agent, restarting it kills your own process.
+- **A launchd-managed macOS daemon must remain launchd-owned during upgrades.** Do not run `paseo daemon restart` while `com.paseo.daemon` is loaded: that command starts a detached supervisor, while launchd keeps trying to start its own copy. Do not use `launchctl submit` as a one-shot recovery mechanism; submitted jobs are kept alive after failure and can repeat destructive actions. Before any permitted restart, inspect the current process manager and prepare an out-of-band recovery path that does not depend on the daemon being restarted. See [docs/development.md](docs/development.md#macos-launchd-daemon-upgrade-safety).
 - **NEVER assume a timeout means the service needs restarting** — timeouts can be transient.
 - **NEVER add auth checks to tests** — agent providers handle their own auth.
 - **Before changing app routes, startup routing, remembered workspace restore, or active workspace selection, read [docs/expo-router.md](docs/expo-router.md).**

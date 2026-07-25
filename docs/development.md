@@ -210,6 +210,28 @@ Check `$PASEO_HOME/daemon.log` for daemon logs. The default level is `info`; set
 `PASEO_LOG_LEVEL=trace` before launching the daemon when you need full provider,
 session, and agent-manager traces for stuck-state debugging.
 
+### macOS launchd daemon upgrade safety
+
+The owner's standalone macOS daemon is normally owned by the
+`com.paseo.daemon` LaunchAgent. Preserve that ownership across upgrades:
+
+- Inspect `launchctl print gui/$(id -u)/com.paseo.daemon`, the PID tree, the
+  pid-lock file, and port 6767 before choosing a restart mechanism.
+- Do not run `paseo daemon restart` while the LaunchAgent is loaded. The CLI
+  restart creates a detached supervisor; launchd then keeps trying to start a
+  second foreground supervisor because its configured job is not the owner.
+- Do not treat `launchctl submit` as a one-shot rescue runner. macOS keeps a
+  submitted job alive after failure, so a partially failing script can repeat a
+  shutdown or restart indefinitely.
+- A Paseo-hosted agent cannot be the only recovery channel: stopping port 6767
+  also disconnects that agent. Before a permitted restart, prepare an
+  out-of-band recovery path that does not depend on the daemon being replaced,
+  and make every recovery action idempotent with a bounded attempt count.
+- After the handoff, verify one ownership chain only:
+  `launchd -> paseo daemon start --foreground -> Paseo Supervisor -> Paseo Daemon`.
+  Confirm that the launchd `runs` counter and all PIDs remain stable before
+  declaring the upgrade complete.
+
 ### Custom fork build identity
 
 CLI and daemon builds from this fork append the SemVer build metadata `+LY` to
