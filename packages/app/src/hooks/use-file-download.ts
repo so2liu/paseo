@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useHosts } from "@/runtime/host-runtime";
+import { useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import { useDownloadStore } from "@/stores/download-store";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 
@@ -25,12 +25,13 @@ export function useFileDownload({
     () => daemons.find((daemon) => daemon.serverId === serverId),
     [daemons, serverId],
   );
+  const hostSnapshot = useHostRuntimeSnapshot(serverId);
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
   const workspaceScopeId = useMemo(
     () => workspaceId?.trim() || normalizedWorkspaceRoot,
     [normalizedWorkspaceRoot, workspaceId],
   );
-  const { requestFileDownloadToken } = useFileExplorerActions({
+  const { readFileForDownload, requestFileDownloadToken } = useFileExplorerActions({
     serverId,
     workspaceId,
     workspaceRoot: normalizedWorkspaceRoot,
@@ -48,9 +49,19 @@ export function useFileDownload({
         fileName,
         path,
         daemonProfile,
+        activeConnectionType: hostSnapshot?.activeConnection?.type ?? null,
+        readFile: readFileForDownload,
         requestFileDownloadToken: (targetPath) => requestFileDownloadToken(targetPath),
       });
     },
-    [daemonProfile, requestFileDownloadToken, serverId, startDownload, workspaceScopeId],
+    [
+      daemonProfile,
+      hostSnapshot?.activeConnection?.type,
+      readFileForDownload,
+      requestFileDownloadToken,
+      serverId,
+      startDownload,
+      workspaceScopeId,
+    ],
   );
 }

@@ -98,6 +98,8 @@ import {
 } from "@/workspace-tabs/identity";
 import { selectVisibleAgentIds } from "./visible-agent-ids";
 import {
+  type ActiveConnection,
+  type HostRuntimeSnapshot,
   getHostRuntimeStore,
   useHostRuntimeClient,
   useHostRuntimeIsConnected,
@@ -1845,6 +1847,12 @@ function useMarkWorkspaceAttentionViewed(input: {
   ]);
 }
 
+function resolveActiveConnectionType(
+  snapshot: HostRuntimeSnapshot | null,
+): ActiveConnection["type"] | null {
+  return snapshot?.activeConnection?.type ?? null;
+}
+
 function WorkspaceScreenContent({
   serverId,
   workspaceId,
@@ -1885,6 +1893,8 @@ function WorkspaceScreenContent({
   });
 
   const client = useHostRuntimeClient(normalizedServerId);
+  const hostSnapshot = useHostRuntimeSnapshot(normalizedServerId);
+  const activeConnectionType = resolveActiveConnectionType(hostSnapshot);
   const hosts = useHosts();
   const daemonProfile = useMemo(
     () => hosts.find((host) => host.serverId === normalizedServerId),
@@ -2933,6 +2943,8 @@ function WorkspaceScreenContent({
         fileName: getFileNameFromPath(path) ?? "download",
         path: downloadTarget.path,
         daemonProfile,
+        activeConnectionType,
+        readFile: (targetPath) => client.readFile(downloadTarget.cwd, targetPath),
         requestFileDownloadToken: (targetPath) =>
           client.requestDownloadToken(downloadTarget.cwd, targetPath),
       });
@@ -2940,6 +2952,7 @@ function WorkspaceScreenContent({
     [
       client,
       daemonProfile,
+      activeConnectionType,
       normalizedServerId,
       normalizedWorkspaceId,
       startDownload,

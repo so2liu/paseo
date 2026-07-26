@@ -37,6 +37,12 @@ interface DownloadState {
     fileName: string;
     path: string;
     daemonProfile: HostProfile | undefined;
+    activeConnectionType: "directTcp" | "directSocket" | "directPipe" | "relay" | null;
+    readFile: (path: string) => Promise<{
+      bytes: Uint8Array;
+      mime: string;
+      size: number;
+    }>;
     requestFileDownloadToken: (path: string) => Promise<{
       token: string | null;
       fileName: string | null;
@@ -66,6 +72,8 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     fileName,
     path,
     daemonProfile,
+    activeConnectionType,
+    readFile,
     requestFileDownloadToken,
   }) => {
     const id = generateDownloadId();
@@ -84,71 +92,103 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     }));
 
     try {
-      const tokenResponse = await requestFileDownloadToken(path);
-      if (tokenResponse.error || !tokenResponse.token) {
-        throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
-      }
-
       const downloadTarget = resolveDaemonDownloadTarget(daemonProfile);
-      if (!downloadTarget.baseUrl) {
-        throw new Error(i18n.t("downloads.hostUnavailable"));
-      }
+      let resolvedFileName = fileName;
+      let downloadedUri: string;
+      let downloadedMimeType: string | null = null;
 
-      const resolvedFileName = tokenResponse.fileName ?? fileName;
-      const downloadUrl = buildDownloadUrl(
-        downloadTarget.baseUrl,
-        tokenResponse.token,
-        isWeb ? downloadTarget.authCredentials : null,
-      );
+      const downloadOverActiveClient = async () => {
+        const file = await readFile(path);
+        const targetFile = resolveDownloadTargetFile(resolvedFileName);
+        targetFile.write(file.bytes);
+        get().updateProgress(id, {
+          percent: 1,
+          bytesWritten: file.size,
+          totalBytes: file.size,
+          speed: 0,
+          eta: 0,
+        });
+        downloadedMimeType = file.mime;
+        return targetFile.uri;
+      };
 
-      if (isWeb) {
-        triggerBrowserDownload(downloadUrl, resolvedFileName);
-        get().completeDownload(id);
-        return;
-      }
+      const shouldUseActiveClient = !isWeb && activeConnectionType !== "directTcp";
+      if (shouldUseActiveClient) {
+        downloadedUri = await downloadOverActiveClient();
+      } else {
+        try {
+          const tokenResponse = await requestFileDownloadToken(path);
+          if (tokenResponse.error || !tokenResponse.token) {
+            throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
+          }
+          if (!downloadTarget.baseUrl) {
+            throw new Error(i18n.t("downloads.hostUnavailable"));
+          }
 
-      const downloadStartTime = Date.now();
-      const targetFile = resolveDownloadTargetFile(resolvedFileName);
-      const downloadResumable = LegacyFileSystem.createDownloadResumable(
-        downloadUrl,
-        targetFile.uri,
-        downloadTarget.authHeader
-          ? { headers: { Authorization: downloadTarget.authHeader } }
-          : undefined,
-        (data) => {
-          const now = Date.now();
-          const { totalBytesWritten, totalBytesExpectedToWrite } = data;
+          resolvedFileName = tokenResponse.fileName ?? fileName;
+          downloadedMimeType = tokenResponse.mimeType;
+          const downloadUrl = buildDownloadUrl(
+            downloadTarget.baseUrl,
+            tokenResponse.token,
+            isWeb ? downloadTarget.authCredentials : null,
+          );
 
-          if (totalBytesExpectedToWrite <= 0) {
+          if (isWeb) {
+            triggerBrowserDownload(downloadUrl, resolvedFileName);
+            get().completeDownload(id);
             return;
           }
 
-          const percent = totalBytesWritten / totalBytesExpectedToWrite;
-          const elapsed = (now - downloadStartTime) / 1000;
-          const speed = elapsed > 0 ? totalBytesWritten / elapsed : 0;
-          const remaining = totalBytesExpectedToWrite - totalBytesWritten;
-          const eta = speed > 0 ? remaining / speed : 0;
+          const downloadStartTime = Date.now();
+          const targetFile = resolveDownloadTargetFile(resolvedFileName);
+          const downloadResumable = LegacyFileSystem.createDownloadResumable(
+            downloadUrl,
+            targetFile.uri,
+            downloadTarget.authHeader
+              ? { headers: { Authorization: downloadTarget.authHeader } }
+              : undefined,
+            (data) => {
+              const now = Date.now();
+              const { totalBytesWritten, totalBytesExpectedToWrite } = data;
 
-          get().updateProgress(id, {
-            percent,
-            bytesWritten: totalBytesWritten,
-            totalBytes: totalBytesExpectedToWrite,
-            speed,
-            eta,
-          });
-        },
-      );
+              if (totalBytesExpectedToWrite <= 0) {
+                return;
+              }
 
-      const result = await downloadResumable.downloadAsync();
-      if (!result) {
-        throw new Error(i18n.t("downloads.cancelled"));
+              const percent = totalBytesWritten / totalBytesExpectedToWrite;
+              const elapsed = (now - downloadStartTime) / 1000;
+              const speed = elapsed > 0 ? totalBytesWritten / elapsed : 0;
+              const remaining = totalBytesExpectedToWrite - totalBytesWritten;
+              const eta = speed > 0 ? remaining / speed : 0;
+
+              get().updateProgress(id, {
+                percent,
+                bytesWritten: totalBytesWritten,
+                totalBytes: totalBytesExpectedToWrite,
+                speed,
+                eta,
+              });
+            },
+          );
+
+          const result = await downloadResumable.downloadAsync();
+          if (!result) {
+            throw new Error(i18n.t("downloads.cancelled"));
+          }
+          downloadedUri = result.uri;
+        } catch (error) {
+          if (isWeb) {
+            throw error;
+          }
+          downloadedUri = await downloadOverActiveClient();
+        }
       }
 
       get().completeDownload(id);
 
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(result.uri, {
-          mimeType: tokenResponse.mimeType ?? undefined,
+        await Sharing.shareAsync(downloadedUri, {
+          mimeType: downloadedMimeType ?? undefined,
           dialogTitle: resolvedFileName
             ? i18n.t("downloads.shareFileNamed", { fileName: resolvedFileName })
             : i18n.t("downloads.shareFile"),

@@ -35,3 +35,13 @@ is untrusted workspace content:
 Do not add `allow-same-origin`, `allow-scripts`, external resource origins, file access, or app
 bridges to the HTML preview. Relative workspace assets are intentionally not resolved by this
 initial sandboxed preview.
+
+## File downloads
+
+Browser downloads use a short-lived daemon token and the daemon's HTTP download endpoint. Native
+downloads follow the active host transport: relay, socket, and pipe connections reuse the existing
+binary WebSocket file channel; direct TCP keeps the HTTP path for streaming efficiency and falls
+back to the binary client path if HTTP fails.
+
+On iOS and Android, the downloaded bytes are first written to the app cache and then handed to the
+system share sheet. The user chooses a durable destination such as Files from that sheet.
