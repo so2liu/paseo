@@ -17,7 +17,6 @@ import {
 } from "react-native";
 import { StyleSheet, UnistylesRuntime } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useSessionStore, type ExplorerFile } from "@/stores/session-store";
 import { highlightCode, type HighlightToken } from "@getpaseo/highlight";
@@ -25,7 +24,9 @@ import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { lineNumberGutterWidth } from "@/components/code-insets";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
-import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
+import { isRenderedHtmlFile, isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
+import { FileMarkdownPreview } from "@/file-preview/file-markdown-preview";
+import { HtmlPreview } from "@/file-preview/html-preview";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes } from "@/attachments/service";
@@ -203,6 +204,65 @@ const codeLineStyles = StyleSheet.create((theme) => ({
   },
 }));
 
+function CodeFilePreviewBody({
+  content,
+  highlightedLines,
+  gutterWidth,
+  lineSelection,
+  isMobile,
+  scrollRef,
+}: {
+  content: string;
+  highlightedLines: HighlightToken[][] | null;
+  gutterWidth: number;
+  lineSelection: FileLineSelection | null;
+  isMobile: boolean;
+  scrollRef: React.RefObject<RNScrollView | null>;
+}) {
+  const lines = highlightedLines ?? [[{ text: content, style: null }]];
+  const keyedLines = lines.map((tokens, index) => ({
+    key: `line-${index}`,
+    tokens,
+    lineNumber: index + 1,
+  }));
+  const codeLines = (
+    <View dataSet={CODE_SURFACE_DATASET}>
+      {keyedLines.map(({ key, tokens, lineNumber }) => (
+        <CodeLine
+          key={key}
+          tokens={tokens}
+          lineNumber={lineNumber}
+          gutterWidth={gutterWidth}
+          highlighted={
+            Boolean(lineSelection) &&
+            lineNumber >= (lineSelection?.lineStart ?? 0) &&
+            lineNumber <= (lineSelection?.lineEnd ?? 0)
+          }
+        />
+      ))}
+    </View>
+  );
+
+  return (
+    <View style={styles.previewScrollContainer}>
+      <RNScrollView ref={scrollRef} style={styles.previewContent} showsVerticalScrollIndicator>
+        {isMobile ? (
+          <View style={styles.previewCodeScrollContent}>{codeLines}</View>
+        ) : (
+          <RNScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator
+            contentContainerStyle={styles.previewCodeScrollContent}
+          >
+            {codeLines}
+          </RNScrollView>
+        )}
+      </RNScrollView>
+    </View>
+  );
+}
+
 function FilePreviewBody({
   preview,
   isLoading,
@@ -216,16 +276,18 @@ function FilePreviewBody({
   const filePath = location.path;
   const isMarkdownFile =
     preview?.kind === "text" && isRenderedMarkdownFile(filePath) && !location.lineStart;
+  const isHtmlFile =
+    preview?.kind === "text" && isRenderedHtmlFile(filePath) && !location.lineStart;
 
   const previewScrollRef = useRef<RNScrollView>(null);
 
   const highlightedLines = useMemo(() => {
-    if (!preview || preview.kind !== "text" || isMarkdownFile) {
+    if (!preview || preview.kind !== "text" || isMarkdownFile || isHtmlFile) {
       return null;
     }
 
     return highlightCode(preview.content ?? "", filePath);
-  }, [isMarkdownFile, preview, filePath]);
+  }, [isHtmlFile, isMarkdownFile, preview, filePath]);
 
   const gutterWidth = useMemo(() => {
     if (!highlightedLines) return 0;
@@ -279,6 +341,10 @@ function FilePreviewBody({
   }
 
   if (preview.kind === "text") {
+    if (isHtmlFile) {
+      return <HtmlPreview source={preview.content ?? ""} />;
+    }
+
     if (isMarkdownFile) {
       return (
         <View style={styles.previewScrollContainer}>
@@ -288,57 +354,21 @@ function FilePreviewBody({
             contentContainerStyle={styles.previewMarkdownScrollContent}
             showsVerticalScrollIndicator
           >
-            <MarkdownRenderer text={preview.content ?? ""} />
+            <FileMarkdownPreview source={preview.content ?? ""} />
           </RNScrollView>
         </View>
       );
     }
 
-    const lines = highlightedLines ?? [[{ text: preview.content ?? "", style: null }]];
-    const keyedLines = lines.map((tokens, index) => ({
-      key: `line-${index}`,
-      tokens,
-      lineNumber: index + 1,
-    }));
-    const codeLines = (
-      <View dataSet={CODE_SURFACE_DATASET}>
-        {keyedLines.map(({ key, tokens, lineNumber }) => (
-          <CodeLine
-            key={key}
-            tokens={tokens}
-            lineNumber={lineNumber}
-            gutterWidth={gutterWidth}
-            highlighted={
-              Boolean(lineSelection) &&
-              lineNumber >= (lineSelection?.lineStart ?? 0) &&
-              lineNumber <= (lineSelection?.lineEnd ?? 0)
-            }
-          />
-        ))}
-      </View>
-    );
-
     return (
-      <View style={styles.previewScrollContainer}>
-        <RNScrollView
-          ref={previewScrollRef}
-          style={styles.previewContent}
-          showsVerticalScrollIndicator
-        >
-          {isMobile ? (
-            <View style={styles.previewCodeScrollContent}>{codeLines}</View>
-          ) : (
-            <RNScrollView
-              horizontal
-              nestedScrollEnabled
-              showsHorizontalScrollIndicator
-              contentContainerStyle={styles.previewCodeScrollContent}
-            >
-              {codeLines}
-            </RNScrollView>
-          )}
-        </RNScrollView>
-      </View>
+      <CodeFilePreviewBody
+        content={preview.content ?? ""}
+        highlightedLines={highlightedLines}
+        gutterWidth={gutterWidth}
+        lineSelection={lineSelection}
+        isMobile={isMobile}
+        scrollRef={previewScrollRef}
+      />
     );
   }
 
@@ -454,12 +484,12 @@ export function FilePane({
   const imagePreviewUri = useAttachmentPreviewUrl(
     resolvedPreview.key === previewKey ? resolvedPreview.imageAttachment : null,
   );
-  const isMarkdown = isMarkdownPreview(preview, location.path);
+  const isRendered = isRenderedPreview(preview, location.path);
   const editable = isEditableTextFile({
     preview,
     supportsEditing,
   });
-  const canToggleMarkdownMode = isMarkdown && editable;
+  const canToggleRenderedMode = isRendered && editable;
   const lineCount =
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
   const errorMessage = getFileErrorMessage(query.error, t("panels.file.failedToLoad"));
@@ -472,8 +502,8 @@ export function FilePane({
       preview={preview}
       version={version}
       filename={getFileNameFromPath(location.path) ?? location.path}
-      markdownMode={canToggleMarkdownMode ? markdownMode : undefined}
-      onMarkdownModeChange={canToggleMarkdownMode ? setMarkdownMode : undefined}
+      markdownMode={canToggleRenderedMode ? markdownMode : undefined}
+      onMarkdownModeChange={canToggleRenderedMode ? setMarkdownMode : undefined}
       lineCount={lineCount}
       editable={editable}
       disconnectedMessage={t("workspace.terminal.hostDisconnected")}
@@ -487,8 +517,10 @@ export function FilePane({
   );
 }
 
-function isMarkdownPreview(preview: ExplorerFile | null, path: string): boolean {
-  return preview?.kind === "text" && isRenderedMarkdownFile(path);
+// Markdown and HTML both have a rendered mode, so both get the Preview/Source toggle
+// instead of dropping straight into the editor.
+function isRenderedPreview(preview: ExplorerFile | null, path: string): boolean {
+  return preview?.kind === "text" && (isRenderedMarkdownFile(path) || isRenderedHtmlFile(path));
 }
 
 function getFileErrorMessage(error: unknown, fallback: string): string | null {

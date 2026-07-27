@@ -4,6 +4,13 @@ The file pane chooses its rendered mode from the file extension. Markdown and HT
 when the caller opens the whole file; a line-targeted open keeps using the source-code view so the
 requested line can be highlighted.
 
+All of this is wired from a single place: `FilePreviewBody` in `packages/app/src/file-pane/pane.tsx`
+imports `FileMarkdownPreview` and `HtmlPreview` from `packages/app/src/file-preview/`. Everything
+under `file-preview/` is a fork customization, so an upstream sync that rewrites the file pane can
+leave those modules orphaned and silently fall back to plain `MarkdownRenderer` with no HTML mode.
+After syncing upstream, check that `pane.tsx` still imports them — nothing else references
+`file-preview/`, so a stale copy of the pane typechecks and lints clean while the feature is gone.
+
 ## Markdown and Mermaid
 
 Markdown files use the shared native Markdown renderer. A fenced block whose first info-string
@@ -31,6 +38,10 @@ is untrusted workspace content:
 - `createSandboxedHtmlDocument` injects a CSP that blocks scripts, network requests, frames,
   objects, forms, and base-URL changes;
 - inline styles and embedded `data:`/`blob:` images, media, and fonts remain available.
+
+Like Markdown, HTML gets the bar's Preview/Source toggle when the file is editable. Without that,
+an editable `.html` would open straight into the source editor and the rendered document would be
+unreachable.
 
 Do not add `allow-same-origin`, `allow-scripts`, external resource origins, file access, or app
 bridges to the HTML preview. Relative workspace assets are intentionally not resolved by this
