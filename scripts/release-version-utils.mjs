@@ -24,10 +24,16 @@ export function parseReleaseVersion(version) {
   const prerelease = match.groups.prerelease ?? null;
   const betaMatch = prerelease?.match(/^beta\.(?<beta>\d+)$/) ?? null;
   const betaNumber = betaMatch?.groups?.beta ? Number.parseInt(betaMatch.groups.beta, 10) : null;
+  // This fork ships its own desktop builds on top of an upstream version:
+  // 0.2.2-LY.3 is the third fork build of upstream 0.2.2. The separator before
+  // the number must be a dot — semver compares "LY-10" against "LY-3" as plain
+  // strings, so a hyphen would make build 10 sort below build 3.
+  const lyMatch = prerelease?.match(/^LY\.(?<ly>\d+)$/) ?? null;
+  const lyNumber = lyMatch?.groups?.ly ? Number.parseInt(lyMatch.groups.ly, 10) : null;
 
-  if (prerelease !== null && betaNumber === null) {
+  if (prerelease !== null && betaNumber === null && lyNumber === null) {
     throw new Error(
-      `Unsupported release version "${version}". Expected beta prerelease versions like 0.1.41-beta.1.`,
+      `Unsupported release version "${version}". Expected beta prerelease versions like 0.1.41-beta.1 or fork versions like 0.2.2-LY.1.`,
     );
   }
 
@@ -36,6 +42,9 @@ export function parseReleaseVersion(version) {
   assertInteger(patch, "patch version");
   if (betaNumber !== null) {
     assertInteger(betaNumber, "beta number");
+  }
+  if (lyNumber !== null) {
+    assertInteger(lyNumber, "LY build number");
   }
 
   return {
@@ -48,6 +57,8 @@ export function parseReleaseVersion(version) {
     isPrerelease: prerelease !== null,
     isBeta: betaNumber !== null,
     betaNumber,
+    isLy: lyNumber !== null,
+    lyNumber,
   };
 }
 
@@ -78,10 +89,16 @@ export function getReleaseInfoFromSourceTag(sourceTag) {
     version: parsed.version,
     baseVersion: parsed.baseVersion,
     prerelease: parsed.prerelease,
-    isPrerelease: parsed.isPrerelease,
+    // LY builds are this fork's stable line, not a preview channel. They must be
+    // published as normal GitHub releases on the `latest` channel: electron-updater
+    // with allowPrerelease=false resolves the feed through /releases/latest, which
+    // skips anything flagged as a GitHub prerelease.
+    isPrerelease: parsed.isBeta,
     isBeta: parsed.isBeta,
     betaNumber: parsed.betaNumber,
-    releaseType: parsed.isPrerelease ? "prerelease" : "release",
+    isLy: parsed.isLy,
+    lyNumber: parsed.lyNumber,
+    releaseType: parsed.isBeta ? "prerelease" : "release",
     releaseChannel: parsed.isBeta ? "beta" : "latest",
     isSmokeTag: sourceTag.includes("gha-smoke"),
   };

@@ -21,10 +21,11 @@ on:
       - "packages/protocol/**"
       - "packages/relay/**"
       - "packages/server/**"
+  # Fork note: the tag trigger is removed — publishing targets
+  # ghcr.io/getpaseo/paseo, which this fork cannot write to. Branch builds stay on
+  # as non-publishing checks.
   push:
     branches: [main]
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       paseo_version:

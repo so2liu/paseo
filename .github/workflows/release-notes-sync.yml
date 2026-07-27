@@ -1,9 +1,9 @@
 name: Release Notes Sync
 
+# Fork note: the tag trigger is removed. Fork LY tags have no matching CHANGELOG
+# entry, so a tag-triggered sync would always fail.
 on:
   push:
-    tags:
-      - "v*"
     branches:
       - main
     paths:

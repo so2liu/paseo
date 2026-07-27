@@ -1,0 +1,176 @@
+# Fork-only release workflow. Upstream's `Desktop Release` builds macOS, Linux and
+# Windows for getpaseo/paseo; this fork only ships an Apple Silicon desktop build,
+# published to so2liu/paseo so the in-app updater finds it.
+#
+# Tag scheme: v<upstream version>-LY.<n>, e.g. v0.2.2-LY.1 is the first fork build
+# on top of upstream 0.2.2. The number must be separated by a dot — semver compares
+# `LY-10` and `LY-3` as strings, so a hyphen would make build 10 look older.
+name: Fork macOS Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "desktop-macos-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build (e.g. v0.2.2-LY.1)"
+        required: true
+        type: string
+      checkout_ref:
+        description: "Optional branch/ref to check out while using tag for release metadata."
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: fork-macos-release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  SOURCE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.checkout_ref || github.event.inputs.tag) || github.ref_name }}
+  DESKTOP_PACKAGE_PATH: "packages/desktop"
+
+jobs:
+  publish-macos:
+    permissions:
+      contents: write
+      packages: read
+    # macos-14 is the Apple Silicon runner.
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.CHECKOUT_REF }}
+
+      - name: Resolve release metadata
+        shell: bash
+        run: node scripts/emit-release-env.mjs --source-tag "$SOURCE_TAG" >> "$GITHUB_ENV"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install JS dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Set desktop package version from tag
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const version = process.env.DESKTOP_VERSION;
+          if (!version) throw new Error('DESKTOP_VERSION env var is missing');
+
+          const packageJsonPath = path.join(process.env.DESKTOP_PACKAGE_PATH, 'package.json');
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          packageJson.version = version;
+          fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+          NODE
+
+      # Signing and notarization are separate: this fork signs with an Apple
+      # Development certificate, which is enough for Squirrel.Mac to install
+      # updates but cannot be notarized (that needs a Developer ID certificate).
+      - name: Detect Apple signing credentials
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${APPLE_CERTIFICATE:-}" ]]; then
+            echo "HAS_APPLE_SIGNING=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No signing certificate configured — building an unsigned DMG. macOS auto-update cannot install unsigned builds."
+            echo "HAS_APPLE_SIGNING=false" >> "$GITHUB_ENV"
+          fi
+          if [[ -n "${APPLE_CERTIFICATE:-}" && -n "${APPLE_ID:-}" ]]; then
+            echo "HAS_APPLE_NOTARIZATION=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_APPLE_NOTARIZATION=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build desktop release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EP_GH_IGNORE_TIME: true
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PASEO_DESKTOP_SMOKE: "1"
+          PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke
+        run: |
+          set -euo pipefail
+          build_args=(-- --publish never --mac --arm64)
+          build_args+=("-c.publish.releaseType=$RELEASE_TYPE")
+          build_args+=("-c.publish.channel=$RELEASE_CHANNEL")
+          if [[ "$HAS_APPLE_SIGNING" != "true" ]]; then
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            build_args+=("-c.mac.identity=null")
+          fi
+          if [[ "$HAS_APPLE_NOTARIZATION" != "true" ]]; then
+            build_args+=("-c.mac.notarize=false")
+          fi
+          npm run build:desktop "${build_args[@]}"
+
+      - name: Upload packaged smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-smoke-macos-arm64
+          path: ${{ runner.temp }}/desktop-smoke
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Publish release
+        if: env.IS_SMOKE_TAG != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            prerelease_flag=""
+            if [[ "$IS_PRERELEASE" == "true" ]]; then
+              prerelease_flag="--prerelease"
+            fi
+            gh release create "$RELEASE_TAG" \
+              --repo "${{ github.repository }}" \
+              --title "Paseo $RELEASE_TAG" \
+              --notes "" \
+              $prerelease_flag
+          fi
+
+          release_dir="${DESKTOP_PACKAGE_PATH}/release"
+          # The DMG and ZIP are the installable artifacts, the blockmaps make
+          # differential updates work, and the channel manifest is what
+          # electron-updater reads to discover the release.
+          files=()
+          while IFS= read -r -d '' f; do
+            files+=("$f")
+          done < <(
+            find "$release_dir" -maxdepth 1 -type f \
+              \( -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' -o -name "${RELEASE_CHANNEL}-mac.yml" \) \
+              -print0 | sort -z
+          )
+          if (( ${#files[@]} == 0 )); then
+            echo "::error::No release artifacts found in $release_dir"
+            exit 1
+          fi
+          if [[ ! -f "$release_dir/${RELEASE_CHANNEL}-mac.yml" ]]; then
+            echo "::error::Missing ${RELEASE_CHANNEL}-mac.yml — the in-app updater would never see this release"
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"

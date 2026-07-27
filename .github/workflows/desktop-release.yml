@@ -1,13 +1,11 @@
 name: Desktop Release
 
+# Fork note: the tag trigger is intentionally removed. In so2liu/paseo, tag pushes
+# are handled by `Fork macOS Release`, which builds the single Apple Silicon
+# artifact we ship. Keeping both on the same tags would race on creating and
+# uploading to the same GitHub release. Multi-platform builds stay available here
+# through manual dispatch.
 on:
-  push:
-    tags:
-      - "v*"
-      - "desktop-v*"
-      - "desktop-macos-v*"
-      - "desktop-linux-v*"
-      - "desktop-windows-v*"
   workflow_dispatch:
     inputs:
       tag:

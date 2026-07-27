@@ -38,7 +38,8 @@ export interface LocalDaemonVersionResult {
   error: string | null;
 }
 
-const RELEASE_DOWNLOAD_BASE_URL = "https://github.com/getpaseo/paseo/releases/download";
+// This fork publishes its own desktop builds, so downloads point at so2liu/paseo.
+const RELEASE_DOWNLOAD_BASE_URL = "https://github.com/so2liu/paseo/releases/download";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

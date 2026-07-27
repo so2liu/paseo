@@ -1,10 +1,8 @@
 name: Android APK Release
 
+# Fork note: the tag trigger is removed. This fork only ships the macOS desktop
+# build automatically; Android APKs stay available through manual dispatch.
 on:
-  push:
-    tags:
-      - "v*"
-      - "android-v*"
   workflow_dispatch:
     inputs:
       tag:
