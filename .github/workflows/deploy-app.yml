@@ -1,12 +1,8 @@
 name: Deploy App
 
+# Fork note: the tag trigger is removed. This deploys upstream's hosted web app,
+# which the fork does not operate.
 on:
-  push:
-    tags:
-      - "v*"
-      - "!v*-beta.*"
-      - "app-v*"
-      - "!app-v*-beta.*"
   workflow_dispatch:
 
 jobs:

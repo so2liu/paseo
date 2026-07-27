@@ -29,6 +29,24 @@ test("parses beta release metadata", () => {
     isPrerelease: true,
     isBeta: true,
     betaNumber: 1,
+    isLy: false,
+    lyNumber: null,
+  });
+});
+
+test("parses fork LY release metadata", () => {
+  assert.deepEqual(parseReleaseVersion("0.2.2-LY.3"), {
+    version: "0.2.2-LY.3",
+    major: 0,
+    minor: 2,
+    patch: 2,
+    prerelease: "LY.3",
+    baseVersion: "0.2.2",
+    isPrerelease: true,
+    isBeta: false,
+    betaNumber: null,
+    isLy: true,
+    lyNumber: 3,
   });
 });
 
@@ -42,12 +60,33 @@ test("emits beta release info from tags", () => {
     isPrerelease: true,
     isBeta: true,
     betaNumber: 1,
+    isLy: false,
+    lyNumber: null,
     releaseType: "prerelease",
     releaseChannel: "beta",
     isSmokeTag: false,
   });
 });
 
-test("rejects non-beta prerelease versions", () => {
-  assert.throws(() => parseReleaseVersion("0.1.60-canary.1"), /Expected beta prerelease versions/);
+test("publishes fork LY tags on the stable channel", () => {
+  assert.deepEqual(getReleaseInfoFromSourceTag("v0.2.2-LY.3"), {
+    sourceTag: "v0.2.2-LY.3",
+    releaseTag: "v0.2.2-LY.3",
+    version: "0.2.2-LY.3",
+    baseVersion: "0.2.2",
+    prerelease: "LY.3",
+    isPrerelease: false,
+    isBeta: false,
+    betaNumber: null,
+    isLy: true,
+    lyNumber: 3,
+    releaseType: "release",
+    releaseChannel: "latest",
+    isSmokeTag: false,
+  });
+});
+
+test("rejects unknown prerelease versions", () => {
+  assert.throws(() => parseReleaseVersion("0.1.60-canary.1"), /Unsupported release version/);
+  assert.throws(() => parseReleaseVersion("0.2.2-LY-3"), /Unsupported release version/);
 });

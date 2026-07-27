@@ -28,11 +28,15 @@ extraResources:
   - from: assets/editor-targets
     to: editor-target-icons
 publish:
+  # This fork ships its own desktop builds, so the update feed points at
+  # so2liu/paseo instead of the upstream getpaseo/paseo releases.
   provider: github
-  owner: getpaseo
+  owner: so2liu
   repo: paseo
 mac:
-  artifactName: "Paseo-${version}-LY-${arch}.${ext}"
+  # The fork version already carries the LY branding (0.2.2-LY.3), so the file
+  # name stays in upstream's shape.
+  artifactName: "Paseo-${version}-${arch}.${ext}"
   category: public.app-category.developer-tools
   icon: assets/icon.icns
   hardenedRuntime: true
