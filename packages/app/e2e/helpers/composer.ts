@@ -48,8 +48,11 @@ export async function fillComposerDraft(page: Page, text: string): Promise<void>
   await composerInput(page).fill(text);
 }
 
+// This fork runs the composer with defaultSendBehavior="queue", so while the agent
+// is running Enter queues the draft and Control+Enter is the interrupt-and-send
+// escape hatch. Upstream maps those two the other way around.
 export async function sendDraftToQueue(page: Page): Promise<void> {
-  await composerInput(page).press("Control+Enter");
+  await composerInput(page).press("Enter");
 }
 
 export async function expectQueuedMessageButton(page: Page): Promise<void> {
