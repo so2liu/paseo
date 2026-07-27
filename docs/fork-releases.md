@@ -74,8 +74,12 @@ secrets 一览（名字沿用上游 workflow）：
 | `APPLE_TEAM_ID`              | Team ID                   |
 
 **当前用的是"只签名"模式**，证书是 owner 的 `Apple Development: yang ma`
-（Team `366ADQ28F6`，2027-07-18 过期）。公证要求 Developer ID Application 证书，
-owner 没有，所以 `APPLE_ID`/`APPLE_PASSWORD` 不配、`mac.notarize` 在 CI 里被关掉。
+（团队 `yang ma` / Team `366ADQ28F6`，2027-07-18 过期），所以 `APPLE_ID`/
+`APPLE_PASSWORD` 不配、`mac.notarize` 在 CI 里被关掉。
+
+公证需要 Developer ID Application 证书。owner 有付费开发者账号（个人账号，本人即
+Account Holder），随时可以在 developer.apple.com 创建一张升到"签名 + 公证"——只是
+目前还没建，钥匙串里只有 Xcode 自动生成的开发证书。
 
 electron-builder 找不到 `Developer ID Application` 时会回落到"非 Apple 前缀"的证书
 （`appleCertificatePrefixes` 只包含 Developer ID / 3rd Party 两类），
