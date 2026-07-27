@@ -77,6 +77,9 @@ jobs:
           fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
           NODE
 
+      # Signing and notarization are separate: this fork signs with an Apple
+      # Development certificate, which is enough for Squirrel.Mac to install
+      # updates but cannot be notarized (that needs a Developer ID certificate).
       - name: Detect Apple signing credentials
         shell: bash
         env:
@@ -84,11 +87,16 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
         run: |
           set -euo pipefail
-          if [[ -n "${APPLE_CERTIFICATE:-}" && -n "${APPLE_ID:-}" ]]; then
+          if [[ -n "${APPLE_CERTIFICATE:-}" ]]; then
             echo "HAS_APPLE_SIGNING=true" >> "$GITHUB_ENV"
           else
-            echo "::warning::No Apple signing secrets configured — building an unsigned DMG. macOS auto-update cannot install unsigned builds."
+            echo "::warning::No signing certificate configured — building an unsigned DMG. macOS auto-update cannot install unsigned builds."
             echo "HAS_APPLE_SIGNING=false" >> "$GITHUB_ENV"
+          fi
+          if [[ -n "${APPLE_CERTIFICATE:-}" && -n "${APPLE_ID:-}" ]]; then
+            echo "HAS_APPLE_NOTARIZATION=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_APPLE_NOTARIZATION=false" >> "$GITHUB_ENV"
           fi
 
       - name: Build desktop release
@@ -110,7 +118,10 @@ jobs:
           build_args+=("-c.publish.channel=$RELEASE_CHANNEL")
           if [[ "$HAS_APPLE_SIGNING" != "true" ]]; then
             export CSC_IDENTITY_AUTO_DISCOVERY=false
-            build_args+=("-c.mac.identity=null" "-c.mac.notarize=false")
+            build_args+=("-c.mac.identity=null")
+          fi
+          if [[ "$HAS_APPLE_NOTARIZATION" != "true" ]]; then
+            build_args+=("-c.mac.notarize=false")
           fi
           npm run build:desktop "${build_args[@]}"
 

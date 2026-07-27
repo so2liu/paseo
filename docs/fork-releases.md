@@ -55,18 +55,34 @@ git push origin v0.2.2-LY.1
 ## 签名
 
 macOS 的自动更新由 Squirrel.Mac 完成，它会校验新版本的代码签名，**未签名的包无法
-自动更新**。所以 repo 里需要配好这些 secrets（名字沿用上游 workflow）：
+自动更新**。签名和公证是两件独立的事，workflow 支持三档：
 
-| Secret                       | 用途                            |
-| ---------------------------- | ------------------------------- |
-| `APPLE_CERTIFICATE`          | Developer ID 证书（base64 p12） |
-| `APPLE_CERTIFICATE_PASSWORD` | p12 密码                        |
-| `APPLE_ID`                   | 公证用的 Apple ID               |
-| `APPLE_PASSWORD`             | App 专用密码                    |
-| `APPLE_TEAM_ID`              | Team ID                         |
+| 模式        | 条件                                | 效果                                                 |
+| ----------- | ----------------------------------- | ---------------------------------------------------- |
+| 签名 + 公证 | 配了 `APPLE_CERTIFICATE`+`APPLE_ID` | 任何 Mac 双击即装，自动更新正常                      |
+| 只签名      | 只配了 `APPLE_CERTIFICATE`          | 自动更新正常；首次装 DMG 需右键"打开"绕过 Gatekeeper |
+| 不签名      | 什么都没配                          | 只能每次手动下载 DMG，App 内更新装不上               |
 
-secrets 缺失时 workflow 不会失败，而是降级成未签名构建并打一条 warning：DMG 能装
-（首次打开需右键"打开"），但 App 内更新装不上，只能手动下载新 DMG。
+secrets 一览（名字沿用上游 workflow）：
+
+| Secret                       | 用途                      |
+| ---------------------------- | ------------------------- |
+| `APPLE_CERTIFICATE`          | 签名证书（base64 的 p12） |
+| `APPLE_CERTIFICATE_PASSWORD` | p12 密码                  |
+| `APPLE_ID`                   | 公证用的 Apple ID         |
+| `APPLE_PASSWORD`             | App 专用密码              |
+| `APPLE_TEAM_ID`              | Team ID                   |
+
+**当前用的是"只签名"模式**，证书是 owner 的 `Apple Development: yang ma`
+（Team `366ADQ28F6`，2027-07-18 过期）。公证要求 Developer ID Application 证书，
+owner 没有，所以 `APPLE_ID`/`APPLE_PASSWORD` 不配、`mac.notarize` 在 CI 里被关掉。
+
+electron-builder 找不到 `Developer ID Application` 时会回落到"非 Apple 前缀"的证书
+（`appleCertificatePrefixes` 只包含 Developer ID / 3rd Party 两类），
+`Apple Development: ...` 正好落进这个分支，所以不需要额外指定 `mac.identity`。
+
+证书到期换新时，只要新证书的 Team 和 CN 不变，已装的 App 仍能通过 Squirrel 的签名
+校验，正常自动更新。
 
 ## 被关掉的上游 workflow
 
