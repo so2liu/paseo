@@ -340,6 +340,12 @@ class SegmentConnection {
     this.pending = Buffer.alloc(0);
     try {
       this.ws.removeAllListeners();
+      // Closing a socket that is still handshaking makes `ws` emit one last error
+      // asynchronously. With every listener removed that becomes an unhandled
+      // 'error' event, which takes the whole daemon down — so keep a sink attached.
+      // This is the common path: the connection opened eagerly after a commit is
+      // often still CONNECTING when the session ends.
+      this.ws.on("error", () => {});
       if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
         this.ws.close();
       }
@@ -467,8 +473,12 @@ export class VolcengineSTT implements SpeechToTextProvider {
             emitter.emit("error", error);
             emitter.emit("transcript", { segmentId: committedId, transcript: "", isFinal: true });
           } finally {
-            if (!closed) {
-              // Reopen eagerly so the next utterance does not pay for the handshake.
+            // Reopen eagerly so the next utterance does not pay for the handshake —
+            // but only if nothing opened one already. Finalizing takes a few hundred
+            // ms, and audio arriving in that window has `appendPcm16` open the next
+            // segment's connection itself. Overwriting it here would silently drop
+            // every word spoken across the segment boundary.
+            if (!closed && !connection) {
               connection = openConnection(segmentId);
             }
           }

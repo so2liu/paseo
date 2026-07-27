@@ -132,11 +132,23 @@ The `SpeechToTextProvider` interface is segment-based: audio accumulates until
 
 - The next connection opens eagerly right after a commit, so the following
   utterance does not pay for the handshake.
+- **The eager reopen must not clobber a connection that already exists.**
+  Finalizing costs a round-trip, and people keep talking through it — that audio
+  has `appendPcm16` open the next segment's connection itself. Replacing it
+  unconditionally silently drops every word spoken across the boundary. The bug
+  reads as an ordinary recognition error (`确认没有问题再提交` came back as
+  `确认。有问题再提交`), which is why it is worth a regression test rather than a
+  careful comment.
 - A segment with no audio (the silence auto-commit path) resolves to an empty
   final transcript without opening a connection at all.
 - Every segment emits exactly one final transcript, including on error, timeout,
   or a dropped connection. Skipping it would leave `DictationStreamManager`
   waiting out its own timeout before giving up.
+- **Tearing down a websocket mid-handshake needs an error listener attached.**
+  `ws` emits one last error when a CONNECTING socket is closed; with every
+  listener removed that becomes an unhandled `'error'` event and takes the daemon
+  down. The eagerly-reopened connection is usually still CONNECTING when a
+  session ends, so this is the common path, not an edge case.
 
 Auto-commit fires every 15 s (`PASEO_DICTATION_AUTO_COMMIT_SECONDS`), so the
 reconnect rate is low enough not to matter.

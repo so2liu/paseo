@@ -16,6 +16,8 @@ interface ReceivedFrame {
   messageType: number;
   sequence: number | null;
   isLast: boolean;
+  /** Decoded JSON body, present only on the config frame. */
+  config: Record<string, unknown> | null;
 }
 
 /**
@@ -53,6 +55,10 @@ class FakeVolcengineServer {
           messageType: decoded.messageType,
           sequence: decoded.sequence,
           isLast: decoded.isLastPacket,
+          config:
+            decoded.messageType === VolcengineMessageType.FullClientRequest
+              ? (JSON.parse(decoded.rawPayload) as Record<string, unknown>)
+              : null,
         };
         connection.frames.push(frame);
         this.onFrame?.({ frame, socket, connectionIndex });
@@ -127,6 +133,11 @@ function buildConfig(overrides: Partial<VolcengineSttConfig> & { endpoint: strin
 /** 200 ms of 16 kHz PCM16 — exactly one audio frame. */
 function buildAudioFrame(): Buffer {
   return Buffer.alloc((VOLCENGINE_ASR_SAMPLE_RATE * 2 * 200) / 1000, 1);
+}
+
+function countAudioFrames(frames: ReceivedFrame[]): number {
+  return frames.filter((frame) => frame.messageType === VolcengineMessageType.AudioOnlyRequest)
+    .length;
 }
 
 function collectTranscripts(session: StreamingTranscriptionSession): {
@@ -225,11 +236,59 @@ describe("VolcengineSTT", () => {
     await session.connect();
 
     await waitFor(() => server.connections[0]?.frames.length === 1);
-    expect(server.connections[0].frames[0]).toEqual({
+    expect(server.connections[0].frames[0]).toMatchObject({
       messageType: VolcengineMessageType.FullClientRequest,
       sequence: 1,
       isLast: false,
     });
+    session.close();
+  });
+
+  it("sends hotwords on the config frame of every segment's connection", async () => {
+    // Each segment opens its own websocket, so the vocabulary has to be re-sent
+    // every time. A segment that silently drops it recognizes worse than the first.
+    server.onFrame = ({ frame, socket }) => {
+      if (frame.isLast) {
+        FakeVolcengineServer.sendResponse(socket, { text: "ok", isLast: true });
+      }
+    };
+
+    const provider = new VolcengineSTT(
+      buildConfig({ endpoint: server.endpoint, hotwords: ["Paseo", "Unistyles"] }),
+      logger,
+    );
+    const session = provider.createSession({ logger });
+    const events = collectTranscripts(session);
+
+    await session.connect();
+    await waitFor(() => server.connections[0]?.frames.length === 1);
+    session.appendPcm16(buildAudioFrame());
+    session.commit();
+    await waitFor(() => events.finals.length === 1);
+    await waitFor(() => server.connections[1]?.frames.length === 1);
+
+    const expectedContext = JSON.stringify({
+      hotwords: [{ word: "Paseo" }, { word: "Unistyles" }],
+    });
+    for (const connection of server.connections) {
+      const request = connection.frames[0].config?.request as Record<string, unknown>;
+      expect((request.corpus as Record<string, unknown>).context).toBe(expectedContext);
+    }
+
+    session.close();
+  });
+
+  it("omits the corpus entirely when no hotwords are configured", async () => {
+    const provider = new VolcengineSTT(buildConfig({ endpoint: server.endpoint }), logger);
+    const session = provider.createSession({ logger });
+
+    await session.connect();
+    await waitFor(() => server.connections[0]?.frames.length === 1);
+
+    const request = server.connections[0].frames[0].config?.request as Record<string, unknown>;
+    expect(request.corpus).toBeUndefined();
+    // Disfluency removal must stay off so dictation reaches the agent verbatim.
+    expect(request.enable_ddc).toBe(false);
     session.close();
   });
 
@@ -380,6 +439,70 @@ describe("VolcengineSTT", () => {
     expect(events.finals[0].transcript).toBe("partial only");
 
     session.close();
+  });
+
+  it("keeps audio that arrives while the previous segment is still finalizing", async () => {
+    // Finalizing takes a round-trip. Speech continues during it, and that audio
+    // belongs to the next segment — if the eager reopen replaces the connection
+    // that already received it, every word across the boundary is lost.
+    let releaseFinal: (() => void) | null = null;
+    server.onFrame = ({ frame, socket }) => {
+      if (frame.messageType !== VolcengineMessageType.AudioOnlyRequest) return;
+      if (!frame.isLast) return;
+      releaseFinal = () => FakeVolcengineServer.sendResponse(socket, { text: "one", isLast: true });
+    };
+
+    const provider = new VolcengineSTT(buildConfig({ endpoint: server.endpoint }), logger);
+    const session = provider.createSession({ logger });
+    const events = collectTranscripts(session);
+
+    await session.connect();
+    await waitFor(() => server.connections[0]?.frames.length === 1);
+    session.appendPcm16(buildAudioFrame());
+
+    session.commit();
+    await waitFor(() => releaseFinal !== null);
+
+    // Speech continues before the server has answered the terminator.
+    session.appendPcm16(buildAudioFrame());
+    await waitFor(() => server.connections.length === 2);
+    await waitFor(() => countAudioFrames(server.connections[1].frames) > 0);
+
+    releaseFinal?.();
+    await waitFor(() => events.finals.length === 1);
+    // Give the eager-reopen path a chance to (incorrectly) replace the connection.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Exactly two connections: the finalized one and the one holding the new audio.
+    expect(server.connections).toHaveLength(2);
+    expect(countAudioFrames(server.connections[1].frames)).toBeGreaterThan(0);
+
+    session.close();
+  });
+
+  it("closes a still-handshaking connection without raising an unhandled error", async () => {
+    // `ws` emits a final error when a CONNECTING socket is closed. If nothing is
+    // listening by then it becomes an unhandled 'error' event and kills the daemon.
+    // This is the common shape: the connection opened eagerly after a commit is
+    // usually still handshaking when the session ends.
+    const unhandled: unknown[] = [];
+    const onUncaught = (error: unknown) => unhandled.push(error);
+    process.on("uncaughtException", onUncaught);
+
+    try {
+      const provider = new VolcengineSTT(buildConfig({ endpoint: server.endpoint }), logger);
+      const session = provider.createSession({ logger });
+      session.on("error", () => {});
+
+      await session.connect();
+      // No wait — tear down while the handshake is still in flight.
+      session.close();
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("uncaughtException", onUncaught);
+    }
   });
 
   it("buffers sub-frame audio until a whole frame has accumulated", async () => {
