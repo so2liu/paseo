@@ -8,7 +8,7 @@ export function queuedMessagesFromServer(
   existing: readonly QueuedComposerMessage[],
 ): QueuedComposerMessage[] {
   const existingById = new Map(existing.map((item) => [item.id, item]));
-  return items.map((item) => {
+  const fromServer = items.map((item) => {
     const attachments: ComposerAttachment[] = [];
     for (const attachment of item.attachments ?? []) {
       if (attachment.type === "uploaded_file") attachments.push({ kind: "file", attachment });
@@ -22,6 +22,17 @@ export function queuedMessagesFromServer(
       serverAcknowledged: true,
     };
   });
+
+  // A message queued locally is not on the daemon yet — the enqueue request is
+  // still in flight. Dropping it here would make the row vanish from the composer
+  // until the round trip lands. Items that were acknowledged before and are now
+  // absent are genuinely gone (the agent drained them), so those stay dropped.
+  const serverIds = new Set(items.map((item) => item.id));
+  const stillPending = existing.filter(
+    (item) => !serverIds.has(item.id) && item.serverAcknowledged !== true,
+  );
+
+  return [...fromServer, ...stillPending];
 }
 
 export function pendingQueuedMessagesForServerSync(input: {

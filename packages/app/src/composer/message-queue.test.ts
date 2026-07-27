@@ -46,6 +46,24 @@ describe("queuedMessagesFromServer", () => {
 
     expect(message?.attachments).toEqual([localAttachment]);
   });
+
+  it("keeps a locally queued message whose enqueue request is still in flight", () => {
+    const messages = queuedMessagesFromServer(
+      [],
+      [{ id: "message-1", text: "Queued just now", attachments: [] }],
+    );
+
+    expect(messages).toEqual([{ id: "message-1", text: "Queued just now", attachments: [] }]);
+  });
+
+  it("drops an acknowledged message once the daemon has drained it", () => {
+    const messages = queuedMessagesFromServer(
+      [],
+      [{ id: "message-1", text: "Already sent", attachments: [], serverAcknowledged: true }],
+    );
+
+    expect(messages).toEqual([]);
+  });
 });
 
 describe("pendingQueuedMessagesForServerSync", () => {
