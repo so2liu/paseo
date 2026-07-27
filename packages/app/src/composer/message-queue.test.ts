@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { queuedMessagesFromServer } from "./message-queue";
+import { pendingQueuedMessagesForServerSync, queuedMessagesFromServer } from "./message-queue";
 
 describe("queuedMessagesFromServer", () => {
   it("marks messages acknowledged after they appear in the daemon queue", () => {
@@ -45,5 +45,34 @@ describe("queuedMessagesFromServer", () => {
     );
 
     expect(message?.attachments).toEqual([localAttachment]);
+  });
+});
+
+describe("pendingQueuedMessagesForServerSync", () => {
+  it("does not resend an acknowledged local message that the daemon already drained", () => {
+    expect(
+      pendingQueuedMessagesForServerSync({
+        serverId: "server-1",
+        agentId: "agent-1",
+        serverItems: [],
+        outbox: [
+          {
+            serverId: "server-1",
+            agentId: "agent-1",
+            id: "message-1",
+            text: "Already handled",
+            attachments: [],
+          },
+        ],
+        localItems: [
+          {
+            id: "message-1",
+            text: "Already handled",
+            attachments: [],
+            serverAcknowledged: true,
+          },
+        ],
+      }),
+    ).toEqual([]);
   });
 });

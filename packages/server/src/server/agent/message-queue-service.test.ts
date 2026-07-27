@@ -66,4 +66,26 @@ describe("AgentMessageQueueService", () => {
     expect(manager.steerAgent).toHaveBeenCalledOnce();
     expect(await service.list("agent-1")).toEqual([]);
   });
+
+  test("does not enqueue an accepted message again after it was removed and the daemon restarted", async () => {
+    const { manager, service } = await createService();
+    const message = {
+      id: "message-1",
+      agentId: "agent-1",
+      text: "run exactly once",
+      attachments: [],
+    };
+    await service.enqueue(message);
+    await service.remove(message.agentId, message.id);
+
+    const restored = new AgentMessageQueueService(
+      tempDir!,
+      manager,
+      {} as AgentStorage,
+      createTestLogger(),
+    );
+    await restored.enqueue(message);
+
+    expect(await restored.list(message.agentId)).toEqual([]);
+  });
 });

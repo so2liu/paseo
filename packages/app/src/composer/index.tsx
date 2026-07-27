@@ -129,7 +129,10 @@ import { getForgePresentation } from "@/git/forge";
 import { ForgeBrandIcon } from "@/git/forge-icon";
 import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
-import { queuedMessagesFromServer } from "@/composer/message-queue";
+import {
+  pendingQueuedMessagesForServerSync,
+  queuedMessagesFromServer,
+} from "@/composer/message-queue";
 import {
   collectUserInputHistory,
   navigateInputHistory,
@@ -1412,15 +1415,15 @@ export function Composer({
           listAgentMessageOutbox(serverId, agentId),
         ]);
         if (cancelled) return;
-        const serverMessageIds = new Set(items.map((item) => item.id));
-        const pendingById = new Map(outbox.map((item) => [item.id, item]));
-        for (const local of queueWriter.read(agentId)) {
-          if (!serverMessageIds.has(local.id) && !pendingById.has(local.id)) {
-            pendingById.set(local.id, { ...local, serverId, agentId });
-          }
-        }
+        const pending = pendingQueuedMessagesForServerSync({
+          serverId,
+          agentId,
+          serverItems: items,
+          outbox,
+          localItems: queueWriter.read(agentId),
+        });
         applyServerQueue(items);
-        for (const queued of pendingById.values()) {
+        for (const queued of pending) {
           if (cancelled) return;
           await persistAgentMessageOutboxItem(queued);
           await enqueueOnServer(queued);

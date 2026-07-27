@@ -14,7 +14,24 @@ import { sendPromptToAgent } from "./agent-prompt.js";
 
 const QueueFileSchema = z.object({
   items: z.array(AgentMessageQueueItemSchema),
+  receipts: z
+    .array(
+      z.object({
+        agentId: z.string(),
+        messageId: z.string(),
+        acceptedAt: z.string(),
+      }),
+    )
+    .optional(),
 });
+
+const MAX_MESSAGE_RECEIPTS = 20_000;
+
+interface AgentMessageQueueReceipt {
+  agentId: string;
+  messageId: string;
+  acceptedAt: string;
+}
 
 export type AgentMessageQueueListener = (agentId: string, items: AgentMessageQueueItem[]) => void;
 
@@ -22,6 +39,8 @@ export class AgentMessageQueueService {
   private readonly filePath: string;
   private readonly logger: pino.Logger;
   private readonly itemsByAgent = new Map<string, AgentMessageQueueItem[]>();
+  private receipts: AgentMessageQueueReceipt[] = [];
+  private readonly receiptKeys = new Set<string>();
   private readonly listeners = new Set<AgentMessageQueueListener>();
   private readonly draining = new Set<string>();
   private loadPromise: Promise<void> | null = null;
@@ -62,11 +81,16 @@ export class AgentMessageQueueService {
     input: Omit<AgentMessageQueueItem, "createdAt" | "updatedAt">,
   ): Promise<AgentMessageQueueItem[]> {
     return await this.mutate(input.agentId, (items) => {
+      if (this.receiptKeys.has(this.receiptKey(input.agentId, input.id))) {
+        return items;
+      }
       const existing = items.find((item) => item.id === input.id);
       if (existing) {
+        this.rememberReceipt(input.agentId, input.id, existing.createdAt);
         return items;
       }
       const now = new Date().toISOString();
+      this.rememberReceipt(input.agentId, input.id, now);
       return [...items, { ...input, createdAt: now, updatedAt: now }];
     });
   }
@@ -146,10 +170,17 @@ export class AgentMessageQueueService {
     this.loadPromise = (async () => {
       try {
         const parsed = QueueFileSchema.parse(JSON.parse(await fs.readFile(this.filePath, "utf8")));
+        for (const receipt of parsed.receipts ?? []) {
+          const key = this.receiptKey(receipt.agentId, receipt.messageId);
+          if (this.receiptKeys.has(key)) continue;
+          this.receiptKeys.add(key);
+          this.receipts.push(receipt);
+        }
         for (const item of parsed.items) {
           const items = this.itemsByAgent.get(item.agentId) ?? [];
           items.push(item);
           this.itemsByAgent.set(item.agentId, items);
+          this.rememberReceipt(item.agentId, item.id, item.createdAt);
         }
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -169,7 +200,44 @@ export class AgentMessageQueueService {
   private async persist(): Promise<void> {
     const items = Array.from(this.itemsByAgent.values()).flat();
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    await writeJsonFileAtomic(this.filePath, { items });
+    await writeJsonFileAtomic(this.filePath, { items, receipts: this.receipts });
+  }
+
+  private receiptKey(agentId: string, messageId: string): string {
+    return `${agentId}\0${messageId}`;
+  }
+
+  private rememberReceipt(agentId: string, messageId: string, acceptedAt: string): void {
+    const key = this.receiptKey(agentId, messageId);
+    if (this.receiptKeys.has(key)) return;
+    this.receiptKeys.add(key);
+    this.receipts.push({ agentId, messageId, acceptedAt });
+    this.pruneReceipts();
+  }
+
+  private pruneReceipts(): void {
+    if (this.receipts.length <= MAX_MESSAGE_RECEIPTS) return;
+    const queuedKeys = new Set(
+      Array.from(this.itemsByAgent.entries()).flatMap(([agentId, items]) =>
+        items.map((item) => this.receiptKey(agentId, item.id)),
+      ),
+    );
+    const kept: AgentMessageQueueReceipt[] = [];
+    let retainedCompleted = 0;
+    for (let index = this.receipts.length - 1; index >= 0; index -= 1) {
+      const receipt = this.receipts[index];
+      if (!receipt) continue;
+      const isQueued = queuedKeys.has(this.receiptKey(receipt.agentId, receipt.messageId));
+      if (isQueued || retainedCompleted < MAX_MESSAGE_RECEIPTS) {
+        kept.push(receipt);
+        if (!isQueued) retainedCompleted += 1;
+      }
+    }
+    this.receipts = kept.toReversed();
+    this.receiptKeys.clear();
+    for (const receipt of this.receipts) {
+      this.receiptKeys.add(this.receiptKey(receipt.agentId, receipt.messageId));
+    }
   }
 
   private emit(agentId: string, items: AgentMessageQueueItem[]): void {

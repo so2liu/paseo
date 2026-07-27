@@ -67,7 +67,9 @@ Queued agent messages are daemon-owned. The client keeps only an acknowledged vi
 device outbox for enqueue requests that have not yet been acknowledged. Queue writes are atomic;
 the daemon broadcasts the resulting per-agent snapshot to connected clients and drains the oldest
 message after the active foreground turn finishes. A queued message is removed only after a normal
-turn or steer request has been accepted by the provider.
+turn or steer request has been accepted by the provider. The same queue file retains a bounded set
+of accepted message IDs so a client retry after a lost acknowledgement cannot enqueue an already
+handled message again.
 
 The `agents/{sanitized-cwd}/` directory name is derived from the agent's `cwd` by stripping the filesystem root and replacing path separators with `-` (Windows drive letters become a `C-` style prefix). Persistent server stores write atomically by writing a temp file in the target directory and then renaming it into place.
 
