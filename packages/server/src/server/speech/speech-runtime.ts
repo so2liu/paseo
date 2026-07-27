@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Logger } from "pino";
 
-import type { PaseoOpenAIConfig, PaseoSpeechConfig } from "../bootstrap.js";
+import type { PaseoOpenAIConfig, PaseoSpeechConfig, PaseoVolcengineConfig } from "../bootstrap.js";
 import type { LocalSpeechModelId } from "./providers/local/config.js";
 import {
   ensureLocalSpeechModels,
@@ -15,6 +15,11 @@ import {
   initializeOpenAiSpeechServices,
   validateOpenAiCredentialRequirements,
 } from "./providers/openai/runtime.js";
+import {
+  getVolcengineSpeechAvailability,
+  initializeVolcengineSpeechServices,
+  validateVolcengineCredentialRequirements,
+} from "./providers/volcengine/runtime.js";
 import type { SpeechToTextProvider, TextToSpeechProvider } from "./speech-provider.js";
 import type { RequestedSpeechProviders } from "./speech-types.js";
 import type { TurnDetectionProvider } from "./turn-detection-provider.js";
@@ -357,11 +362,13 @@ export interface SpeechService {
 export function createSpeechService(params: {
   logger: Logger;
   openaiConfig?: PaseoOpenAIConfig;
+  volcengineConfig?: PaseoVolcengineConfig;
   speechConfig?: PaseoSpeechConfig;
 }): SpeechService {
   const logger = params.logger.child({ module: "speech-runtime" });
   const speechConfig = params.speechConfig ?? null;
   const openaiConfig = params.openaiConfig;
+  const volcengineConfig = params.volcengineConfig;
   const providers = resolveRequestedSpeechProviders(speechConfig);
   const requestedProviders = describeRequestedProviders(providers);
 
@@ -370,12 +377,18 @@ export function createSpeechService(params: {
     openaiConfig,
     logger,
   });
+  validateVolcengineCredentialRequirements({
+    providers,
+    volcengineConfig,
+    logger,
+  });
 
   logger.info(
     {
       requestedProviders,
       availability: {
         openai: getOpenAiSpeechAvailability(openaiConfig),
+        volcengine: getVolcengineSpeechAvailability(volcengineConfig),
       },
     },
     "Speech provider reconciliation started",
@@ -503,15 +516,21 @@ export function createSpeechService(params: {
       speechConfig,
       logger,
     });
-    const nextOpenAiSpeech = initializeOpenAiSpeechServices({
+    const nextVolcengineSpeech = initializeVolcengineSpeechServices({
       providers,
-      openaiConfig,
+      volcengineConfig,
       existing: {
         turnDetectionService: nextLocalSpeech.turnDetectionService,
         sttService: nextLocalSpeech.sttService,
         ttsService: nextLocalSpeech.ttsService,
         dictationSttService: nextLocalSpeech.dictationSttService,
       },
+      logger,
+    });
+    const nextOpenAiSpeech = initializeOpenAiSpeechServices({
+      providers,
+      openaiConfig,
+      existing: nextVolcengineSpeech,
       logger,
     });
 

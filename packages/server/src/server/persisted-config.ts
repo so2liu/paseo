@@ -68,10 +68,39 @@ const LocalSpeechProviderSchema = z
   })
   .strict();
 
+const VolcengineSttSchema = z
+  .object({
+    // New console issues a single API key; the legacy console issues the
+    // appId + accessToken pair. Either one is enough.
+    apiKey: z.string().trim().min(1).optional(),
+    appId: z.string().trim().min(1).optional(),
+    accessToken: z.string().trim().min(1).optional(),
+    endpoint: z.string().trim().min(1).optional(),
+    resourceId: z.string().trim().min(1).optional(),
+    modelName: z.string().trim().min(1).optional(),
+    language: z.string().trim().min(1).optional(),
+    hotwords: z.array(z.string().trim().min(1)).optional(),
+    boostingTableId: z.string().trim().min(1).optional(),
+    enableItn: z.boolean().optional(),
+    enablePunc: z.boolean().optional(),
+    enableDdc: z.boolean().optional(),
+  })
+  .strict();
+
+const VolcengineProviderSchema = z
+  .object({
+    apiKey: z.string().trim().min(1).optional(),
+    appId: z.string().trim().min(1).optional(),
+    accessToken: z.string().trim().min(1).optional(),
+    stt: VolcengineSttSchema.optional(),
+  })
+  .strict();
+
 const ProvidersSchema = z
   .object({
     openai: OpenAiProviderSchema.optional(),
     local: LocalSpeechProviderSchema.optional(),
+    volcengine: VolcengineProviderSchema.optional(),
   })
   .strict();
 
@@ -96,7 +125,7 @@ const SpeechProviderIdSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .pipe(z.enum(["openai", "local"]));
+  .pipe(z.enum(["openai", "local", "volcengine"]));
 
 const FeatureDictationSchema = z
   .object({
