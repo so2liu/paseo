@@ -261,6 +261,12 @@ The owner's standalone macOS daemon is normally owned by the
   `launchd -> paseo daemon start --foreground -> Paseo Supervisor -> Paseo Daemon`.
   Confirm that the launchd `runs` counter and all PIDs remain stable before
   declaring the upgrade complete.
+- **Do not use `daemonVersion` as the readiness check for a fork upgrade.**
+  Consecutive fork commits usually carry the same workspace version, so old and
+  new both report e.g. `0.2.2+LY` and the check passes against a daemon that was
+  never replaced. Assert on the release path instead — that the running process
+  is the CLI under `~/paseo-releases/<new-commit>/`:
+  `pgrep -f "paseo-releases/<new-commit>/packages/cli/bin/paseo"`.
 
 ### Custom fork build identity
 
