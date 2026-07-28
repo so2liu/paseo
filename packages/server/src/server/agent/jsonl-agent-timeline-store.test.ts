@@ -261,6 +261,52 @@ describe("JsonlAgentTimelineStore", () => {
     expect(readFile).toHaveBeenCalledTimes(1);
   });
 
+  it("enforces the byte budget as cached agents grow by appending", async () => {
+    const store = new JsonlAgentTimelineStore({
+      directory,
+      logger: createTestLogger(),
+      cacheBytes: 40_000,
+    });
+    await store.ensureEpoch("a", "epoch-a");
+    await store.ensureEpoch("b", "epoch-b");
+    await store.bulkInsert("a", [row(1, "small")]);
+    await store.bulkInsert("b", [row(1, "small")]);
+
+    // Both agents are cached and under budget. Streaming agents stay cached, so
+    // their growth is only ever visible on the append path; without eviction
+    // there the budget would never be applied again.
+    const big = "y".repeat(20_000);
+    await store.bulkInsert("b", [row(2, big), row(3, big)]);
+    await store.flush();
+
+    const readFile = vi.spyOn(fs, "readFile");
+    await store.getCommittedRows("b");
+    expect(readFile).not.toHaveBeenCalled();
+    await store.getCommittedRows("a");
+    expect(readFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts multi-byte characters at their encoded size", async () => {
+    const store = new JsonlAgentTimelineStore({
+      directory,
+      logger: createTestLogger(),
+      cacheBytes: 40_000,
+    });
+    await store.ensureEpoch("a", "epoch-a");
+    await store.ensureEpoch("b", "epoch-b");
+    await store.bulkInsert("a", [row(1, "small")]);
+    await store.bulkInsert("b", [row(1, "small")]);
+
+    // 15k CJK characters are ~45 KB of UTF-8 but only 15k JS string units, so
+    // measuring string length would leave this comfortably "under" budget.
+    await store.bulkInsert("b", [row(2, "历".repeat(15_000))]);
+    await store.flush();
+
+    const readFile = vi.spyOn(fs, "readFile");
+    await store.getCommittedRows("a");
+    expect(readFile).toHaveBeenCalledTimes(1);
+  });
+
   it("does not let an agent id escape the timeline directory", async () => {
     const store = createStore();
     await store.ensureEpoch("../escaped", "epoch-1");

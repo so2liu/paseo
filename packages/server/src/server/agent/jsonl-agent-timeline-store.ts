@@ -44,7 +44,11 @@ interface LoadedTimeline {
    * append rows that collide with the ones already committed on disk.
    */
   readable: boolean;
-  /** Serialized size of the log this was parsed from, used to bound the cache. */
+  /**
+   * UTF-8 size of the log this was parsed from, used to bound the cache. String
+   * length would undercount by up to 3x on non-Latin text, which is exactly the
+   * content most likely to fill the budget.
+   */
   bytes: number;
 }
 
@@ -172,8 +176,11 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
     const payload = fresh.map(serializeRow).join("");
     loaded.rows.push(...fresh.map(cloneRow));
     // Keep the size estimate current as the log grows, or a long-running agent
-    // would stay counted at whatever it weighed when first read.
-    loaded.bytes += payload.length;
+    // would stay counted at whatever it weighed when first read. Streaming
+    // agents stay cache-resident, so this is the only place their growth is
+    // ever observed — the budget has to be enforced here too.
+    loaded.bytes += Buffer.byteLength(payload, "utf8");
+    this.evictOverflow();
     await this.enqueueWrite(agentId, async () => {
       await fs.appendFile(this.filePath(agentId), payload, "utf8");
     });
@@ -385,7 +392,12 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
       this.logger.warn({ agentId, skipped }, "Skipped unreadable durable timeline rows");
     }
 
-    return { epoch: header.epoch, rows, readable: true, bytes: contents.length };
+    return {
+      epoch: header.epoch,
+      rows,
+      readable: true,
+      bytes: Buffer.byteLength(contents, "utf8"),
+    };
   }
 
   private async readHeader(agentId: string): Promise<TimelineFileHeader | null> {
