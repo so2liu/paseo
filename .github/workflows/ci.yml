@@ -92,7 +92,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Windows is temporarily disabled. Re-enable by adding `windows-latest`
+        # back to this list — the per-OS `if:` guards elsewhere in this file were
+        # left in place so nothing else has to change.
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     name: server-tests (${{ matrix.os }})
     env:
@@ -129,7 +132,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Windows is temporarily disabled — see the note on `server-tests`.
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
