@@ -38,6 +38,12 @@ interface TimelineFileHeader {
 interface LoadedTimeline {
   epoch: string;
   rows: AgentTimelineRow[];
+  /**
+   * False when the log exists but could not be read. An unreadable log is not
+   * an absent one: treating it as empty would restart sequence numbering and
+   * append rows that collide with the ones already committed on disk.
+   */
+  readable: boolean;
 }
 
 export interface JsonlAgentTimelineStoreOptions {
@@ -127,6 +133,12 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
       return;
     }
     const loaded = await this.load(agentId);
+    if (!loaded.readable) {
+      throw new Error(
+        `Refusing to append to an unreadable timeline log for agent '${agentId}': ` +
+          "its committed sequence numbers are unknown",
+      );
+    }
     // Replaying an already-committed seq would duplicate rows on disk. This
     // happens when provider hydration re-streams history the cache already has.
     const lastSeq = loaded.rows.at(-1)?.seq ?? 0;
@@ -190,9 +202,16 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
   }
 
   async ensureEpoch(agentId: string, epoch: string): Promise<void> {
-    if (await this.readHeader(agentId)) {
+    const loaded = await this.load(agentId);
+    if (loaded.epoch) {
       return;
     }
+    if (!loaded.readable) {
+      // The log is there but unreadable. Overwriting it would destroy committed
+      // history, and adopting this epoch would restart sequence numbering.
+      return;
+    }
+    let adopted = false;
     await this.enqueueWrite(agentId, async () => {
       // Re-check inside the chain: a concurrent ensureEpoch may have won.
       if (await this.readHeaderFromDisk(agentId)) {
@@ -201,14 +220,23 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
       const header: TimelineFileHeader = { v: TIMELINE_FILE_VERSION, agentId, epoch };
       await fs.mkdir(this.directory, { recursive: true });
       await fs.writeFile(this.filePath(agentId), `${JSON.stringify(header)}\n`, "utf8");
+      adopted = true;
     });
-    this.cache.set(agentId, { epoch, rows: [] });
+    if (!adopted) {
+      // Someone else's header is on disk. Caching this epoch with no rows would
+      // make the next append reuse sequence numbers that are already committed.
+      this.cache.delete(agentId);
+      return;
+    }
+    this.cache.set(agentId, { epoch, rows: [], readable: true });
     this.evictOverflow();
   }
 
   async hasCommitted(agentId: string): Promise<boolean> {
     const loaded = await this.load(agentId);
-    return loaded.rows.length > 0;
+    // An unreadable log cannot answer a history read, so the caller falls back
+    // to loading the agent instead of being handed a silently empty timeline.
+    return loaded.readable && loaded.rows.length > 0;
   }
 
   async deleteAgent(agentId: string): Promise<void> {
@@ -266,6 +294,11 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
     if (raced) {
       return raced;
     }
+    // Never cache a failed read: a transient error would otherwise stick around
+    // as a fake empty timeline, and recovery would wait for LRU eviction.
+    if (!loaded.readable) {
+      return loaded;
+    }
     this.cache.set(agentId, loaded);
     this.evictOverflow();
     return loaded;
@@ -276,17 +309,21 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
     try {
       contents = await fs.readFile(this.filePath(agentId), "utf8");
     } catch (error) {
-      if (!isMissingFileError(error)) {
-        this.logger.error({ err: error, agentId }, "Failed to read durable agent timeline");
+      if (isMissingFileError(error)) {
+        return { epoch: "", rows: [], readable: true };
       }
-      return { epoch: "", rows: [] };
+      this.logger.error({ err: error, agentId }, "Failed to read durable agent timeline");
+      return { epoch: "", rows: [], readable: false };
     }
 
     const lines = contents.split("\n");
     const header = lines.length > 0 ? parseHeader(lines[0]) : null;
     if (!header) {
       this.logger.warn({ agentId }, "Durable agent timeline has no readable header; ignoring file");
-      return { epoch: "", rows: [] };
+      // Readable, just not usable: the content is known-bad, so ensureEpoch is
+      // free to rewrite the file from scratch. That is distinct from an I/O
+      // error, where the real content is unknown and must not be clobbered.
+      return { epoch: "", rows: [], readable: true };
     }
 
     const rows: AgentTimelineRow[] = [];
@@ -309,7 +346,7 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
       this.logger.warn({ agentId, skipped }, "Skipped unreadable durable timeline rows");
     }
 
-    return { epoch: header.epoch, rows };
+    return { epoch: header.epoch, rows, readable: true };
   }
 
   private async readHeader(agentId: string): Promise<TimelineFileHeader | null> {

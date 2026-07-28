@@ -178,6 +178,30 @@ test("rebuilds a readable log after force hydration wipes it", async () => {
   expect(timeline.epoch).toBe(liveEpoch);
 });
 
+test("reports a seeded assistant response once, not twice", async () => {
+  const first = createHarness();
+  await first.manager.createAgent({ provider: "codex", cwd: root }, AGENT_ID, {
+    workspaceId: "workspace-1",
+  });
+  // A timeline that is nothing but assistant chunks: the live segment then
+  // reaches index 0, which used to be read as "older history may precede this".
+  await first.manager.appendTimelineItem(AGENT_ID, { type: "assistant_message", text: "ALPHA" });
+  await first.manager.closeAgent(AGENT_ID);
+  await first.manager.flushForShutdown();
+  await first.manager.flushCommittedTimelines();
+
+  const restarted = createHarness();
+  const record = await restarted.storage.get(AGENT_ID);
+  if (!record?.persistence) {
+    throw new Error("expected a persistence handle for the stored agent");
+  }
+  await restarted.manager.resumeAgentFromPersistence(record.persistence, {}, AGENT_ID);
+
+  // The live timeline is seeded from the durable log, so both stores hold the
+  // same rows. Concatenating them would report the answer twice.
+  expect(await restarted.manager.getLastAssistantMessage(AGENT_ID)).toBe("ALPHA");
+});
+
 test("seeds a resumed agent from the durable log instead of replaying provider history", async () => {
   const first = createHarness();
   await first.manager.createAgent({ provider: "codex", cwd: root }, AGENT_ID, {

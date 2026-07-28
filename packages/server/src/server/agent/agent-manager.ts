@@ -2487,15 +2487,8 @@ export class AgentManager {
   private getLastAssistantMessageFromTimeline(
     timeline: readonly AgentTimelineItem[],
   ): string | null {
-    return this.getLastAssistantMessageSegmentFromTimeline(timeline)?.text ?? null;
-  }
-
-  private getLastAssistantMessageSegmentFromTimeline(
-    timeline: readonly AgentTimelineItem[],
-  ): { text: string; startsAtBeginning: boolean } | null {
     // Collect the last contiguous assistant messages (Claude streams chunks)
     const chunks: string[] = [];
-    let startsAtBeginning = false;
     for (let i = timeline.length - 1; i >= 0; i--) {
       const item = timeline[i];
       if (item.type !== "assistant_message") {
@@ -2505,41 +2498,28 @@ export class AgentManager {
         continue;
       }
       chunks.push(item.text);
-      startsAtBeginning = i === 0;
     }
 
     if (!chunks.length) {
       return null;
     }
 
-    return {
-      text: chunks.toReversed().join(""),
-      startsAtBeginning,
-    };
+    return chunks.toReversed().join("");
   }
 
   private async getLastAssistantMessageFromStores(agentId: string): Promise<string | null> {
-    const liveTimeline = this.timelineStore.getItems(agentId);
-    const liveSegment = this.getLastAssistantMessageSegmentFromTimeline(liveTimeline);
-    if (!this.durableTimelineStore) {
-      return liveSegment?.text ?? null;
+    // A registered agent's live timeline is seeded with every committed row, so
+    // it is the complete history rather than a suffix of the durable log. That
+    // makes it authoritative here, and keeps this answer consistent with what
+    // fetchTimeline serves. Reaching for the durable store only makes sense
+    // when nothing is in memory at all.
+    const liveMessage = this.getLastAssistantMessageFromTimeline(
+      this.timelineStore.getItems(agentId),
+    );
+    if (liveMessage !== null) {
+      return liveMessage;
     }
-
-    if (!liveSegment) {
-      return await this.durableTimelineStore.getLastAssistantMessage(agentId);
-    }
-
-    if (!liveSegment.startsAtBeginning) {
-      return liveSegment.text;
-    }
-
-    const lastDurableItem = await this.durableTimelineStore.getLastItem(agentId);
-    if (lastDurableItem?.type !== "assistant_message") {
-      return liveSegment.text;
-    }
-
-    const durableMessage = await this.durableTimelineStore.getLastAssistantMessage(agentId);
-    return durableMessage ? `${durableMessage}${liveSegment.text}` : liveSegment.text;
+    return (await this.durableTimelineStore?.getLastAssistantMessage(agentId)) ?? null;
   }
 
   private async getLastItemFromStores(agentId: string): Promise<AgentTimelineItem | null> {

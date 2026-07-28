@@ -160,6 +160,35 @@ describe("JsonlAgentTimelineStore", () => {
     expect(rows.map((entry) => entry.seq)).toEqual([1, 2, 3]);
   });
 
+  it("never renumbers rows after a transient read failure", async () => {
+    const writer = createStore();
+    await writer.ensureEpoch("agent-1", "epoch-1");
+    await writer.bulkInsert("agent-1", [row(1, "one"), row(2, "two")]);
+    await writer.flush();
+
+    const filePath = path.join(directory, "agent-1.jsonl");
+    await fs.chmod(filePath, 0o000);
+
+    // A daemon that cannot read the log must not conclude the agent has none:
+    // adopting a fresh epoch and restarting at seq 1 would append rows that
+    // collide with the committed ones, corrupting history permanently.
+    const store = createStore();
+    expect(await store.hasCommitted("agent-1")).toBe(false);
+    await store.ensureEpoch("agent-1", "epoch-2");
+    await expect(store.bulkInsert("agent-1", [row(1, "replayed")])).rejects.toThrow(/unreadable/);
+    await store.flush();
+
+    await fs.chmod(filePath, 0o644);
+    const contents = await fs.readFile(filePath, "utf8");
+    const lines = contents.split("\n").filter(Boolean);
+    expect(JSON.parse(lines[0]).epoch).toBe("epoch-1");
+    expect(lines.slice(1).map((line) => JSON.parse(line).seq)).toEqual([1, 2]);
+
+    // Once the file is readable again the store recovers without a restart.
+    expect(await store.hasCommitted("agent-1")).toBe(true);
+    expect(await store.getEpoch("agent-1")).toBe("epoch-1");
+  });
+
   it("does not let an agent id escape the timeline directory", async () => {
     const store = createStore();
     await store.ensureEpoch("../escaped", "epoch-1");
