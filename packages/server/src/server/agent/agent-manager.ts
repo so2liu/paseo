@@ -3334,8 +3334,18 @@ export class AgentManager {
           });
         }
       }
-    } catch {
-      // ignore history failures
+    } catch (error) {
+      // A stream that dies part-way leaves a truncated transcript. Committing
+      // that prefix would make the next load mistake it for the whole
+      // conversation and never hydrate again, so drop it and let the next
+      // attempt start over. The live timeline keeps the prefix: showing part of
+      // the history now beats showing none.
+      agent.historyPrimed = false;
+      await this.deleteCommittedTimeline(agent.id);
+      this.logger.warn(
+        { err: error, agentId: agent.id, provider: agent.provider },
+        "Provider history stream failed; discarded the partial durable backfill",
+      );
     }
 
     if (typeof broadcast !== "function" || !broadcast()) {

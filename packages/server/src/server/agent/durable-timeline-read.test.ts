@@ -14,6 +14,8 @@ import type {
   AgentResumeSessionOptions,
   AgentSession,
   AgentSessionConfig,
+  AgentStreamEvent,
+  AgentTimelineItem,
 } from "./agent-sdk-types.js";
 import { createTestAgentClients } from "../test-utils/fake-agent-client.js";
 
@@ -30,9 +32,29 @@ interface Harness {
 let root: string;
 
 /**
+ * Replays `events` and then dies, standing in for a provider whose transcript
+ * is truncated or whose process drops part-way through history streaming.
+ */
+function withFailingHistory(session: AgentSession, events: AgentTimelineItem[]): AgentSession {
+  return new Proxy(session, {
+    get(target, property) {
+      if (property !== "streamHistory") {
+        return Reflect.get(target, property, target);
+      }
+      return async function* streamHistory() {
+        for (const item of events) {
+          yield { type: "timeline", provider: target.provider, item } as AgentStreamEvent;
+        }
+        throw new Error("provider history stream died");
+      };
+    },
+  }) as AgentSession;
+}
+
+/**
  * Counts session resumes so a test can assert that a read never started one.
  */
-function createHarness(): Harness {
+function createHarness(harnessOptions: { failHistoryAfter?: AgentTimelineItem[] } = {}): Harness {
   const logger = createTestLogger();
   const storage = new AgentStorage(path.join(root, "agents"), logger);
   const baseClient = createTestAgentClients().codex;
@@ -55,7 +77,10 @@ function createHarness(): Harness {
       _options?: AgentResumeSessionOptions,
     ): Promise<AgentSession> => {
       resumes += 1;
-      return await baseClient.resumeSession(handle, overrides, launchContext);
+      const session = await baseClient.resumeSession(handle, overrides, launchContext);
+      return harnessOptions.failHistoryAfter
+        ? withFailingHistory(session, harnessOptions.failHistoryAfter)
+        : session;
     },
     fetchCatalog: async (options) => await baseClient.fetchCatalog(options),
     isAvailable: async () => await baseClient.isAvailable(),
@@ -200,6 +225,38 @@ test("reports a seeded assistant response once, not twice", async () => {
   // The live timeline is seeded from the durable log, so both stores hold the
   // same rows. Concatenating them would report the answer twice.
   expect(await restarted.manager.getLastAssistantMessage(AGENT_ID)).toBe("ALPHA");
+});
+
+test("does not freeze a truncated transcript in place when history streaming fails", async () => {
+  const first = createHarness();
+  await first.manager.createAgent({ provider: "codex", cwd: root }, AGENT_ID, {
+    workspaceId: "workspace-1",
+  });
+  await first.manager.closeAgent(AGENT_ID);
+  await first.manager.flushForShutdown();
+  await first.manager.flushCommittedTimelines();
+
+  // The provider dies after emitting part of its transcript. Persisting that
+  // prefix would make the next load treat it as the whole conversation, and
+  // the rest would stay missing across every later restart.
+  const failing = createHarness({
+    failHistoryAfter: [{ type: "user_message", text: "partial" }],
+  });
+  const record = await failing.storage.get(AGENT_ID);
+  if (!record?.persistence) {
+    throw new Error("expected a persistence handle for the stored agent");
+  }
+  await failing.manager.resumeAgentFromPersistence(record.persistence, {}, AGENT_ID);
+  await failing.manager.hydrateTimelineFromProvider(AGENT_ID);
+  await failing.manager.flushForShutdown();
+  await failing.manager.flushCommittedTimelines();
+
+  // The prefix did reach the live timeline, so the failure really did happen
+  // part-way rather than before the first row.
+  expect(failing.manager.getTimeline(AGENT_ID)).toEqual([
+    { type: "user_message", text: "partial" },
+  ]);
+  expect(await failing.manager.hasCommittedTimeline(AGENT_ID)).toBe(false);
 });
 
 test("seeds a resumed agent from the durable log instead of replaying provider history", async () => {
