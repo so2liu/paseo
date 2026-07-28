@@ -71,13 +71,23 @@ export interface AgentTimelineStore {
   /** True when the agent has a committed timeline that can be served without a provider process. */
   hasCommitted(agentId: string): Promise<boolean>;
   /**
-   * Record whether the committed rows are the whole conversation.
+   * Start a provider backfill: drop every committed row and mark the timeline
+   * incomplete, keeping the epoch.
    *
-   * Provider backfill streams rows one at a time, so a crash part-way leaves a
-   * real but truncated prefix. Without this the next start would mistake that
-   * prefix for the entire history and never ask the provider again.
+   * Replay assigns sequence numbers from 1, so it must never land on top of
+   * rows that are already there. Those can be a truncated prefix from an
+   * earlier failed backfill, or live rows the agent committed afterwards —
+   * either way the replayed and retained rows would claim the same slots and
+   * the result would be an interleaved timeline marked authoritative. The
+   * provider transcript is a superset of what is dropped here.
    */
-  setBackfillComplete(agentId: string, complete: boolean): Promise<void>;
+  beginBackfill(agentId: string): Promise<void>;
+  /**
+   * Mark the committed rows as the whole conversation. Until this lands, a
+   * crash part-way leaves a real but truncated prefix that the next start must
+   * not mistake for the entire history.
+   */
+  completeBackfill(agentId: string): Promise<void>;
   /** Wait for every queued write to reach disk. */
   flush(): Promise<void>;
 }

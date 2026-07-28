@@ -318,10 +318,28 @@ export class SqliteAgentTimelineStore implements AgentTimelineStore {
       .run(agentId, epoch);
   }
 
-  async setBackfillComplete(agentId: string, complete: boolean): Promise<void> {
+  async beginBackfill(agentId: string): Promise<void> {
+    // Clearing and marking incomplete belong to the same instant: a crash
+    // between them would leave rows that look authoritative but are about to be
+    // replaced.
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.prepare("DELETE FROM agent_timeline_rows WHERE agent_id = ?").run(agentId);
+      this.db
+        .prepare("UPDATE agent_timelines SET backfill_complete = 0 WHERE agent_id = ?")
+        .run(agentId);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      this.logger.error({ err: error, agentId }, "Failed to start agent timeline backfill");
+      throw error;
+    }
+  }
+
+  async completeBackfill(agentId: string): Promise<void> {
     this.db
-      .prepare("UPDATE agent_timelines SET backfill_complete = ? WHERE agent_id = ?")
-      .run(complete ? 1 : 0, agentId);
+      .prepare("UPDATE agent_timelines SET backfill_complete = 1 WHERE agent_id = ?")
+      .run(agentId);
   }
 
   async hasCommitted(agentId: string): Promise<boolean> {

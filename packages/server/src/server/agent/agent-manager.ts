@@ -3295,7 +3295,7 @@ export class AgentManager {
     await this.durableTimelineStore?.ensureEpoch(agent.id, this.timelineStore.getEpoch(agent.id));
     // Rows go in one at a time below, so the timeline is a prefix until they all
     // land. A crash in between must not leave that prefix looking authoritative.
-    await this.durableTimelineStore?.setBackfillComplete(agent.id, false);
+    await this.durableTimelineStore?.beginBackfill(agent.id);
     agent.historyPrimed = true;
 
     for (const event of this.providerSubagents.deleteParent(agent.id)) {
@@ -3323,7 +3323,7 @@ export class AgentManager {
         });
       }
     }
-    await this.durableTimelineStore?.setBackfillComplete(agent.id, true);
+    await this.durableTimelineStore?.completeBackfill(agent.id);
     this.touchUpdatedAt(agent);
     this.emitState(agent);
   }
@@ -3339,9 +3339,11 @@ export class AgentManager {
     }> = [];
     const providerSubagentEvents: AgentManagerEvent[] = [];
     agent.historyPrimed = true;
-    // Rows are committed one at a time as they stream, so until this finishes
-    // the durable timeline is only a prefix of the conversation.
-    await this.durableTimelineStore?.setBackfillComplete(agent.id, false);
+    // Replay numbers rows from 1, so it starts from an empty timeline: any
+    // truncated prefix from an earlier failed attempt, and any live rows the
+    // agent committed after that failure, would otherwise claim the same
+    // sequence numbers and interleave with the replayed history.
+    await this.durableTimelineStore?.beginBackfill(agent.id);
     try {
       for await (const event of agent.session.streamHistory()) {
         if (event.type === "provider_subagent") {
@@ -3377,7 +3379,7 @@ export class AgentManager {
       }
       // The stream ended on its own, so the committed rows are the whole
       // transcript and later loads can serve them without the provider.
-      await this.durableTimelineStore?.setBackfillComplete(agent.id, true);
+      await this.durableTimelineStore?.completeBackfill(agent.id);
     } catch (error) {
       // The backfill stays marked incomplete, which is enough: the committed
       // prefix is real and worth keeping, it just is not the whole story. The

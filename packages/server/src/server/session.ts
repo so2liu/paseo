@@ -3352,6 +3352,11 @@ export class Session {
       await unarchiveAgentState(this.agentStorage, this.agentManager, agentId);
       let snapshot: ManagedAgent;
       const existing = this.agentManager.getAgent(agentId);
+      // Read before loading: the loader backfills the log, after which this
+      // would always be true and could no longer tell the two cases apart.
+      const hadCommittedTimeline = existing
+        ? false
+        : await this.agentManager.hasCommittedTimeline(agentId);
       if (existing) {
         await this.interruptAgentIfRunning(agentId);
         snapshot = await this.agentManager.reloadAgentSession(agentId, undefined, {
@@ -3381,10 +3386,13 @@ export class Session {
       }
       await this.agentManager.hydrateTimelineFromProvider(agentId, {
         broadcast: true,
-        // A cold-loaded agent is seeded from its committed timeline, which marks
-        // history primed and would make hydration a no-op. Reload exists to
-        // re-read the provider transcript, so it has to force past the cache.
-        ...(existing ? {} : { force: true }),
+        // A cold-loaded agent seeded from committed rows has its history marked
+        // primed, so the loader's own hydration was a no-op and Reload has to
+        // force past the cache. An agent with nothing committed is the opposite:
+        // the loader already replayed the whole transcript, and forcing would
+        // replay it a second time — doubling the very wait this cache exists to
+        // remove, for exactly the agents that predate it.
+        ...(existing || !hadCommittedTimeline ? {} : { force: true }),
       });
       await this.agentUpdates.forwardLiveAgent(snapshot);
       const timelineSize = this.agentManager.getTimeline(agentId).length;

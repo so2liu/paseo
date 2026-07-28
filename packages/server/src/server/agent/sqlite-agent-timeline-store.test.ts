@@ -148,7 +148,7 @@ describe("SqliteAgentTimelineStore", () => {
   it("treats an unfinished backfill as no committed timeline", async () => {
     const writer = createStore();
     await writer.ensureEpoch(AGENT, EPOCH);
-    await writer.setBackfillComplete(AGENT, false);
+    await writer.beginBackfill(AGENT);
     await writer.bulkInsert(AGENT, [row(1, "first half")]);
     writer.close();
 
@@ -160,8 +160,33 @@ describe("SqliteAgentTimelineStore", () => {
     expect(await restarted.getEpoch(AGENT)).toBe(EPOCH);
     expect(await restarted.getCommittedRows(AGENT)).toHaveLength(1);
 
-    await restarted.setBackfillComplete(AGENT, true);
+    await restarted.completeBackfill(AGENT);
     expect(await restarted.hasCommitted(AGENT)).toBe(true);
+  });
+
+  it("clears retained rows so a replay cannot interleave with them", async () => {
+    const store = createStore();
+    await store.ensureEpoch(AGENT, EPOCH);
+    // A failed backfill left seq 1, then the still-usable agent committed a
+    // live message at seq 2 while the timeline stayed incomplete.
+    await store.beginBackfill(AGENT);
+    await store.bulkInsert(AGENT, [row(1, "history one")]);
+    await store.bulkInsert(AGENT, [row(2, "live message sent after the failure")]);
+
+    // Replay numbers from 1 again. Without clearing, seq 2 is already taken by
+    // the live message, so the replayed second history item would be dropped
+    // and the live message would sit in the middle of the transcript.
+    await store.beginBackfill(AGENT);
+    expect(await store.getCommittedRows(AGENT)).toEqual([]);
+    expect(await store.getEpoch(AGENT)).toBe(EPOCH);
+
+    await store.bulkInsert(AGENT, [row(1, "history one"), row(2, "history two")]);
+    await store.completeBackfill(AGENT);
+
+    expect((await store.getCommittedRows(AGENT)).map((entry) => entry.item)).toEqual([
+      { type: "assistant_message", text: "history one" },
+      { type: "assistant_message", text: "history two" },
+    ]);
   });
 
   it("counts a never-backfilled timeline as complete", async () => {
