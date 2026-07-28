@@ -105,6 +105,8 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
   private readonly cache = new Map<string, LoadedTimeline>();
   /** Per-agent write chain. Serializes appends so lines never interleave. */
   private readonly writeChains = new Map<string, Promise<void>>();
+  /** Per-agent read in progress, so concurrent callers share one disk read. */
+  private readonly inFlightLoads = new Map<string, Promise<LoadedTimeline>>();
 
   constructor(options: JsonlAgentTimelineStoreOptions) {
     this.directory = options.directory;
@@ -283,17 +285,29 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
       return cached;
     }
 
+    // Appends are fire-and-forget, so a burst of rows arriving while this agent
+    // is out of the LRU would otherwise each reparse the whole log. One read
+    // per agent at a time; everyone else waits for it.
+    const inFlight = this.inFlightLoads.get(agentId);
+    if (inFlight) {
+      return await inFlight;
+    }
+
+    const load = this.loadUncached(agentId);
+    this.inFlightLoads.set(agentId, load);
+    try {
+      return await load;
+    } finally {
+      this.inFlightLoads.delete(agentId);
+    }
+  }
+
+  private async loadUncached(agentId: string): Promise<LoadedTimeline> {
     // Rows appended while the agent was cached are written by a queued task. A
     // cold read must not observe the file before those land.
     await this.writeChains.get(agentId);
 
     const loaded = await this.readFromDisk(agentId);
-    // A concurrent load may have populated the cache while this one was
-    // reading; that entry may already carry appended rows, so keep it.
-    const raced = this.cache.get(agentId);
-    if (raced) {
-      return raced;
-    }
     // Never cache a failed read: a transient error would otherwise stick around
     // as a fake empty timeline, and recovery would wait for LRU eviction.
     if (!loaded.readable) {

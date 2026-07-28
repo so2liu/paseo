@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import type { AgentTimelineRow } from "./agent-timeline-store-types.js";
 import { JsonlAgentTimelineStore } from "./jsonl-agent-timeline-store.js";
@@ -26,6 +26,7 @@ describe("JsonlAgentTimelineStore", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await fs.rm(directory, { recursive: true, force: true });
   });
 
@@ -187,6 +188,35 @@ describe("JsonlAgentTimelineStore", () => {
     // Once the file is readable again the store recovers without a restart.
     expect(await store.hasCommitted("agent-1")).toBe(true);
     expect(await store.getEpoch("agent-1")).toBe("epoch-1");
+  });
+
+  it("reads the log once when concurrent appends arrive on a cold cache", async () => {
+    const writer = createStore();
+    await writer.ensureEpoch("agent-1", "epoch-1");
+    await writer.bulkInsert(
+      "agent-1",
+      Array.from({ length: 50 }, (_, index) => row(index + 1, `row ${index}`)),
+    );
+    await writer.flush();
+
+    // A fresh store stands in for an agent evicted from the read cache while it
+    // is still streaming. Appends are fire-and-forget, so they land together.
+    const store = createStore();
+    const readFile = vi.spyOn(fs, "readFile");
+    await Promise.all(
+      [51, 52, 53, 54, 55].map((seq) => store.bulkInsert("agent-1", [row(seq, `new ${seq}`)])),
+    );
+    await store.flush();
+
+    const reads = readFile.mock.calls.filter((call) =>
+      String(call[0]).endsWith("agent-1.jsonl"),
+    ).length;
+    expect(reads).toBe(1);
+
+    const reader = createStore();
+    expect((await reader.getCommittedRows("agent-1")).map((entry) => entry.seq)).toEqual(
+      Array.from({ length: 55 }, (_, index) => index + 1),
+    );
   });
 
   it("does not let an agent id escape the timeline directory", async () => {
