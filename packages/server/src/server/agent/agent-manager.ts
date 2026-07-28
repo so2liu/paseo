@@ -3275,6 +3275,10 @@ export class AgentManager {
     await this.deleteCommittedTimeline(agent.id);
     this.timelineStore.delete(agent.id);
     this.timelineStore.initialize(agent.id, { timestamp: new Date().toISOString() });
+    // Publish the freshly minted epoch before any row is appended. Without a
+    // header the rebuilt log is unreadable, so every rewound conversation would
+    // silently lose its durable fast path on the next daemon start.
+    await this.durableTimelineStore?.ensureEpoch(agent.id, this.timelineStore.getEpoch(agent.id));
     agent.historyPrimed = true;
 
     for (const event of this.providerSubagents.deleteParent(agent.id)) {

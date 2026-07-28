@@ -3379,7 +3379,13 @@ export class Session {
           logger: this.sessionLogger,
         });
       }
-      await this.agentManager.hydrateTimelineFromProvider(agentId, { broadcast: true });
+      await this.agentManager.hydrateTimelineFromProvider(agentId, {
+        broadcast: true,
+        // A cold-loaded agent is seeded from its committed timeline, which marks
+        // history primed and would make hydration a no-op. Reload exists to
+        // re-read the provider transcript, so it has to force past the cache.
+        ...(existing ? {} : { force: true }),
+      });
       await this.agentUpdates.forwardLiveAgent(snapshot);
       const timelineSize = this.agentManager.getTimeline(agentId).length;
       if (requestId) {

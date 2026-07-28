@@ -152,6 +152,32 @@ test("resumes the committed epoch and sequence after a restart", async () => {
   expect(timeline.window.nextSeq).toBe(2);
 });
 
+test("rebuilds a readable log after force hydration wipes it", async () => {
+  const harness = createHarness();
+  await harness.manager.createAgent({ provider: "codex", cwd: root }, AGENT_ID, {
+    workspaceId: "workspace-1",
+  });
+  await harness.manager.appendTimelineItem(AGENT_ID, { type: "user_message", text: "before" });
+  await harness.manager.flushCommittedTimelines();
+
+  // Rewind takes this path: it deletes the log, mints a fresh epoch, and
+  // re-streams provider history into it.
+  await harness.manager.hydrateTimelineFromProvider(AGENT_ID, { force: true });
+  await harness.manager.flushForShutdown();
+  await harness.manager.flushCommittedTimelines();
+
+  const liveEpoch = harness.manager.fetchTimeline(AGENT_ID, { direction: "tail", limit: 1 }).epoch;
+
+  // Appending rows to a header-less file would make the whole log unreadable on
+  // the next start, silently dropping this agent back to the slow path.
+  const reader = createHarness();
+  expect(await reader.manager.hasCommittedTimeline(AGENT_ID)).toBe(
+    harness.manager.fetchTimeline(AGENT_ID, { direction: "tail", limit: 0 }).rows.length > 0,
+  );
+  const timeline = await reader.manager.fetchCommittedTimeline(AGENT_ID);
+  expect(timeline.epoch).toBe(liveEpoch);
+});
+
 test("seeds a resumed agent from the durable log instead of replaying provider history", async () => {
   const first = createHarness();
   await first.manager.createAgent({ provider: "codex", cwd: root }, AGENT_ID, {
