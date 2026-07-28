@@ -24,46 +24,26 @@ This repository is our fork of `getpaseo/paseo`, customized according to the own
 
 ### Resolving an upstream sync
 
-A sync merge is mostly mechanical, but the failures are silent — a dropped dependency
-or a broken type shows up long after the merge looks clean. Work in this order.
+The full procedure — choosing the base tag, per-conflict handling, the verification
+order, and the customization checklist — is in
+[docs/upstream-sync.md](docs/upstream-sync.md). Read it before starting a sync. The
+rules that are easiest to violate without noticing:
 
-- **Never resolve a conflict with `git checkout --theirs <file>` (or `--ours`).** It
-  replaces the **entire file**, not the conflicting hunks, so every fork change
-  elsewhere in that file is discarded without a warning. The `v0.2.3` sync lost
-  `packages/app`'s `mermaid` dependency and `build:mermaid-webview` scripts this
-  way — the conflict was one version line, but the whole file was swapped. Edit the
-  conflict markers directly and keep the rest of the merged content.
-  `--theirs` is only safe when the file is entirely upstream's and the fork has never
-  touched it — prove it with `git log v<base>..HEAD -- <file>` first, as with
-  `CHANGELOG.md`.
-- **Version-only conflicts still take the upstream number.** All `package.json`
-  versions follow upstream (see [docs/development.md](docs/development.md#custom-fork-build-identity)) — just change the
-  version lines rather than the file.
-- **For `package-lock.json`, take upstream's and then run `npm install`.** That
-  reconciles the lockfile against the merged manifests and restores fork-only
-  dependencies. Confirm afterwards that the fork dependency is back in all three
-  places: the manifest, the lockfile, and `node_modules`.
-- **Rebuild the whole stack before believing a type error.** `npm run build:client`
-  does not rebuild `relay` or `highlight`, so their stale `dist` declarations produce
-  errors in files that neither side edited — during this sync, `relay-transport.ts`
-  and `daemon-client-relay-e2ee-transport.ts` both failed that way and were fine after
-  `npm run build:server`. Diagnose only after a full rebuild.
-- **Expect semantic conflicts that Git merges cleanly.** When upstream adds a required
-  field to a type and the fork has customized a fixture or caller for it, the merge
-  succeeds and the types break. `npm run typecheck` is what catches these, so it is
-  mandatory after a sync, not optional. `strategy-web.test.tsx` needed upstream's new
-  `olderHistoryProgressKey` added to the two fixtures we had customized.
+- **Never resolve a conflict with `git checkout --theirs` (or `--ours`).** It replaces
+  the entire file, not the conflicting hunks, so fork changes elsewhere in that file
+  are discarded silently. Edit the conflict markers instead.
+- **Run `npm run build:server` before believing any type error.** `build:client` does
+  not rebuild `relay` or `highlight`, and their stale declarations produce errors in
+  files neither side touched.
+- **`npm run typecheck` is mandatory after a sync**, because Git merges semantic
+  conflicts cleanly — upstream adds a required field, our customized fixture lacks it,
+  and nothing complains until typecheck runs.
 - **When upstream fixes the same bug we did, compare the actual values before
-  deferring.** The rule to prefer upstream's implementation assumes it covers our
-  behavior. Upstream's `v0.2.3` raised the idle-agent TTL from 2 minutes to 30, but the
-  owner asked for a full hour — so our fix was not redundant and stayed. The sweep
-  interval in the same hunk was never ours, and took upstream's value.
-- **Verify the customizations survived, explicitly.** Grep for each one after the merge
-  rather than assuming: the Volcengine STT provider, the SQLite timeline store, the
-  `mermaid` dependency, `so2liu` in `electron-builder.yml`, the fork's Expo project ID
-  in `app.config.js`, and the one-hour idle TTL.
-- **The LY counter restarts when the upstream base moves.** After syncing to `0.2.3`,
-  the next fork release is `v0.2.3-LY.1`, not `LY.3`.
+  deferring.** Preferring upstream assumes it covers our behavior; verify that it does.
+- **Keep the sync PR faithful.** Don't fix upstream's bugs inside it — that hides what
+  changed and creates fork-only divergence that re-conflicts on every future sync.
+- **The LY counter restarts when the upstream base moves** — after syncing to `0.2.3`,
+  the next fork release is `v0.2.3-LY.1`.
 
 ### Two delivery channels, and why owner machines report an upstream version
 
@@ -118,6 +98,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/custom-providers.md](docs/custom-providers.md)               | Custom provider config: Z.AI, Alibaba/Qwen, ACP agents, profiles, custom binaries                                              |
 | [docs/service-proxy.md](docs/service-proxy.md)                     | Service proxy: exposing workspace scripts at public URLs, DNS setup, reverse proxy config                                      |
 | [docs/development.md](docs/development.md)                         | Dev server, build sync gotchas, CLI reference, agent state, Playwright MCP                                                     |
+| [docs/upstream-sync.md](docs/upstream-sync.md)                     | Syncing from upstream — choosing the base tag, conflict handling, verification order, customization checklist                  |
 | [docs/rpc-namespacing.md](docs/rpc-namespacing.md)                 | WebSocket RPC naming convention — dotted namespaces and `.request`/`.response` pairs                                           |
 | [docs/protocol-validation.md](docs/protocol-validation.md)         | zod-aot generated inbound WebSocket validation, patched compiler regressions, schema-purity rules                              |
 | [docs/terminal-performance.md](docs/terminal-performance.md)       | Terminal latency pipeline, coalescing/backpressure invariants, benchmark + perf spec usage                                     |
