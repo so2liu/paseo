@@ -11,7 +11,7 @@ This repository is our fork of `getpaseo/paseo`, customized according to the own
 - Treat `so2liu/paseo` (`origin`) as our fork and `getpaseo/paseo` (`upstream`) as the upstream project.
 - Agents may commit completed, verified, in-scope work and push it to `origin` without waiting for a separate commit or push request. If the owner explicitly asks to keep changes local, leave them uncommitted, create a draft only, or not push, follow that instruction. Never push directly to `upstream`.
 - **Never push to `main` — not even a docs-only or one-line change.** Branch, push the branch, open a PR against `so2liu/paseo`, and let the automated review run. "The change is trivial" and "the owner asked me to push" are not exemptions; pushing means pushing a branch. Release tags are the one exception — `git push origin v0.2.2-LY.2` is a tag push, not a branch push, and is how [docs/fork-releases.md](docs/fork-releases.md) says to cut a release.
-- When the owner asks to pull, sync, or update from upstream, handle the Git operations for them and update from the latest upstream beta release tag, not from an arbitrary `upstream/main` commit. Fetch upstream tags and verify which GitHub prerelease is newest before choosing the base.
+- When the owner asks to pull, sync, or update from upstream, handle the Git operations for them and update from the **newest upstream release tag**, not from an arbitrary `upstream/main` commit. Fetch upstream tags and compare release dates before choosing the base. Upstream's newest release is often a stable, not a prerelease — as of `v0.2.3`, every remaining prerelease (`v0.2.0-beta.4` and older) was behind it, so picking "the latest beta" would have synced backwards. Prefer the newest tag whatever its channel.
 - Preserve our custom features and behavior when updating. Rebase, merge, or port the custom commits onto the selected beta as appropriate, and verify that the resulting tree still contains the intended customizations.
 - When both our fork and upstream contain a fix for the same bug, prefer the upstream implementation. Remove or adapt our redundant fix only after confirming that the upstream fix covers the same behavior; retain unrelated custom behavior.
 - Every daemon deployment and every iOS build or installation for the owner's iPhone must be produced from the current customized fork state. Never deploy an unmodified upstream checkout, upstream tag, or upstream prebuilt artifact in place of our customized version.
@@ -19,6 +19,49 @@ This repository is our fork of `getpaseo/paseo`, customized according to the own
 - Treat owner fleet upgrades as a matched deployment unless the owner explicitly narrows the scope: update the Linux daemon on `box`, and update both the macOS Desktop app and the separately installed macOS daemon on every targeted owner Mac, all from the same customized-fork commit. Installing the Desktop app alone does not update an already-running external daemon.
 - **On a Mac, any Paseo "update" or "upgrade" means a whole-machine upgrade: Desktop app plus the separately installed daemon/CLI.** This applies even when the request calls out one component, such as "upgrade the local daemon"; naming a component identifies the immediate concern but does not narrow the deployment. Only an explicit exclusion such as "only upgrade the daemon; do not upgrade Desktop" narrows the scope.
 - For a whole-machine Mac upgrade, rebuild the client app (`packages/app`) and Desktop wrapper (`packages/desktop`) into the macOS Desktop app, install `/Applications/Paseo.app`, and upgrade the separately installed macOS daemon/CLI from the same customized-fork commit. Restart the daemon and verify the installed Desktop app plus CLI/daemon versions. The upgrade is not complete after replacing only the app, only the Desktop wrapper, or only the daemon.
+
+### Resolving an upstream sync
+
+A sync merge is mostly mechanical, but the failures are silent — a dropped dependency
+or a broken type shows up long after the merge looks clean. Work in this order.
+
+- **Never resolve a conflict with `git checkout --theirs <file>` (or `--ours`).** It
+  replaces the **entire file**, not the conflicting hunks, so every fork change
+  elsewhere in that file is discarded without a warning. The `v0.2.3` sync lost
+  `packages/app`'s `mermaid` dependency and `build:mermaid-webview` scripts this
+  way — the conflict was one version line, but the whole file was swapped. Edit the
+  conflict markers directly and keep the rest of the merged content.
+  `--theirs` is only safe when the file is entirely upstream's and the fork has never
+  touched it — prove it with `git log v<base>..HEAD -- <file>` first, as with
+  `CHANGELOG.md`.
+- **Version-only conflicts still take the upstream number.** All `package.json`
+  versions follow upstream (see [docs/development.md](docs/development.md#custom-fork-build-identity)) — just change the
+  version lines rather than the file.
+- **For `package-lock.json`, take upstream's and then run `npm install`.** That
+  reconciles the lockfile against the merged manifests and restores fork-only
+  dependencies. Confirm afterwards that the fork dependency is back in all three
+  places: the manifest, the lockfile, and `node_modules`.
+- **Rebuild the whole stack before believing a type error.** `npm run build:client`
+  does not rebuild `relay` or `highlight`, so their stale `dist` declarations produce
+  errors in files that neither side edited — during this sync, `relay-transport.ts`
+  and `daemon-client-relay-e2ee-transport.ts` both failed that way and were fine after
+  `npm run build:server`. Diagnose only after a full rebuild.
+- **Expect semantic conflicts that Git merges cleanly.** When upstream adds a required
+  field to a type and the fork has customized a fixture or caller for it, the merge
+  succeeds and the types break. `npm run typecheck` is what catches these, so it is
+  mandatory after a sync, not optional. `strategy-web.test.tsx` needed upstream's new
+  `olderHistoryProgressKey` added to the two fixtures we had customized.
+- **When upstream fixes the same bug we did, compare the actual values before
+  deferring.** The rule to prefer upstream's implementation assumes it covers our
+  behavior. Upstream's `v0.2.3` raised the idle-agent TTL from 2 minutes to 30, but the
+  owner asked for a full hour — so our fix was not redundant and stayed. The sweep
+  interval in the same hunk was never ours, and took upstream's value.
+- **Verify the customizations survived, explicitly.** Grep for each one after the merge
+  rather than assuming: the Volcengine STT provider, the SQLite timeline store, the
+  `mermaid` dependency, `so2liu` in `electron-builder.yml`, the fork's Expo project ID
+  in `app.config.js`, and the one-hour idle TTL.
+- **The LY counter restarts when the upstream base moves.** After syncing to `0.2.3`,
+  the next fork release is `v0.2.3-LY.1`, not `LY.3`.
 
 ### Two delivery channels, and why owner machines report an upstream version
 
