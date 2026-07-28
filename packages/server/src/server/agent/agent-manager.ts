@@ -2941,6 +2941,30 @@ export class AgentManager {
     return await this.durableTimelineStore.fetchCommitted(agentId, options);
   }
 
+  /**
+   * Read a timeline for an agent that was live when the caller looked, but may
+   * not be by the time it reads.
+   *
+   * Idle collection can retire a runtime at any moment, and `fetchTimeline`
+   * throws once the agent is gone. Failing the read would contradict the point
+   * of the committed log: the rows are on disk, and serving them needs no
+   * runtime at all.
+   */
+  async readLiveOrCommittedTimeline(
+    agentId: string,
+    options?: AgentTimelineFetchOptions,
+  ): Promise<AgentTimelineFetchResult> {
+    if (this.agents.has(agentId)) {
+      return this.fetchTimeline(agentId, options);
+    }
+    if (await this.hasCommittedTimeline(agentId)) {
+      return await this.fetchCommittedTimeline(agentId, options);
+    }
+    // Nothing durable to fall back to, so surface the same error as before
+    // rather than inventing an empty conversation.
+    return this.fetchTimeline(agentId, options);
+  }
+
   async hasCommittedTimeline(agentId: string): Promise<boolean> {
     if (!this.durableTimelineStore) {
       return false;

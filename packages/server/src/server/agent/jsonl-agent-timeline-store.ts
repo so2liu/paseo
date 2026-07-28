@@ -343,26 +343,32 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
   }
 
   private async loadUncached(agentId: string): Promise<LoadedTimeline> {
-    const generation = this.cacheGenerations.get(agentId) ?? 0;
-    // Rows appended while the agent was cached are written by a queued task. A
-    // cold read must not observe the file before those land.
-    await this.writeChains.get(agentId);
+    for (;;) {
+      const generation = this.cacheGenerations.get(agentId) ?? 0;
+      // Rows appended while the agent was cached are written by a queued task.
+      // A cold read must not observe the file before those land.
+      await this.writeChains.get(agentId);
 
-    const loaded = await this.readFromDisk(agentId);
-    // Never cache a failed read: a transient error would otherwise stick around
-    // as a fake empty timeline, and recovery would wait for LRU eviction.
-    if (!loaded.readable) {
+      const loaded = await this.readFromDisk(agentId);
+
+      // The log was invalidated while this read was in flight, so what came
+      // back describes a file that is already gone. Returning it would be worse
+      // than not caching it: an append would trust its epoch and sequence
+      // numbers and rebuild the deleted file without a header. Read again to
+      // observe the state the invalidation left behind.
+      if ((this.cacheGenerations.get(agentId) ?? 0) !== generation) {
+        continue;
+      }
+
+      // Never cache a failed read: a transient error would otherwise stick
+      // around as a fake empty timeline, and recovery would wait for eviction.
+      if (!loaded.readable) {
+        return loaded;
+      }
+      this.cache.set(agentId, loaded);
+      this.evictOverflow();
       return loaded;
     }
-    // The log was invalidated while this read was in flight, so what came back
-    // describes a file that is already gone. Caching it would resurrect the old
-    // epoch and rows, and the next ensureEpoch would skip header creation.
-    if ((this.cacheGenerations.get(agentId) ?? 0) !== generation) {
-      return loaded;
-    }
-    this.cache.set(agentId, loaded);
-    this.evictOverflow();
-    return loaded;
   }
 
   /**

@@ -259,6 +259,28 @@ test("does not freeze a truncated transcript in place when history streaming fai
   expect(await failing.manager.hasCommittedTimeline(AGENT_ID)).toBe(false);
 });
 
+test("still serves history when the runtime is collected mid-read", async () => {
+  const harness = createHarness();
+  await harness.manager.createAgent({ provider: "codex", cwd: root }, AGENT_ID, {
+    workspaceId: "workspace-1",
+  });
+  await harness.manager.appendTimelineItem(AGENT_ID, { type: "user_message", text: "hello" });
+  await harness.manager.flushCommittedTimelines();
+
+  // A caller resolves the agent as live, then idle collection retires it before
+  // the read runs. Failing here would contradict the committed log's purpose:
+  // the rows are on disk and need no runtime to serve.
+  expect(harness.manager.getAgent(AGENT_ID)).not.toBeNull();
+  await harness.manager.closeAgent(AGENT_ID);
+  expect(harness.manager.getAgent(AGENT_ID)).toBeNull();
+
+  const timeline = await harness.manager.readLiveOrCommittedTimeline(AGENT_ID, {
+    direction: "tail",
+    limit: 200,
+  });
+  expect(timeline.rows.map((row) => row.item)).toEqual([{ type: "user_message", text: "hello" }]);
+});
+
 test("seeds a resumed agent from the durable log instead of replaying provider history", async () => {
   const first = createHarness();
   await first.manager.createAgent({ provider: "codex", cwd: root }, AGENT_ID, {

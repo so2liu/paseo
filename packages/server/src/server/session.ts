@@ -5964,7 +5964,8 @@ export class Session {
       return {
         provider: live.provider,
         agent: await this.buildAgentPayload(live),
-        readTimeline: async (options) => this.agentManager.fetchTimeline(agentId, options),
+        readTimeline: async (options) =>
+          this.agentManager.readLiveOrCommittedTimeline(agentId, options),
       };
     }
 

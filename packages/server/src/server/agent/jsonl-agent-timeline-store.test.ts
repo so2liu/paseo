@@ -336,6 +336,32 @@ describe("JsonlAgentTimelineStore", () => {
     expect(await store.getEpoch("agent-1")).toBe("epoch-new");
   });
 
+  it("refuses an append whose load was invalidated mid-flight", async () => {
+    const writer = createStore();
+    await writer.ensureEpoch("agent-1", "epoch-old");
+    await writer.bulkInsert("agent-1", [row(1, "one")]);
+    await writer.flush();
+    const original = await fs.readFile(path.join(directory, "agent-1.jsonl"), "utf8");
+
+    const store = createStore();
+    let release!: (contents: string) => void;
+    const stalled = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(fs, "readFile").mockReturnValueOnce(stalled as never);
+
+    const append = store.bulkInsert("agent-1", [row(2, "two")]);
+    await Promise.resolve();
+    await store.deleteAgent("agent-1");
+    release(original);
+
+    // Acting on the pre-deletion snapshot would queue this write after the
+    // removal and rebuild the file from rows alone, with no header.
+    await expect(append).rejects.toThrow(/header/);
+    await store.flush();
+    await expect(fs.access(path.join(directory, "agent-1.jsonl"))).rejects.toThrow();
+  });
+
   it("does not let an agent id escape the timeline directory", async () => {
     const store = createStore();
     await store.ensureEpoch("../escaped", "epoch-1");
