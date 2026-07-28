@@ -146,6 +146,15 @@ class InMemoryAgentManager {
     };
   }
 
+  // This agent is always live here, so reads never fall back to a committed log.
+  async readLiveOrCommittedTimeline() {
+    return this.fetchTimeline();
+  }
+
+  async hasCommittedTimeline() {
+    return false;
+  }
+
   listAgents() {
     return [];
   }
