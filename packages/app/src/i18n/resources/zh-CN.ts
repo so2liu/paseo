@@ -500,6 +500,7 @@ export const zhCN: TranslationResources = {
         openFor: "打开 {{label}} 的菜单",
         copyResumeCommand: "复制恢复命令",
         copyAgentId: "复制 Agent ID",
+        copyTerminalId: "复制 Terminal ID",
         copyFilePath: "Copy file path",
         downloadFile: "下载到本机",
         rename: "重命名",
@@ -538,6 +539,7 @@ export const zhCN: TranslationResources = {
       toasts: {
         copyFailed: "复制失败",
         agentIdCopiedLabel: "Agent ID",
+        terminalIdCopiedLabel: "Terminal ID",
         resumeCommandCopiedLabel: "恢复命令",
         filePathCopiedLabel: "File path",
         resumeIdUnavailable: "恢复 ID 不可用",

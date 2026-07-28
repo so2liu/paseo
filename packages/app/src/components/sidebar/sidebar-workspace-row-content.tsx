@@ -1,13 +1,7 @@
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  ActivityIndicator,
-  Pressable,
-  Text,
-  View,
-  type GestureResponderEvent,
-  type ViewStyle,
-} from "react-native";
+import { Pressable, Text, View, type GestureResponderEvent, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   Check,
@@ -56,7 +50,7 @@ const purpleColorMapping = (theme: Theme) => ({ color: theme.colors.palette.purp
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedCheck = withUnistyles(Check);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
-const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const ThemedMonitor = withUnistyles(Monitor);
@@ -256,7 +250,7 @@ function WorkspaceStatusIndicator({
   if (loading) {
     return (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-loading">
-        <ThemedActivityIndicator size={8} uniProps={foregroundMutedColorMapping} />
+        <ThemedLoadingSpinner size={8} uniProps={foregroundMutedColorMapping} />
       </View>
     );
   }
