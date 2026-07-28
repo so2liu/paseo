@@ -58,4 +58,18 @@ export interface AgentTimelineStore {
   getLastAssistantMessage(agentId: string): Promise<string | null>;
   deleteAgent(agentId: string): Promise<void>;
   bulkInsert(agentId: string, rows: readonly AgentTimelineRow[]): Promise<void>;
+  /**
+   * The durable store owns the timeline epoch whenever one is configured, so a
+   * daemon restart resumes the epoch clients already hold cursors against
+   * instead of minting a new one and forcing a full reset.
+   *
+   * Returns null when nothing has been committed for the agent yet.
+   */
+  getEpoch(agentId: string): Promise<string | null>;
+  /** Adopt `epoch` for an agent that has no committed timeline yet. */
+  ensureEpoch(agentId: string, epoch: string): Promise<void>;
+  /** True when the agent has a committed timeline that can be served without a provider process. */
+  hasCommitted(agentId: string): Promise<boolean>;
+  /** Wait for every queued write to reach disk. */
+  flush(): Promise<void>;
 }

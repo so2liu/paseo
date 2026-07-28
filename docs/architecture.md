@@ -99,7 +99,7 @@ Cross-platform React Native app that connects to one or more daemons.
 
 - Expo Router navigation (`/h/[serverId]/workspace/[workspaceId]`, `/h/[serverId]/agent/[agentId]`, etc.). The `workspaceId` URL segment is an opaque workspace id, not a directly meaningful filesystem path.
 - `HostRuntimeController` manages saved host connections, reconnection, and per-host runtime state
-- `runtime/replica-cache` keeps a non-authoritative per-host display replica in AsyncStorage: only the last focused agent, its workspace, and a short timeline tail. It restores before navigation becomes ready, leaves remote hydration flags false, and is atomically replaced by the normal snapshot-plus-delta synchronization path.
+- `runtime/replica-cache` keeps a non-authoritative per-host display replica in AsyncStorage: the recently viewed agents, their workspaces, and a short timeline tail each. It restores before navigation becomes ready, leaves remote hydration flags false, and is atomically replaced by the normal snapshot-plus-delta synchronization path.
 - `SessionContext` wraps the daemon client for the active session
 - Composer UI and submit/draft behavior live in `packages/app/src/composer/`; screens and panels should integrate it from there instead of dropping composer internals into `components/`, `hooks/`, or `screens/workspace/`
 - Timeline reducers in `timeline/session-stream-reducers.ts` handle compaction, gap detection, sequence-based deduplication
@@ -110,8 +110,12 @@ The replica cache exists only to paint stale data immediately while the host con
 own mutations, infer deletions, or replace daemon reconciliation. Pending permission requests are
 not restored from it. AsyncStorage is not encrypted, so the cached timeline tail may contain source
 code, prompts, and tool output; encrypted-at-rest storage is a separate product/security decision.
-Its serialized payload has a 1 MiB byte budget and evicts whole host snapshots in least-recently-
-written order; a single oversized host is omitted rather than partially restored.
+It caches up to 8 recently viewed agents per host, tracked in most-recently-viewed order by the live
+session-store subscription, so switching back to an agent paints from cache instead of waiting on a
+round trip. Its serialized payload has a 2 MiB byte budget. Eviction sheds the least recently viewed
+agent first and only falls back to dropping whole host snapshots, in least-recently-written order,
+once every host is down to a single agent; a single oversized host is omitted rather than partially
+restored.
 
 ### `packages/cli` — Command-line client
 

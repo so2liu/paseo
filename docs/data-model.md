@@ -24,7 +24,7 @@ Workspace archive runs lifecycle teardown from the exact `cwd` but removes only 
 `worktreeRoot` after its last active reference disappears. Worktree recovery recreates that backing
 checkout from `mainRepoRoot`, then restores the relative path from `worktreeRoot` to `cwd`.
 
-Paseo uses **file-based JSON persistence** instead of a traditional database. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
+Paseo uses **file-based JSON persistence** for its records, with one exception: committed agent timeline rows live in SQLite (see below), because they are append-only, sequence-ordered, and read in bounded pages. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
 
 All server-side stores live under `$PASEO_HOME` (defaults to `~/.paseo`).
 
@@ -60,6 +60,7 @@ $PASEO_HOME/
 ├── runtime/
 │   └── managed-processes/
 │       └── {recordId}.json              # Helper processes owned by Paseo; reconciled on daemon bootstrap
+├── timelines.db                         # Committed agent timeline rows (SQLite, WAL)
 └── push-tokens.json                     # Expo push notification tokens
 ```
 
@@ -173,6 +174,58 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 Terminals are live daemon state, not persisted JSON records. A terminal carries a `workspaceId` while it is running; workspace-scoped terminal lists include only terminals with the matching `workspaceId`. Legacy live terminals without an owner remain visible to unscoped terminal reads but contribute to no workspace status.
 
 Terminal activity contributes to the workspace status bucket **per `workspaceId`**: a working terminal drives `running` onto the workspace it carries only. Same-`cwd` siblings are untouched; terminal visibility is likewise `workspaceId`-scoped.
+
+---
+
+## 1a. Committed Agent Timeline
+
+**Path:** `$PASEO_HOME/timelines.db` (SQLite)
+
+The one store that is not JSON on disk. Timeline rows are immutable, sequence-ordered, and read in
+bounded pages, so paging, atomic appends, and reader/writer isolation are pushed into SQLite rather
+than hand-rolled. Opened in WAL mode so a client can page through history while a running agent
+appends.
+
+```sql
+CREATE TABLE agent_timelines (
+  agent_id TEXT PRIMARY KEY,
+  epoch    TEXT NOT NULL
+);
+CREATE TABLE agent_timeline_rows (
+  agent_id  TEXT    NOT NULL,
+  seq       INTEGER NOT NULL,
+  timestamp TEXT    NOT NULL,
+  item      TEXT    NOT NULL,   -- JSON-encoded AgentTimelineItem
+  PRIMARY KEY (agent_id, seq)
+) WITHOUT ROWID;
+```
+
+| Column      | Description                                                 |
+| ----------- | ----------------------------------------------------------- |
+| `seq`       | Monotonic per-agent sequence, starting at 1                 |
+| `timestamp` | ISO 8601, when the row was committed                        |
+| `item`      | JSON `AgentTimelineItem`, already content-bounded at 64 KiB |
+
+`agent_timelines.epoch` is the durable owner of the agent's timeline epoch. A daemon restart adopts
+it instead of minting a fresh one, so client cursors survive the restart rather than being
+invalidated: `ensureEpoch` is an `INSERT OR IGNORE`, and the committed epoch always wins.
+
+A batch is one transaction, so a crash commits all of it or none of it — a partially written page
+can never be read back as a complete one. Appends are `INSERT OR IGNORE` on `(agent_id, seq)`, which
+makes provider history replay idempotent.
+
+Reads never load a whole conversation to answer a bounded page; the window bounds come from
+aggregates and the page itself from `LIMIT`. Paging, cursor, gap, and reset semantics are identical
+to `InMemoryAgentTimelineStore` — `sqlite-agent-timeline-store.test.ts` asserts that by running every
+request shape through both stores and comparing results.
+
+`node:sqlite` is used rather than a native module, so nothing extra is compiled for Electron or
+Docker packaging. It requires Node >= 22.5 and currently prints an experimental-feature warning on
+first use. `src/server/types/node-sqlite.d.ts` carries local typings because the server package still
+types against `@types/node@^20`; delete it once those typings ship.
+
+This table is what lets history be read without a provider process — see
+[timeline-sync.md](./timeline-sync.md#reading-history-without-a-provider-process).
 
 ---
 

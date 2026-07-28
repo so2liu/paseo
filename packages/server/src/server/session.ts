@@ -70,6 +70,7 @@ import type {
   AgentManagerEvent,
   AgentTimelineCursor,
   AgentTimelineFetchDirection,
+  AgentTimelineFetchOptions,
   AgentTimelineFetchResult,
   ManagedAgent,
 } from "./agent/agent-manager.js";
@@ -536,6 +537,15 @@ interface AgentTimelineProjectionSelection {
   endSeq: number | null;
   hasOlder: boolean;
   hasNewer: boolean;
+}
+
+type TimelineReader = (options: AgentTimelineFetchOptions) => Promise<AgentTimelineFetchResult>;
+
+/** Where one timeline read is answered from, plus the agent facts that go with it. */
+interface TimelineSource {
+  provider: string;
+  agent: AgentSnapshotPayload;
+  readTimeline: TimelineReader;
 }
 
 type RegistryTransition = "created" | "unarchived" | "existing";
@@ -3369,7 +3379,13 @@ export class Session {
           logger: this.sessionLogger,
         });
       }
-      await this.agentManager.hydrateTimelineFromProvider(agentId, { broadcast: true });
+      await this.agentManager.hydrateTimelineFromProvider(agentId, {
+        broadcast: true,
+        // A cold-loaded agent is seeded from its committed timeline, which marks
+        // history primed and would make hydration a no-op. Reload exists to
+        // re-read the provider transcript, so it has to force past the cache.
+        ...(existing ? {} : { force: true }),
+      });
       await this.agentUpdates.forwardLiveAgent(snapshot);
       const timelineSize = this.agentManager.getTimeline(agentId).length;
       if (requestId) {
@@ -5929,18 +5945,63 @@ export class Session {
     };
   }
 
-  private selectProjectedTimelineProjection(input: {
-    agentId: string;
+  /**
+   * Pick where this timeline read is answered from.
+   *
+   * Reading history must not cost a provider process. When the agent already has
+   * a live runtime its in-memory timeline is authoritative and free. Otherwise,
+   * if the durable log holds committed rows, they are served straight off disk —
+   * no session resume, no transcript replay. Only an agent with no durable rows
+   * (created before the log existed, or never committed one) still has to be
+   * loaded, which also backfills the log for next time.
+   *
+   * The provider process is started later, by whatever actually needs it: a
+   * prompt, a steer, a permission response.
+   */
+  private async resolveTimelineSource(agentId: string): Promise<TimelineSource> {
+    const live = this.agentManager.getAgent(agentId);
+    if (live) {
+      return {
+        provider: live.provider,
+        agent: await this.buildAgentPayload(live),
+        readTimeline: async (options) =>
+          this.agentManager.readLiveOrCommittedTimeline(agentId, options),
+      };
+    }
+
+    const record = await this.agentStorage.get(agentId);
+    if (record && (await this.agentManager.hasCommittedTimeline(agentId))) {
+      return {
+        provider: record.provider,
+        agent: this.buildStoredAgentPayload(record),
+        readTimeline: (options) => this.agentManager.fetchCommittedTimeline(agentId, options),
+      };
+    }
+
+    const snapshot = await ensureAgentLoaded(agentId, {
+      agentManager: this.agentManager,
+      agentStorage: this.agentStorage,
+      logger: this.sessionLogger,
+    });
+    return {
+      provider: snapshot.provider,
+      agent: await this.buildAgentPayload(snapshot),
+      readTimeline: async (options) => this.agentManager.fetchTimeline(agentId, options),
+    };
+  }
+
+  private async selectProjectedTimelineProjection(input: {
+    readTimeline: TimelineReader;
     controlTimeline: AgentTimelineFetchResult;
     direction: AgentTimelineFetchDirection;
     cursor?: AgentTimelineCursor;
     pageLimit: number;
-  }): AgentTimelineProjectionSelection {
+  }): Promise<AgentTimelineProjectionSelection> {
     const timeline = this.shouldUseFullTimelineForProjectedPage({
       timeline: input.controlTimeline,
       pageLimit: input.pageLimit,
     })
-      ? this.agentManager.fetchTimeline(input.agentId, { direction: "tail", limit: 0 })
+      ? await input.readTimeline({ direction: "tail", limit: 0 })
       : input.controlTimeline;
     const page = selectProjectedTimelinePage({
       rows: timeline.rows,
@@ -5960,19 +6021,19 @@ export class Session {
     };
   }
 
-  private selectTimelineProjection(input: {
-    agentId: string;
+  private async selectTimelineProjection(input: {
+    readTimeline: TimelineReader;
     projection: TimelineProjectionMode;
     controlTimeline: AgentTimelineFetchResult;
     direction: AgentTimelineFetchDirection;
     cursor?: AgentTimelineCursor;
     pageLimit: number;
-  }): AgentTimelineProjectionSelection {
+  }): Promise<AgentTimelineProjectionSelection> {
     if (input.projection === "canonical") {
       return this.selectCanonicalTimelineProjection({ timeline: input.controlTimeline });
     }
 
-    return this.selectProjectedTimelineProjection(input);
+    return await this.selectProjectedTimelineProjection(input);
   }
 
   private async handleFetchAgentTimelineRequest(
@@ -5990,20 +6051,15 @@ export class Session {
       : undefined;
 
     try {
-      const snapshot = await ensureAgentLoaded(msg.agentId, {
-        agentManager: this.agentManager,
-        agentStorage: this.agentStorage,
-        logger: this.sessionLogger,
-      });
-      const agentPayload = await this.buildAgentPayload(snapshot);
+      const source = await this.resolveTimelineSource(msg.agentId);
 
-      const controlTimeline = this.agentManager.fetchTimeline(msg.agentId, {
+      const controlTimeline = await source.readTimeline({
         direction,
         cursor,
         limit: pageLimit,
       });
-      const selectedTimeline = this.selectTimelineProjection({
-        agentId: msg.agentId,
+      const selectedTimeline = await this.selectTimelineProjection({
+        readTimeline: source.readTimeline,
         projection,
         controlTimeline,
         direction,
@@ -6024,7 +6080,7 @@ export class Session {
         payload: {
           requestId: msg.requestId,
           agentId: msg.agentId,
-          agent: agentPayload,
+          agent: source.agent,
           direction,
           projection,
           epoch: selectedTimeline.timeline.epoch,
@@ -6037,7 +6093,7 @@ export class Session {
           hasOlder: selectedTimeline.hasOlder,
           hasNewer: selectedTimeline.hasNewer,
           entries: selectedTimeline.entries.map((entry) => ({
-            provider: snapshot.provider,
+            provider: source.provider,
             item: entry.item,
             timestamp: entry.timestamp,
             seqStart: entry.seqStart,

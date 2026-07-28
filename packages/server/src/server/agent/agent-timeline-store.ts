@@ -14,7 +14,7 @@ export interface SeedAgentTimelineOptions {
   timestamp?: string;
 }
 
-interface AgentTimelineState {
+export interface AgentTimelineState {
   epoch: string;
   rows: AgentTimelineRow[];
   nextSeq: number;
@@ -135,6 +135,74 @@ function fetchReset(
   };
 }
 
+/**
+ * Paging over a timeline state. Shared by the in-memory store and any durable
+ * store so cursor, reset, gap, and hasOlder/hasNewer semantics stay identical
+ * no matter which one answered the read.
+ */
+export function fetchTimelineFromState(
+  state: AgentTimelineState,
+  options?: AgentTimelineFetchOptions,
+): AgentTimelineFetchResult {
+  const direction = options?.direction ?? "tail";
+  const requestedLimit = options?.limit;
+  const limit =
+    requestedLimit === undefined
+      ? DEFAULT_TIMELINE_FETCH_LIMIT
+      : Math.max(0, Math.floor(requestedLimit));
+  const cursor = options?.cursor;
+  const minSeq = state.rows.length ? state.rows[0].seq : 0;
+  const maxSeq = state.rows.length ? state.rows[state.rows.length - 1].seq : 0;
+  const selectAll = limit === 0;
+
+  const window = {
+    minSeq,
+    maxSeq,
+    nextSeq: state.nextSeq,
+  };
+
+  const ctx: FetchContext = {
+    state,
+    direction,
+    limit,
+    selectAll,
+    cursor,
+    minSeq,
+    maxSeq,
+    window,
+  };
+
+  if (cursor && typeof cursor.epoch === "string" && cursor.epoch !== state.epoch) {
+    return fetchReset(ctx, { staleCursor: true, gap: false });
+  }
+
+  if (direction === "after" && cursor && state.rows.length > 0 && cursor.seq < minSeq - 1) {
+    return fetchReset(ctx, { staleCursor: false, gap: true });
+  }
+
+  if (state.rows.length === 0) {
+    return {
+      epoch: state.epoch,
+      direction,
+      reset: false,
+      staleCursor: false,
+      gap: false,
+      window,
+      hasOlder: false,
+      hasNewer: false,
+      rows: [],
+    };
+  }
+
+  if (direction === "tail") {
+    return fetchTail(ctx);
+  }
+  if (direction === "after") {
+    return fetchAfter(ctx);
+  }
+  return fetchBefore(ctx);
+}
+
 export class InMemoryAgentTimelineStore {
   private readonly states = new Map<string, AgentTimelineState>();
 
@@ -172,64 +240,7 @@ export class InMemoryAgentTimelineStore {
   }
 
   fetch(agentId: string, options?: AgentTimelineFetchOptions): AgentTimelineFetchResult {
-    const state = this.requireState(agentId);
-    const direction = options?.direction ?? "tail";
-    const requestedLimit = options?.limit;
-    const limit =
-      requestedLimit === undefined
-        ? DEFAULT_TIMELINE_FETCH_LIMIT
-        : Math.max(0, Math.floor(requestedLimit));
-    const cursor = options?.cursor;
-    const minSeq = state.rows.length ? state.rows[0].seq : 0;
-    const maxSeq = state.rows.length ? state.rows[state.rows.length - 1].seq : 0;
-    const selectAll = limit === 0;
-
-    const window = {
-      minSeq,
-      maxSeq,
-      nextSeq: state.nextSeq,
-    };
-
-    const ctx: FetchContext = {
-      state,
-      direction,
-      limit,
-      selectAll,
-      cursor,
-      minSeq,
-      maxSeq,
-      window,
-    };
-
-    if (cursor && typeof cursor.epoch === "string" && cursor.epoch !== state.epoch) {
-      return fetchReset(ctx, { staleCursor: true, gap: false });
-    }
-
-    if (direction === "after" && cursor && state.rows.length > 0 && cursor.seq < minSeq - 1) {
-      return fetchReset(ctx, { staleCursor: false, gap: true });
-    }
-
-    if (state.rows.length === 0) {
-      return {
-        epoch: state.epoch,
-        direction,
-        reset: false,
-        staleCursor: false,
-        gap: false,
-        window,
-        hasOlder: false,
-        hasNewer: false,
-        rows: [],
-      };
-    }
-
-    if (direction === "tail") {
-      return fetchTail(ctx);
-    }
-    if (direction === "after") {
-      return fetchAfter(ctx);
-    }
-    return fetchBefore(ctx);
+    return fetchTimelineFromState(this.requireState(agentId), options);
   }
 
   append(

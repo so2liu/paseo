@@ -333,7 +333,8 @@ export interface SessionReplica {
   agents: Map<string, Agent>;
   workspaces: Map<string, WorkspaceDescriptor>;
   emptyProjects: Map<string, EmptyProjectDescriptor>;
-  timeline: SessionReplicaTimeline | null;
+  /** Cached timelines for recently viewed agents, most recent first. */
+  timelines: SessionReplicaTimeline[];
 }
 
 export type WorkspaceRestoreStatus = "restoring" | "failed" | "needs-host-upgrade";
@@ -702,13 +703,12 @@ export const useSessionStore = create<SessionStore>()(
             return prev;
           }
           const session = createInitialSessionState(serverId, null);
-          const timeline = replica.timeline;
           const agentStreamTail = new Map<string, StreamItem[]>();
           const agentTimelineCursor = new Map<string, AgentTimelineCursorState>();
           const agentTimelineHasOlder = new Map<string, boolean>();
           const agentAuthoritativeHistoryApplied = new Map<string, boolean>();
           const agentHistorySyncGeneration = new Map<string, number>();
-          if (timeline) {
+          for (const timeline of replica.timelines) {
             agentStreamTail.set(timeline.agentId, timeline.items);
             agentTimelineHasOlder.set(timeline.agentId, timeline.hasOlder);
             agentAuthoritativeHistoryApplied.set(timeline.agentId, true);
