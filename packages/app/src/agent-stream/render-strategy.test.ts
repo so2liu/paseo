@@ -39,6 +39,23 @@ function assistantMessage(id: string, text: string, seed: number): StreamItem {
   };
 }
 
+function toolCall(id: string, seed: number): StreamItem {
+  return {
+    kind: "tool_call",
+    id,
+    timestamp: createTimestamp(seed),
+    payload: {
+      source: "orchestrator",
+      data: {
+        toolCallId: id,
+        toolName: "read",
+        arguments: {},
+        status: "completed",
+      },
+    },
+  };
+}
+
 describe("resolveStreamRenderStrategy", () => {
   it("uses forward_stream on web", () => {
     const strategy = resolveStreamRenderStrategy({
@@ -197,21 +214,22 @@ describe("neighbor and traversal semantics", () => {
     ).toBe("assistant-1\n\nassistant-2");
   });
 
-  it("collects only the final non-empty assistant message as the conclusion", () => {
+  it("collects every trailing assistant block as the conclusion", () => {
     const items = [
       userMessage("u1", "question", 1),
-      assistantMessage("a1", "intermediate", 2),
+      assistantMessage("a1", "point one", 2),
       assistantMessage("a2", "", 3),
-      assistantMessage("a3", "final conclusion", 4),
+      assistantMessage("a3", "point two", 4),
+      assistantMessage("a4", "point three", 5),
     ];
     const forward = resolveStreamRenderStrategy({ platform: "web", isMobileBreakpoint: false });
     expect(
       collectAssistantTurnConclusionForStreamRenderStrategy({
         strategy: forward,
         items,
-        startIndex: 3,
+        startIndex: 4,
       }),
-    ).toBe("final conclusion");
+    ).toBe("point one\n\npoint two\n\npoint three");
 
     const inverted = resolveStreamRenderStrategy({ platform: "ios", isMobileBreakpoint: false });
     const invertedItems = orderTailForStreamRenderStrategy({
@@ -224,7 +242,54 @@ describe("neighbor and traversal semantics", () => {
         items: invertedItems,
         startIndex: 0,
       }),
-    ).toBe("final conclusion");
+    ).toBe("point one\n\npoint two\n\npoint three");
+  });
+
+  it("stops the conclusion at work that happened before the final answer", () => {
+    const items = [
+      userMessage("u1", "question", 1),
+      assistantMessage("a1", "let me check", 2),
+      toolCall("t1", 3),
+      assistantMessage("a2", "final part one", 4),
+      assistantMessage("a3", "final part two", 5),
+    ];
+    const forward = resolveStreamRenderStrategy({ platform: "web", isMobileBreakpoint: false });
+    expect(
+      collectAssistantTurnConclusionForStreamRenderStrategy({
+        strategy: forward,
+        items,
+        startIndex: 4,
+      }),
+    ).toBe("final part one\n\nfinal part two");
+
+    const inverted = resolveStreamRenderStrategy({ platform: "ios", isMobileBreakpoint: false });
+    const invertedItems = orderTailForStreamRenderStrategy({
+      strategy: inverted,
+      streamItems: items,
+    });
+    expect(
+      collectAssistantTurnConclusionForStreamRenderStrategy({
+        strategy: inverted,
+        items: invertedItems,
+        startIndex: 0,
+      }),
+    ).toBe("final part one\n\nfinal part two");
+  });
+
+  it("falls back to the last assistant text when the turn ends with a tool call", () => {
+    const items = [
+      userMessage("u1", "question", 1),
+      assistantMessage("a1", "only answer", 2),
+      toolCall("t1", 3),
+    ];
+    const forward = resolveStreamRenderStrategy({ platform: "web", isMobileBreakpoint: false });
+    expect(
+      collectAssistantTurnConclusionForStreamRenderStrategy({
+        strategy: forward,
+        items,
+        startIndex: 2,
+      }),
+    ).toBe("only answer");
   });
 
   it("returns undefined neighbor when index would be out of bounds", () => {
