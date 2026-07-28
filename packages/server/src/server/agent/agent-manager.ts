@@ -2807,14 +2807,32 @@ export class AgentManager {
           timelineRows?: AgentTimelineRow[];
           timelineNextSeq?: number;
           persistence?: AgentPersistenceHandle;
+          historyPrimed?: boolean;
           createdAt?: Date;
           updatedAt?: Date;
         }
       | undefined;
   }): Promise<{ durableTimelineHasRows: boolean }> {
     const { agentId, now, options } = params;
-    const timelineAlreadyPrimed = this.timelineStore.has(agentId);
     const explicitTimelineSeed = buildExplicitTimelineSeedForRegister(now, options);
+
+    // Closing an agent leaves its in-memory timeline behind, so reopening it in
+    // the same daemon normally skips replay. That shortcut is wrong when the
+    // durable store says the backfill never finished: what was retained is the
+    // same truncated prefix, and trusting it would strand the agent on partial
+    // history until the daemon restarts. Drop it so replay starts from scratch
+    // on both sides. Callers that state their own `historyPrimed` — a config
+    // reload preserving its timeline — are deciding this for themselves.
+    if (
+      !explicitTimelineSeed &&
+      options?.historyPrimed === undefined &&
+      this.durableTimelineStore !== undefined &&
+      !(await this.durableTimelineStore.hasCommitted(agentId))
+    ) {
+      this.timelineStore.delete(agentId);
+    }
+
+    const timelineAlreadyPrimed = this.timelineStore.has(agentId);
     const shouldSeedFromDurable =
       !explicitTimelineSeed &&
       !this.timelineStore.has(agentId) &&

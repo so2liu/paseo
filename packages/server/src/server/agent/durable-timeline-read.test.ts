@@ -274,6 +274,41 @@ test("does not freeze a truncated transcript in place when history streaming fai
   });
 });
 
+test("retries the backfill when a partial agent is reopened in the same daemon", async () => {
+  const first = createHarness();
+  await first.manager.createAgent({ provider: "codex", cwd: root }, AGENT_ID, {
+    workspaceId: "workspace-1",
+  });
+  await first.manager.closeAgent(AGENT_ID);
+  await first.manager.flushForShutdown();
+
+  // A second manager stands in for the daemon restart that gets the agent into
+  // a failed-backfill state to begin with: its memory is empty, so hydration
+  // actually runs rather than being short-circuited by a retained timeline.
+  const failing = createHarness({
+    failHistoryAfter: [{ type: "user_message", text: "partial" }],
+  });
+  const record = await failing.storage.get(AGENT_ID);
+  if (!record?.persistence) {
+    throw new Error("expected a persistence handle for the stored agent");
+  }
+  await failing.manager.resumeAgentFromPersistence(record.persistence, {}, AGENT_ID);
+  await failing.manager.hydrateTimelineFromProvider(AGENT_ID);
+  await failing.manager.flushForShutdown();
+  expect(failing.manager.getTimeline(AGENT_ID)).toEqual([
+    { type: "user_message", text: "partial" },
+  ]);
+  expect(await failing.manager.hasCommittedTimeline(AGENT_ID)).toBe(false);
+
+  // Closing keeps that partial timeline in memory, so reopening within this
+  // same daemon used to look "already primed" and skip replay for the rest of
+  // the process. The durable store knows the backfill never finished, and that
+  // has to win over whatever memory happens to be holding.
+  await failing.manager.closeAgent(AGENT_ID);
+  await failing.manager.resumeAgentFromPersistence(record.persistence, {}, AGENT_ID);
+  expect(failing.manager.getTimeline(AGENT_ID)).toEqual([]);
+});
+
 test("still serves history when the runtime is collected mid-read", async () => {
   const harness = createHarness();
   await harness.manager.createAgent({ provider: "codex", cwd: root }, AGENT_ID, {
