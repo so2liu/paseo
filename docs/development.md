@@ -268,6 +268,66 @@ The owner's standalone macOS daemon is normally owned by the
   is the CLI under `~/paseo-releases/<new-commit>/`:
   `pgrep -f "paseo-releases/<new-commit>/packages/cli/bin/paseo"`.
 
+### iOS physical-device deployment
+
+Deploying to an owner device has three prerequisites that fail in confusing ways.
+Check them in this order — each one blocks the next.
+
+**1. Developer Mode must be on, or the build itself will not run.**
+It is not just an install-time gate. When `-destination id=<udid>` names a device
+whose Developer Mode is off, `xcodebuild` waits for that destination to become
+available and eventually dies with error 70 and
+`Timed out waiting for all destinations`. Nothing is compiled, so there is no
+artifact to install later. Verify against the device, not a cached list:
+
+```bash
+xcrun devicectl list devices --json-output /tmp/d.json   # developerModeStatus
+```
+
+Turning it on is a device-side action: Settings → Privacy & Security → Developer
+Mode → on → restart → **confirm the alert that appears after unlocking**. Missing
+that last confirmation leaves the Settings toggle reading "on" while the device
+still reports `disabled` — the device is authoritative, the toggle is not.
+
+**2. A device that has never been used on this Mac must be registered from
+Xcode's GUI first.** Registration rewrites the provisioning profile, which
+requires a signed-in Apple account. The GUI has that session; command-line
+`xcodebuild` does not and fails with `No Accounts: Add a new account in Accounts
+settings` — `-allowProvisioningUpdates` cannot rescue it. One build from Xcode
+registers the device and reissues the profile, after which command-line builds
+work normally. Confirm before building:
+
+```bash
+find ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles \
+     ~/Library/MobileDevice/Provisioning\ Profiles -name '*.mobileprovision' |
+  while read -r f; do
+    security cms -D -i "$f" | plutil -extract ProvisionedDevices json -o - -
+  done
+```
+
+Already-registered devices need none of this — the issued profile is a local
+credential valid for a year, so routine redeploys work offline with no account.
+That is why deploying to a known iPhone keeps working long after the Xcode
+account is gone, and why a new iPad suddenly demands one.
+
+**3. Install with `devicectl`, not with `expo run:ios`.** Its compile step is
+reliable; its install step is not, and it fails as `Connecting to: <device>` →
+`Error: null` after a successful build. Build with Expo, then install directly:
+
+```bash
+xcrun devicectl device install app --device <hardware-udid> \
+  "$HOME/Library/Developer/Xcode/DerivedData/Paseo-*/Build/Products/Release-iphoneos/PaseoDebug.app"
+```
+
+Use the **hardware UDID** (`00008140-…`), not the CoreDevice identifier
+(`A600BAD2-…`) that `devicectl list devices` prints in its `Identifier` column.
+Expo matches only the former, and passing the latter fails with
+`No device UDID or name matching …`.
+
+Do not treat "the app is on the device" as proof a deploy landed — a previous
+build with the same version and build number is indistinguishable in the app
+list. Trust the `App installed:` receipt from `devicectl` instead.
+
 ### Custom fork build identity
 
 CLI and daemon builds from this fork append the SemVer build metadata `+LY` to
