@@ -2849,6 +2849,13 @@ export class AgentManager {
     if (timelineSeed || !this.timelineStore.has(agentId)) {
       this.timelineStore.initialize(agentId, timelineSeed ?? { timestamp: now.toISOString() });
     }
+    // The durable store owns the epoch once it holds anything for this agent,
+    // so publish the live epoch whenever the log has no header yet. Without it
+    // every daemon restart would mint a fresh epoch and invalidate the cursors
+    // clients already hold.
+    if (this.durableTimelineStore) {
+      await this.durableTimelineStore.ensureEpoch(agentId, this.timelineStore.getEpoch(agentId));
+    }
     if (options?.timelineRows?.length) {
       this.enqueueDurableTimelineBulkInsert(agentId, options.timelineRows);
     }
@@ -2923,10 +2930,46 @@ export class AgentManager {
       return { timestamp: now.toISOString() };
     }
 
+    const rows = await this.durableTimelineStore.getCommittedRows(agentId);
+    const epoch = await this.durableTimelineStore.getEpoch(agentId);
     return {
-      nextSeq: (await this.durableTimelineStore.getLatestCommittedSeq(agentId)) + 1,
+      // Seeding the rows themselves — not just the sequence counter — is what
+      // lets a resumed agent skip provider history replay: `historyPrimed` is
+      // derived from this seed, and `fetchTimeline` reads the in-memory store.
+      rows,
+      nextSeq: (rows.at(-1)?.seq ?? 0) + 1,
+      ...(epoch ? { epoch } : {}),
       timestamp: now.toISOString(),
     };
+  }
+
+  /**
+   * Read a committed timeline without loading the agent.
+   *
+   * This is the path that keeps history browsing off the provider process: it
+   * touches only the durable log, so no session is resumed and no transcript is
+   * replayed. Callers must check `hasCommittedTimeline` first — an agent with no
+   * durable rows still needs the loading path to produce its history.
+   */
+  async fetchCommittedTimeline(
+    agentId: string,
+    options?: AgentTimelineFetchOptions,
+  ): Promise<AgentTimelineFetchResult> {
+    if (!this.durableTimelineStore) {
+      throw new Error("Durable timeline store is not configured");
+    }
+    return await this.durableTimelineStore.fetchCommitted(agentId, options);
+  }
+
+  async hasCommittedTimeline(agentId: string): Promise<boolean> {
+    if (!this.durableTimelineStore) {
+      return false;
+    }
+    return await this.durableTimelineStore.hasCommitted(agentId);
+  }
+
+  async flushCommittedTimelines(): Promise<void> {
+    await this.durableTimelineStore?.flush();
   }
 
   private prepareAgentForClosure(

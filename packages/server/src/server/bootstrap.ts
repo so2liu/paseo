@@ -129,6 +129,7 @@ import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
+import { JsonlAgentTimelineStore } from "./agent/jsonl-agent-timeline-store.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
 import {
@@ -812,10 +813,18 @@ export async function createPaseoDaemon(
     extraClients: config.agentClients,
   });
   const initialAgentManagerState = providerSnapshotManager.getAgentManagerProviderState();
+  // Committed timeline rows outlive the agent runtime, so opening an old
+  // conversation reads history off disk instead of resuming its provider
+  // session first.
+  const durableTimelineStore = new JsonlAgentTimelineStore({
+    directory: path.join(config.paseoHome, "timelines"),
+    logger: logger.child({ component: "agent-timeline-store" }),
+  });
   const agentManager = new AgentManager({
     clients: initialAgentManagerState.clients,
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
+    durableTimelineStore,
     appendSystemPrompt: config.appendSystemPrompt,
     onWorkspaceStateMayHaveChanged: ({ cwd }) => {
       workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
@@ -1605,6 +1614,7 @@ export async function createPaseoDaemon(
     agentManager.prepareForShutdown();
     await closeAllAgents(logger, agentManager);
     await agentManager.flushForShutdown().catch(() => undefined);
+    await agentManager.flushCommittedTimelines().catch(() => undefined);
     detachAgentStoragePersistence();
     await agentStorage.flush().catch(() => undefined);
     await providerSnapshotManager.shutdown();

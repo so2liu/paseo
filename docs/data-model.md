@@ -60,6 +60,8 @@ $PASEO_HOME/
 ├── runtime/
 │   └── managed-processes/
 │       └── {recordId}.json              # Helper processes owned by Paseo; reconciled on daemon bootstrap
+├── timelines/
+│   └── {agentId}.jsonl                  # Append-only committed timeline rows, one file per agent
 └── push-tokens.json                     # Expo push notification tokens
 ```
 
@@ -173,6 +175,38 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 Terminals are live daemon state, not persisted JSON records. A terminal carries a `workspaceId` while it is running; workspace-scoped terminal lists include only terminals with the matching `workspaceId`. Legacy live terminals without an owner remain visible to unscoped terminal reads but contribute to no workspace status.
 
 Terminal activity contributes to the workspace status bucket **per `workspaceId`**: a working terminal drives `running` onto the workspace it carries only. Same-`cwd` siblings are untouched; terminal visibility is likewise `workspaceId`-scoped.
+
+---
+
+## 1a. Committed Agent Timeline
+
+**Path:** `$PASEO_HOME/timelines/{agentId}.jsonl`
+
+The one store that is not a rewritten JSON document. Timeline rows are immutable and
+sequence-ordered, so they are appended as JSON Lines and never rewritten. Line 1 is a header,
+every later line is one row:
+
+```
+{"v":1,"agentId":"...","epoch":"..."}
+{"seq":1,"timestamp":"2026-01-01T00:00:00.000Z","item":{...}}
+```
+
+| Field       | Type                | Description                                           |
+| ----------- | ------------------- | ----------------------------------------------------- |
+| `seq`       | `number`            | Monotonic per-agent sequence, starting at 1           |
+| `timestamp` | `string` (ISO 8601) | When the row was committed                            |
+| `item`      | `AgentTimelineItem` | The committed item, already content-bounded at 64 KiB |
+
+The header's `epoch` is the durable owner of the agent's timeline epoch. A daemon restart adopts it
+instead of minting a fresh one, so client cursors survive the restart rather than being invalidated.
+`ensureEpoch` only writes a header when the file has none; the committed epoch always wins.
+
+Writes are appends, not atomic rewrites, so a crash mid-append can leave a torn final line. Reads
+drop unparseable lines and keep every intact row. Rows whose `seq` is already committed are ignored,
+which makes provider history replay idempotent.
+
+This log is what lets history be read without a provider process — see
+[timeline-sync.md](./timeline-sync.md#reading-history-without-a-provider-process).
 
 ---
 
