@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 import type { PersistedConfig } from "../persisted-config.js";
-import type { PaseoOpenAIConfig, PaseoSpeechConfig } from "../bootstrap.js";
+import type { PaseoOpenAIConfig, PaseoSpeechConfig, PaseoVolcengineConfig } from "../bootstrap.js";
 import { resolveLocalSpeechConfig } from "./providers/local/config.js";
 import { resolveOpenAiSpeechConfig } from "./providers/openai/config.js";
+import { resolveVolcengineSpeechConfig } from "./providers/volcengine/config.js";
 import {
   SpeechProviderIdSchema,
   type RequestedSpeechProvider,
@@ -149,6 +150,7 @@ export function resolveSpeechConfig(params: {
   persisted: PersistedConfig;
 }): {
   openai: PaseoOpenAIConfig | undefined;
+  volcengine: PaseoVolcengineConfig | undefined;
   speech: PaseoSpeechConfig;
 } {
   const providers = resolveRequestedSpeechProviders({
@@ -169,8 +171,15 @@ export function resolveSpeechConfig(params: {
     providers,
   });
 
+  const volcengine = resolveVolcengineSpeechConfig({
+    env: params.env,
+    persisted: params.persisted,
+    providers,
+  });
+
   return {
     openai,
+    volcengine,
     speech: {
       providers,
       sttLanguages: local.sttLanguages,

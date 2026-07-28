@@ -210,6 +210,36 @@ Check `$PASEO_HOME/daemon.log` for daemon logs. The default level is `info`; set
 `PASEO_LOG_LEVEL=trace` before launching the daemon when you need full provider,
 session, and agent-manager traces for stuck-state debugging.
 
+### Never write new config keys ahead of the daemon that understands them
+
+`PersistedConfigSchema` is `.strict()` and `loadPersistedConfig()` **throws** on a
+config it cannot parse — it does not warn and fall back to defaults. So a config
+key or enum value introduced by a newer commit is not forward-compatible: writing
+it while the older daemon is still installed leaves a daemon that cannot start.
+
+Under launchd this is worse than a one-off failure. `KeepAlive` is `true`, so the
+job restarts, fails to parse the config, and crash-loops.
+
+The running daemon will not notice, because config is read once at startup — the
+breakage surfaces at the next restart, which may be days later and look unrelated.
+
+Order the deployment so the binary lands first:
+
+1. Stage the new config somewhere inert (`~/.paseo/config.json.<feature>-pending`).
+2. Swap the release and the launchd job.
+3. Move the staged config into place, then start the new daemon.
+
+To check a config against the currently _installed_ daemon rather than the
+checkout:
+
+```bash
+node -e "
+const {PersistedConfigSchema} = require(process.env.HOME + '/paseo-releases/<commit>/packages/server/dist/server/server/persisted-config.js');
+const r = PersistedConfigSchema.safeParse(require(process.env.HOME + '/.paseo/config.json'));
+console.log(r.success || r.error.issues);
+"
+```
+
 ### macOS launchd daemon upgrade safety
 
 The owner's standalone macOS daemon is normally owned by the
