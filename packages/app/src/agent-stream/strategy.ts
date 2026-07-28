@@ -178,6 +178,13 @@ export function createStreamStrategy(config: StreamStrategyConfig): StreamStrate
       return messages.toReversed().join("\n\n");
     },
     collectAssistantTurnConclusion: (items, startIndex) => {
+      // A single logical answer is split into one stream item per markdown
+      // block, so the conclusion is the whole run of adjacent assistant
+      // messages at the end of the turn — not just the last block. Anything
+      // else in between (a tool call, a thought) ends the conclusion, which is
+      // what keeps pre-tool-call chatter out of the copy.
+      const blocks: string[] = [];
+      let foundConclusion = false;
       for (
         let index = startIndex;
         index >= 0 && index < items.length;
@@ -185,11 +192,17 @@ export function createStreamStrategy(config: StreamStrategyConfig): StreamStrate
       ) {
         const currentItem = items[index];
         if (currentItem.kind === "user_message") break;
-        if (currentItem.kind === "assistant_message" && currentItem.text.trim()) {
-          return currentItem.text;
+        if (currentItem.kind !== "assistant_message") {
+          // Non-text items trailing the answer are skipped; once the answer
+          // has started they mark where it began.
+          if (foundConclusion) break;
+          continue;
         }
+        if (!currentItem.text.trim()) continue;
+        foundConclusion = true;
+        blocks.push(currentItem.text);
       }
-      return "";
+      return blocks.toReversed().join("\n\n");
     },
     isNearBottom: (input) => config.isNearBottom(input),
     getBottomOffset: (metrics) => config.getBottomOffset(metrics),
