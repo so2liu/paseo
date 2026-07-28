@@ -257,6 +257,21 @@ test("does not freeze a truncated transcript in place when history streaming fai
     { type: "user_message", text: "partial" },
   ]);
   expect(await failing.manager.hasCommittedTimeline(AGENT_ID)).toBe(false);
+
+  // The agent is still perfectly usable, so it has to keep persisting. Dropping
+  // its epoch along with the partial rows would reject every later row for the
+  // rest of the agent's life, with nothing but a log line to show for it.
+  await failing.manager.appendTimelineItem(AGENT_ID, {
+    type: "user_message",
+    text: "sent after the failure",
+  });
+  await failing.manager.flushForShutdown();
+  await failing.manager.flushCommittedTimelines();
+  const committed = await failing.timelines.getCommittedRows(AGENT_ID);
+  expect(committed.map((entry) => entry.item)).toContainEqual({
+    type: "user_message",
+    text: "sent after the failure",
+  });
 });
 
 test("still serves history when the runtime is collected mid-read", async () => {

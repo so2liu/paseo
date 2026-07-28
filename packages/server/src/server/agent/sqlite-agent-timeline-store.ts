@@ -97,7 +97,11 @@ export class SqliteAgentTimelineStore implements AgentTimelineStore {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS agent_timelines (
         agent_id TEXT PRIMARY KEY,
-        epoch TEXT NOT NULL
+        epoch TEXT NOT NULL,
+        -- A timeline starts complete: a brand-new agent has no earlier history
+        -- to be missing. Only a provider backfill can leave a truncated prefix,
+        -- and it clears this for the duration of the stream.
+        backfill_complete INTEGER NOT NULL DEFAULT 1
       );
       CREATE TABLE IF NOT EXISTS agent_timeline_rows (
         agent_id TEXT NOT NULL,
@@ -107,6 +111,15 @@ export class SqliteAgentTimelineStore implements AgentTimelineStore {
         PRIMARY KEY (agent_id, seq)
       ) WITHOUT ROWID;
     `);
+    // Databases created before the column existed. Adding it is idempotent
+    // because the statement fails once the column is present.
+    try {
+      this.db.exec(
+        "ALTER TABLE agent_timelines ADD COLUMN backfill_complete INTEGER NOT NULL DEFAULT 1",
+      );
+    } catch {
+      // Column already present.
+    }
   }
 
   async appendCommitted(
@@ -305,7 +318,24 @@ export class SqliteAgentTimelineStore implements AgentTimelineStore {
       .run(agentId, epoch);
   }
 
+  async setBackfillComplete(agentId: string, complete: boolean): Promise<void> {
+    this.db
+      .prepare("UPDATE agent_timelines SET backfill_complete = ? WHERE agent_id = ?")
+      .run(complete ? 1 : 0, agentId);
+  }
+
   async hasCommitted(agentId: string): Promise<boolean> {
+    // Rows alone do not make a timeline usable: a backfill that died part-way
+    // leaves a real prefix of a conversation whose remainder only the provider
+    // can supply. Serving that as history would strand the agent on a truncated
+    // transcript for good, so an unfinished backfill reports nothing committed
+    // and the caller falls back to loading the agent and hydrating again.
+    const record = this.db
+      .prepare("SELECT backfill_complete AS complete FROM agent_timelines WHERE agent_id = ?")
+      .get(agentId) as { complete: number } | undefined;
+    if (record?.complete !== 1) {
+      return false;
+    }
     return this.countRows(agentId, null, []) > 0;
   }
 

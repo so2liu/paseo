@@ -145,6 +145,35 @@ describe("SqliteAgentTimelineStore", () => {
     expect(await store.getLastAssistantMessage(AGENT)).toBeNull();
   });
 
+  it("treats an unfinished backfill as no committed timeline", async () => {
+    const writer = createStore();
+    await writer.ensureEpoch(AGENT, EPOCH);
+    await writer.setBackfillComplete(AGENT, false);
+    await writer.bulkInsert(AGENT, [row(1, "first half")]);
+    writer.close();
+
+    // A crash mid-backfill leaves real rows that are only a prefix. Serving
+    // them would strand the agent on a truncated transcript, so a restart must
+    // see nothing committed and hydrate from the provider again.
+    const restarted = createStore();
+    expect(await restarted.hasCommitted(AGENT)).toBe(false);
+    expect(await restarted.getEpoch(AGENT)).toBe(EPOCH);
+    expect(await restarted.getCommittedRows(AGENT)).toHaveLength(1);
+
+    await restarted.setBackfillComplete(AGENT, true);
+    expect(await restarted.hasCommitted(AGENT)).toBe(true);
+  });
+
+  it("counts a never-backfilled timeline as complete", async () => {
+    const store = createStore();
+    // A brand-new agent has no earlier history that could be missing, so its
+    // rows are usable immediately without waiting for a backfill to finish.
+    await store.ensureEpoch(AGENT, EPOCH);
+    await store.bulkInsert(AGENT, [row(1, "live row")]);
+
+    expect(await store.hasCommitted(AGENT)).toBe(true);
+  });
+
   it("reads only the requested page instead of the whole conversation", async () => {
     const store = createStore();
     await store.ensureEpoch(AGENT, EPOCH);

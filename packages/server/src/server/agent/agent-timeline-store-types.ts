@@ -70,6 +70,14 @@ export interface AgentTimelineStore {
   ensureEpoch(agentId: string, epoch: string): Promise<void>;
   /** True when the agent has a committed timeline that can be served without a provider process. */
   hasCommitted(agentId: string): Promise<boolean>;
+  /**
+   * Record whether the committed rows are the whole conversation.
+   *
+   * Provider backfill streams rows one at a time, so a crash part-way leaves a
+   * real but truncated prefix. Without this the next start would mistake that
+   * prefix for the entire history and never ask the provider again.
+   */
+  setBackfillComplete(agentId: string, complete: boolean): Promise<void>;
   /** Wait for every queued write to reach disk. */
   flush(): Promise<void>;
 }

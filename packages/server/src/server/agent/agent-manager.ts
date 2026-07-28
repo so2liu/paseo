@@ -2910,8 +2910,18 @@ export class AgentManager {
       return { timestamp: now.toISOString() };
     }
 
-    const rows = await this.durableTimelineStore.getCommittedRows(agentId);
     const epoch = await this.durableTimelineStore.getEpoch(agentId);
+    // An unfinished backfill is a prefix, not a history. Seeding it would set
+    // `historyPrimed` and permanently suppress the replay that supplies the
+    // missing remainder, so keep the epoch and let hydration run again.
+    if (!(await this.durableTimelineStore.hasCommitted(agentId))) {
+      return {
+        ...(epoch ? { epoch } : {}),
+        timestamp: now.toISOString(),
+      };
+    }
+
+    const rows = await this.durableTimelineStore.getCommittedRows(agentId);
     return {
       // Seeding the rows themselves — not just the sequence counter — is what
       // lets a resumed agent skip provider history replay: `historyPrimed` is
@@ -3279,10 +3289,13 @@ export class AgentManager {
     await this.deleteCommittedTimeline(agent.id);
     this.timelineStore.delete(agent.id);
     this.timelineStore.initialize(agent.id, { timestamp: new Date().toISOString() });
-    // Publish the freshly minted epoch before any row is appended. Without a
-    // header the rebuilt log is unreadable, so every rewound conversation would
-    // silently lose its durable fast path on the next daemon start.
+    // Publish the freshly minted epoch before any row is appended: rows cannot
+    // be committed without one, so every rewound conversation would otherwise
+    // lose its durable fast path on the next daemon start.
     await this.durableTimelineStore?.ensureEpoch(agent.id, this.timelineStore.getEpoch(agent.id));
+    // Rows go in one at a time below, so the timeline is a prefix until they all
+    // land. A crash in between must not leave that prefix looking authoritative.
+    await this.durableTimelineStore?.setBackfillComplete(agent.id, false);
     agent.historyPrimed = true;
 
     for (const event of this.providerSubagents.deleteParent(agent.id)) {
@@ -3310,6 +3323,7 @@ export class AgentManager {
         });
       }
     }
+    await this.durableTimelineStore?.setBackfillComplete(agent.id, true);
     this.touchUpdatedAt(agent);
     this.emitState(agent);
   }
@@ -3325,6 +3339,9 @@ export class AgentManager {
     }> = [];
     const providerSubagentEvents: AgentManagerEvent[] = [];
     agent.historyPrimed = true;
+    // Rows are committed one at a time as they stream, so until this finishes
+    // the durable timeline is only a prefix of the conversation.
+    await this.durableTimelineStore?.setBackfillComplete(agent.id, false);
     try {
       for await (const event of agent.session.streamHistory()) {
         if (event.type === "provider_subagent") {
@@ -3358,17 +3375,19 @@ export class AgentManager {
           });
         }
       }
+      // The stream ended on its own, so the committed rows are the whole
+      // transcript and later loads can serve them without the provider.
+      await this.durableTimelineStore?.setBackfillComplete(agent.id, true);
     } catch (error) {
-      // A stream that dies part-way leaves a truncated transcript. Committing
-      // that prefix would make the next load mistake it for the whole
-      // conversation and never hydrate again, so drop it and let the next
-      // attempt start over. The live timeline keeps the prefix: showing part of
-      // the history now beats showing none.
+      // The backfill stays marked incomplete, which is enough: the committed
+      // prefix is real and worth keeping, it just is not the whole story. The
+      // next load sees an unfinished backfill, ignores it, and hydrates again.
+      // Deleting it instead would also take the epoch with it and leave this
+      // still-usable agent unable to persist anything for the rest of its life.
       agent.historyPrimed = false;
-      await this.deleteCommittedTimeline(agent.id);
       this.logger.warn(
         { err: error, agentId: agent.id, provider: agent.provider },
-        "Provider history stream failed; discarded the partial durable backfill",
+        "Provider history stream failed; leaving the durable backfill incomplete",
       );
     }
 
