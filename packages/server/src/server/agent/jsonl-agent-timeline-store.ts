@@ -44,6 +44,8 @@ interface LoadedTimeline {
    * append rows that collide with the ones already committed on disk.
    */
   readable: boolean;
+  /** Serialized size of the log this was parsed from, used to bound the cache. */
+  bytes: number;
 }
 
 export interface JsonlAgentTimelineStoreOptions {
@@ -56,9 +58,17 @@ export interface JsonlAgentTimelineStoreOptions {
    * history browsing of collected agents.
    */
   cacheSize?: number;
+  /**
+   * Total serialized bytes to keep parsed. Conversation length varies by orders
+   * of magnitude, so an agent count alone does not bound memory: a single tool
+   * result may reach 64 KiB, and browsing a handful of long conversations would
+   * otherwise pin hundreds of megabytes.
+   */
+  cacheBytes?: number;
 }
 
 const DEFAULT_CACHE_SIZE = 16;
+const DEFAULT_CACHE_BYTES = 32 * 1024 * 1024;
 
 function isMissingFileError(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === "ENOENT";
@@ -101,6 +111,7 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
   private readonly directory: string;
   private readonly logger: pino.Logger;
   private readonly cacheSize: number;
+  private readonly cacheBytes: number;
   /** Parsed timelines, most-recently-used last. */
   private readonly cache = new Map<string, LoadedTimeline>();
   /** Per-agent write chain. Serializes appends so lines never interleave. */
@@ -112,6 +123,7 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
     this.directory = options.directory;
     this.logger = options.logger;
     this.cacheSize = options.cacheSize ?? DEFAULT_CACHE_SIZE;
+    this.cacheBytes = options.cacheBytes ?? DEFAULT_CACHE_BYTES;
   }
 
   async appendCommitted(
@@ -141,6 +153,15 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
           "its committed sequence numbers are unknown",
       );
     }
+    if (!loaded.epoch) {
+      // Appending here would create a file whose first line is a row. Such a
+      // log is rejected wholesale on the next start, so the rows would be lost
+      // anyway — and silently. `ensureEpoch` owns log creation; until it has
+      // run there is no log to append to.
+      throw new Error(
+        `Refusing to append to agent '${agentId}' timeline log before its header exists`,
+      );
+    }
     // Replaying an already-committed seq would duplicate rows on disk. This
     // happens when provider hydration re-streams history the cache already has.
     const lastSeq = loaded.rows.at(-1)?.seq ?? 0;
@@ -148,9 +169,13 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
     if (fresh.length === 0) {
       return;
     }
+    const payload = fresh.map(serializeRow).join("");
     loaded.rows.push(...fresh.map(cloneRow));
+    // Keep the size estimate current as the log grows, or a long-running agent
+    // would stay counted at whatever it weighed when first read.
+    loaded.bytes += payload.length;
     await this.enqueueWrite(agentId, async () => {
-      await fs.appendFile(this.filePath(agentId), fresh.map(serializeRow).join(""), "utf8");
+      await fs.appendFile(this.filePath(agentId), payload, "utf8");
     });
   }
 
@@ -230,7 +255,7 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
       this.cache.delete(agentId);
       return;
     }
-    this.cache.set(agentId, { epoch, rows: [], readable: true });
+    this.cache.set(agentId, { epoch, rows: [], readable: true, bytes: 0 });
     this.evictOverflow();
   }
 
@@ -324,10 +349,10 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
       contents = await fs.readFile(this.filePath(agentId), "utf8");
     } catch (error) {
       if (isMissingFileError(error)) {
-        return { epoch: "", rows: [], readable: true };
+        return { epoch: "", rows: [], readable: true, bytes: 0 };
       }
       this.logger.error({ err: error, agentId }, "Failed to read durable agent timeline");
-      return { epoch: "", rows: [], readable: false };
+      return { epoch: "", rows: [], readable: false, bytes: 0 };
     }
 
     const lines = contents.split("\n");
@@ -337,7 +362,7 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
       // Readable, just not usable: the content is known-bad, so ensureEpoch is
       // free to rewrite the file from scratch. That is distinct from an I/O
       // error, where the real content is unknown and must not be clobbered.
-      return { epoch: "", rows: [], readable: true };
+      return { epoch: "", rows: [], readable: true, bytes: 0 };
     }
 
     const rows: AgentTimelineRow[] = [];
@@ -360,7 +385,7 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
       this.logger.warn({ agentId, skipped }, "Skipped unreadable durable timeline rows");
     }
 
-    return { epoch: header.epoch, rows, readable: true };
+    return { epoch: header.epoch, rows, readable: true, bytes: contents.length };
   }
 
   private async readHeader(agentId: string): Promise<TimelineFileHeader | null> {
@@ -385,11 +410,18 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
   }
 
   private evictOverflow(): void {
-    while (this.cache.size > this.cacheSize) {
+    let bytes = 0;
+    for (const entry of this.cache.values()) {
+      bytes += entry.bytes;
+    }
+    // Keep the newest entry even when it alone exceeds the budget: the caller
+    // is using it right now, and dropping it would force an immediate re-read.
+    while (this.cache.size > 1 && (this.cache.size > this.cacheSize || bytes > this.cacheBytes)) {
       const oldest = this.cache.keys().next();
       if (oldest.done) {
         return;
       }
+      bytes -= this.cache.get(oldest.value)?.bytes ?? 0;
       this.cache.delete(oldest.value);
     }
   }

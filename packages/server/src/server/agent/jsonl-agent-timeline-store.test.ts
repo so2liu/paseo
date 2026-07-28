@@ -219,6 +219,48 @@ describe("JsonlAgentTimelineStore", () => {
     );
   });
 
+  it("refuses to append before a header exists", async () => {
+    const store = createStore();
+    await store.ensureEpoch("agent-1", "epoch-1");
+    await store.bulkInsert("agent-1", [row(1, "one")]);
+    await store.deleteAgent("agent-1");
+    await store.flush();
+
+    // A live agent keeps recording rows after a failed backfill dropped its
+    // log. Creating a header-less file here would be rejected wholesale on the
+    // next start, losing these rows silently instead of loudly.
+    await expect(store.bulkInsert("agent-1", [row(2, "later")])).rejects.toThrow(/header/);
+    await store.flush();
+    await expect(fs.access(path.join(directory, "agent-1.jsonl"))).rejects.toThrow();
+  });
+
+  it("bounds the parsed cache by bytes, not just agent count", async () => {
+    const big = "x".repeat(20_000);
+    const writer = createStore();
+    for (const agentId of ["a", "b", "c"]) {
+      await writer.ensureEpoch(agentId, `epoch-${agentId}`);
+      await writer.bulkInsert(agentId, [row(1, big), row(2, big)]);
+    }
+    await writer.flush();
+
+    // Well under the 16-agent limit, but past the byte budget, so the earliest
+    // read has to be dropped rather than pinned in memory.
+    const reader = new JsonlAgentTimelineStore({
+      directory,
+      logger: createTestLogger(),
+      cacheBytes: 60_000,
+    });
+    for (const agentId of ["a", "b", "c"]) {
+      await reader.getCommittedRows(agentId);
+    }
+
+    const readFile = vi.spyOn(fs, "readFile");
+    await reader.getCommittedRows("c");
+    expect(readFile).not.toHaveBeenCalled();
+    await reader.getCommittedRows("a");
+    expect(readFile).toHaveBeenCalledTimes(1);
+  });
+
   it("does not let an agent id escape the timeline directory", async () => {
     const store = createStore();
     await store.ensureEpoch("../escaped", "epoch-1");
