@@ -95,6 +95,7 @@ interface SplitContainerProps {
   onCloseTab: (tabId: string) => Promise<void> | void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
+  onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onDownloadFile: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
@@ -374,6 +375,7 @@ export function SplitContainer({
   onCloseTab,
   onCopyResumeCommand,
   onCopyAgentId,
+  onCopyTerminalId,
   onCopyFilePath,
   onDownloadFile,
   onReloadAgent,
@@ -594,6 +596,7 @@ export function SplitContainer({
           onCloseTab={onCloseTab}
           onCopyResumeCommand={onCopyResumeCommand}
           onCopyAgentId={onCopyAgentId}
+          onCopyTerminalId={onCopyTerminalId}
           onCopyFilePath={onCopyFilePath}
           onDownloadFile={onDownloadFile}
           onReloadAgent={onReloadAgent}
@@ -741,6 +744,7 @@ function SplitNodeView({
   onCloseTab,
   onCopyResumeCommand,
   onCopyAgentId,
+  onCopyTerminalId,
   onCopyFilePath,
   onDownloadFile,
   onReloadAgent,
@@ -799,6 +803,7 @@ function SplitNodeView({
           onCloseTab={onCloseTab}
           onCopyResumeCommand={onCopyResumeCommand}
           onCopyAgentId={onCopyAgentId}
+          onCopyTerminalId={onCopyTerminalId}
           onCopyFilePath={onCopyFilePath}
           onDownloadFile={onDownloadFile}
           onReloadAgent={onReloadAgent}
@@ -849,6 +854,7 @@ function SplitNodeView({
               onCloseTab={onCloseTab}
               onCopyResumeCommand={onCopyResumeCommand}
               onCopyAgentId={onCopyAgentId}
+              onCopyTerminalId={onCopyTerminalId}
               onCopyFilePath={onCopyFilePath}
               onDownloadFile={onDownloadFile}
               onReloadAgent={onReloadAgent}
@@ -905,6 +911,7 @@ function SplitPaneView({
   onCloseTab,
   onCopyResumeCommand,
   onCopyAgentId,
+  onCopyTerminalId,
   onCopyFilePath,
   onDownloadFile,
   onReloadAgent,
@@ -1051,6 +1058,7 @@ function SplitPaneView({
             onCloseTab={onCloseTab}
             onCopyResumeCommand={onCopyResumeCommand}
             onCopyAgentId={onCopyAgentId}
+            onCopyTerminalId={onCopyTerminalId}
             onCopyFilePath={onCopyFilePath}
             onDownloadFile={onDownloadFile}
             onReloadAgent={onReloadAgent}
