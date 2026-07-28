@@ -14,6 +14,32 @@ to 64 KiB, and the same bounded item is used for durable timeline rows and live 
 Provider history hydration applies the same rule so reopening an agent cannot restore an oversized
 tool payload.
 
+## Reading history without a provider process
+
+Reading history must never cost a provider process. The daemon commits timeline rows to an
+durable table (see [data-model.md](./data-model.md#1a-committed-agent-timeline)), and
+`fetch_agent_timeline_request` picks its source in this order:
+
+1. **Live runtime** — the agent's in-memory timeline is authoritative and free.
+2. **Committed log** — served straight off disk. No session resume, no transcript replay.
+3. **Load the agent** — only when the log holds nothing for that agent. Loading also backfills the
+   log, so this happens at most once per agent.
+
+This matters because agent runtimes are collected after an hour idle, and every runtime is gone
+after a daemon restart. Before the log existed, opening any older conversation had to resume its
+provider session and replay the whole transcript first — seconds of latency for a pure read.
+
+The provider process is started by whatever actually needs it: a prompt, a steer, a permission
+response. Browsing history starts nothing.
+
+Two consequences follow from the log being a cache of what Paseo committed:
+
+- A resumed agent seeds its timeline from the log and skips provider history replay. If the
+  provider transcript was mutated outside Paseo, the committed rows are what the user sees until they use
+  **Reload agent**, which deletes the log and re-streams from the provider.
+- A crash can lose rows from a turn that had not been committed yet. The provider transcript
+  remains the authority, so **Reload agent** recovers them.
+
 ## Presence is not delivery
 
 Client heartbeat reports presence:
@@ -118,6 +144,8 @@ limited to the dated compatibility path for daemon timelines created before that
 
 ## Relevant code
 
+- Durable committed rows: `packages/server/src/server/agent/sqlite-agent-timeline-store.ts`
+- Timeline source selection: `Session.resolveTimelineSource` in `packages/server/src/server/session.ts`
 - Server live stream forwarding: `packages/server/src/server/session.ts`
 - App sync planning: `packages/app/src/timeline/timeline-sync-plan.ts`
 - App viewed-agent synchronization: `packages/app/src/timeline/viewed-timeline-sync.ts`

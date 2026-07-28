@@ -2487,15 +2487,8 @@ export class AgentManager {
   private getLastAssistantMessageFromTimeline(
     timeline: readonly AgentTimelineItem[],
   ): string | null {
-    return this.getLastAssistantMessageSegmentFromTimeline(timeline)?.text ?? null;
-  }
-
-  private getLastAssistantMessageSegmentFromTimeline(
-    timeline: readonly AgentTimelineItem[],
-  ): { text: string; startsAtBeginning: boolean } | null {
     // Collect the last contiguous assistant messages (Claude streams chunks)
     const chunks: string[] = [];
-    let startsAtBeginning = false;
     for (let i = timeline.length - 1; i >= 0; i--) {
       const item = timeline[i];
       if (item.type !== "assistant_message") {
@@ -2505,41 +2498,28 @@ export class AgentManager {
         continue;
       }
       chunks.push(item.text);
-      startsAtBeginning = i === 0;
     }
 
     if (!chunks.length) {
       return null;
     }
 
-    return {
-      text: chunks.toReversed().join(""),
-      startsAtBeginning,
-    };
+    return chunks.toReversed().join("");
   }
 
   private async getLastAssistantMessageFromStores(agentId: string): Promise<string | null> {
-    const liveTimeline = this.timelineStore.getItems(agentId);
-    const liveSegment = this.getLastAssistantMessageSegmentFromTimeline(liveTimeline);
-    if (!this.durableTimelineStore) {
-      return liveSegment?.text ?? null;
+    // A registered agent's live timeline is seeded with every committed row, so
+    // it is the complete history rather than a suffix of the durable log. That
+    // makes it authoritative here, and keeps this answer consistent with what
+    // fetchTimeline serves. Reaching for the durable store only makes sense
+    // when nothing is in memory at all.
+    const liveMessage = this.getLastAssistantMessageFromTimeline(
+      this.timelineStore.getItems(agentId),
+    );
+    if (liveMessage !== null) {
+      return liveMessage;
     }
-
-    if (!liveSegment) {
-      return await this.durableTimelineStore.getLastAssistantMessage(agentId);
-    }
-
-    if (!liveSegment.startsAtBeginning) {
-      return liveSegment.text;
-    }
-
-    const lastDurableItem = await this.durableTimelineStore.getLastItem(agentId);
-    if (lastDurableItem?.type !== "assistant_message") {
-      return liveSegment.text;
-    }
-
-    const durableMessage = await this.durableTimelineStore.getLastAssistantMessage(agentId);
-    return durableMessage ? `${durableMessage}${liveSegment.text}` : liveSegment.text;
+    return (await this.durableTimelineStore?.getLastAssistantMessage(agentId)) ?? null;
   }
 
   private async getLastItemFromStores(agentId: string): Promise<AgentTimelineItem | null> {
@@ -2827,14 +2807,32 @@ export class AgentManager {
           timelineRows?: AgentTimelineRow[];
           timelineNextSeq?: number;
           persistence?: AgentPersistenceHandle;
+          historyPrimed?: boolean;
           createdAt?: Date;
           updatedAt?: Date;
         }
       | undefined;
   }): Promise<{ durableTimelineHasRows: boolean }> {
     const { agentId, now, options } = params;
-    const timelineAlreadyPrimed = this.timelineStore.has(agentId);
     const explicitTimelineSeed = buildExplicitTimelineSeedForRegister(now, options);
+
+    // Closing an agent leaves its in-memory timeline behind, so reopening it in
+    // the same daemon normally skips replay. That shortcut is wrong when the
+    // durable store says the backfill never finished: what was retained is the
+    // same truncated prefix, and trusting it would strand the agent on partial
+    // history until the daemon restarts. Drop it so replay starts from scratch
+    // on both sides. Callers that state their own `historyPrimed` — a config
+    // reload preserving its timeline — are deciding this for themselves.
+    if (
+      !explicitTimelineSeed &&
+      options?.historyPrimed === undefined &&
+      this.durableTimelineStore !== undefined &&
+      !(await this.durableTimelineStore.hasCommitted(agentId))
+    ) {
+      this.timelineStore.delete(agentId);
+    }
+
+    const timelineAlreadyPrimed = this.timelineStore.has(agentId);
     const shouldSeedFromDurable =
       !explicitTimelineSeed &&
       !this.timelineStore.has(agentId) &&
@@ -2848,6 +2846,13 @@ export class AgentManager {
     const timelineSeed = explicitTimelineSeed ?? durableTimelineSeed;
     if (timelineSeed || !this.timelineStore.has(agentId)) {
       this.timelineStore.initialize(agentId, timelineSeed ?? { timestamp: now.toISOString() });
+    }
+    // The durable store owns the epoch once it holds anything for this agent,
+    // so publish the live epoch whenever the log has no header yet. Without it
+    // every daemon restart would mint a fresh epoch and invalidate the cursors
+    // clients already hold.
+    if (this.durableTimelineStore) {
+      await this.durableTimelineStore.ensureEpoch(agentId, this.timelineStore.getEpoch(agentId));
     }
     if (options?.timelineRows?.length) {
       this.enqueueDurableTimelineBulkInsert(agentId, options.timelineRows);
@@ -2923,10 +2928,80 @@ export class AgentManager {
       return { timestamp: now.toISOString() };
     }
 
+    const epoch = await this.durableTimelineStore.getEpoch(agentId);
+    // An unfinished backfill is a prefix, not a history. Seeding it would set
+    // `historyPrimed` and permanently suppress the replay that supplies the
+    // missing remainder, so keep the epoch and let hydration run again.
+    if (!(await this.durableTimelineStore.hasCommitted(agentId))) {
+      return {
+        ...(epoch ? { epoch } : {}),
+        timestamp: now.toISOString(),
+      };
+    }
+
+    const rows = await this.durableTimelineStore.getCommittedRows(agentId);
     return {
-      nextSeq: (await this.durableTimelineStore.getLatestCommittedSeq(agentId)) + 1,
+      // Seeding the rows themselves — not just the sequence counter — is what
+      // lets a resumed agent skip provider history replay: `historyPrimed` is
+      // derived from this seed, and `fetchTimeline` reads the in-memory store.
+      rows,
+      nextSeq: (rows.at(-1)?.seq ?? 0) + 1,
+      ...(epoch ? { epoch } : {}),
       timestamp: now.toISOString(),
     };
+  }
+
+  /**
+   * Read a committed timeline without loading the agent.
+   *
+   * This is the path that keeps history browsing off the provider process: it
+   * touches only the durable log, so no session is resumed and no transcript is
+   * replayed. Callers must check `hasCommittedTimeline` first — an agent with no
+   * durable rows still needs the loading path to produce its history.
+   */
+  async fetchCommittedTimeline(
+    agentId: string,
+    options?: AgentTimelineFetchOptions,
+  ): Promise<AgentTimelineFetchResult> {
+    if (!this.durableTimelineStore) {
+      throw new Error("Durable timeline store is not configured");
+    }
+    return await this.durableTimelineStore.fetchCommitted(agentId, options);
+  }
+
+  /**
+   * Read a timeline for an agent that was live when the caller looked, but may
+   * not be by the time it reads.
+   *
+   * Idle collection can retire a runtime at any moment, and `fetchTimeline`
+   * throws once the agent is gone. Failing the read would contradict the point
+   * of the committed log: the rows are on disk, and serving them needs no
+   * runtime at all.
+   */
+  async readLiveOrCommittedTimeline(
+    agentId: string,
+    options?: AgentTimelineFetchOptions,
+  ): Promise<AgentTimelineFetchResult> {
+    if (this.agents.has(agentId)) {
+      return this.fetchTimeline(agentId, options);
+    }
+    if (await this.hasCommittedTimeline(agentId)) {
+      return await this.fetchCommittedTimeline(agentId, options);
+    }
+    // Nothing durable to fall back to, so surface the same error as before
+    // rather than inventing an empty conversation.
+    return this.fetchTimeline(agentId, options);
+  }
+
+  async hasCommittedTimeline(agentId: string): Promise<boolean> {
+    if (!this.durableTimelineStore) {
+      return false;
+    }
+    return await this.durableTimelineStore.hasCommitted(agentId);
+  }
+
+  async flushCommittedTimelines(): Promise<void> {
+    await this.durableTimelineStore?.flush();
   }
 
   private prepareAgentForClosure(
@@ -3232,6 +3307,13 @@ export class AgentManager {
     await this.deleteCommittedTimeline(agent.id);
     this.timelineStore.delete(agent.id);
     this.timelineStore.initialize(agent.id, { timestamp: new Date().toISOString() });
+    // Publish the freshly minted epoch before any row is appended: rows cannot
+    // be committed without one, so every rewound conversation would otherwise
+    // lose its durable fast path on the next daemon start.
+    await this.durableTimelineStore?.ensureEpoch(agent.id, this.timelineStore.getEpoch(agent.id));
+    // Rows go in one at a time below, so the timeline is a prefix until they all
+    // land. A crash in between must not leave that prefix looking authoritative.
+    await this.durableTimelineStore?.beginBackfill(agent.id);
     agent.historyPrimed = true;
 
     for (const event of this.providerSubagents.deleteParent(agent.id)) {
@@ -3259,6 +3341,7 @@ export class AgentManager {
         });
       }
     }
+    await this.durableTimelineStore?.completeBackfill(agent.id);
     this.touchUpdatedAt(agent);
     this.emitState(agent);
   }
@@ -3274,6 +3357,11 @@ export class AgentManager {
     }> = [];
     const providerSubagentEvents: AgentManagerEvent[] = [];
     agent.historyPrimed = true;
+    // Replay numbers rows from 1, so it starts from an empty timeline: any
+    // truncated prefix from an earlier failed attempt, and any live rows the
+    // agent committed after that failure, would otherwise claim the same
+    // sequence numbers and interleave with the replayed history.
+    await this.durableTimelineStore?.beginBackfill(agent.id);
     try {
       for await (const event of agent.session.streamHistory()) {
         if (event.type === "provider_subagent") {
@@ -3307,8 +3395,20 @@ export class AgentManager {
           });
         }
       }
-    } catch {
-      // ignore history failures
+      // The stream ended on its own, so the committed rows are the whole
+      // transcript and later loads can serve them without the provider.
+      await this.durableTimelineStore?.completeBackfill(agent.id);
+    } catch (error) {
+      // The backfill stays marked incomplete, which is enough: the committed
+      // prefix is real and worth keeping, it just is not the whole story. The
+      // next load sees an unfinished backfill, ignores it, and hydrates again.
+      // Deleting it instead would also take the epoch with it and leave this
+      // still-usable agent unable to persist anything for the rest of its life.
+      agent.historyPrimed = false;
+      this.logger.warn(
+        { err: error, agentId: agent.id, provider: agent.provider },
+        "Provider history stream failed; leaving the durable backfill incomplete",
+      );
     }
 
     if (typeof broadcast !== "function" || !broadcast()) {

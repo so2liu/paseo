@@ -175,10 +175,13 @@ describe("ReplicaCache", () => {
     expect(session?.agentTimelineHasOlder.get("agent-1")).toBe(true);
   });
 
-  it("persists only the focused agent view with a short timeline tail", async () => {
+  it("persists every recently viewed agent with a short timeline tail", async () => {
     const storage = new MemoryStorage();
     const cache = new ReplicaCache(storage);
     cache.setHosts([SERVER_ID]);
+    // Recency is accumulated by the live store subscription, so navigation is
+    // recorded even when no persist lands between two switches.
+    cache.start();
     seedSession();
 
     const store = useSessionStore.getState();
@@ -201,8 +204,10 @@ describe("ReplicaCache", () => {
         ["agent-2", secondTimeline],
       ]),
     );
+    // Visiting agent-2 must not evict the agent-1 view behind it.
     store.setFocusedAgentId(SERVER_ID, "agent-2");
     await cache.flush();
+    cache.stop();
 
     store.clearSession(SERVER_ID);
     const reader = new ReplicaCache(storage);
@@ -211,11 +216,49 @@ describe("ReplicaCache", () => {
 
     const session = useSessionStore.getState().sessions[SERVER_ID];
     const timelines = session?.agentStreamTail;
-    expect(Array.from(session?.agents.keys() ?? [])).toEqual(["agent-2"]);
-    expect(Array.from(session?.workspaces.keys() ?? [])).toEqual(["workspace-2"]);
+    expect(Array.from(session?.agents.keys() ?? []).sort()).toEqual(["agent-1", "agent-2"]);
+    expect(Array.from(session?.workspaces.keys() ?? []).sort()).toEqual([
+      "workspace-1",
+      "workspace-2",
+    ]);
     expect(Array.from(session?.emptyProjects.keys() ?? [])).toEqual([]);
-    expect(Array.from(timelines?.keys() ?? [])).toEqual(["agent-2"]);
+    expect(Array.from(timelines?.keys() ?? []).sort()).toEqual(["agent-1", "agent-2"]);
+    expect(timelines?.get("agent-1")).toEqual([message("message-1", "First")]);
     expect(timelines?.get("agent-2")).toEqual(secondTimeline.slice(-50));
+    expect(session?.agentAuthoritativeHistoryApplied.get("agent-1")).toBe(true);
+    expect(session?.agentAuthoritativeHistoryApplied.get("agent-2")).toBe(true);
+  });
+
+  it("keeps only the most recently viewed agents once the byte budget is hit", async () => {
+    const storage = new MemoryStorage();
+    const cache = new ReplicaCache(storage, { maxBytes: 6_000 });
+    cache.setHosts([SERVER_ID]);
+    cache.start();
+    seedSession();
+
+    const store = useSessionStore.getState();
+    store.setAgents(SERVER_ID, (agents) =>
+      new Map(agents).set("agent-2", agent("agent-2", "workspace-2", "/repo/other")),
+    );
+    store.setAgentStreamTail(
+      SERVER_ID,
+      new Map([
+        ["agent-1", [message("message-1", "A".repeat(3_000))]],
+        ["agent-2", [message("message-2", "B".repeat(3_000))]],
+      ]),
+    );
+    store.setFocusedAgentId(SERVER_ID, "agent-2");
+    await cache.flush();
+    cache.stop();
+
+    store.clearSession(SERVER_ID);
+    const reader = new ReplicaCache(storage, { maxBytes: 6_000 });
+    reader.setHosts([SERVER_ID]);
+    await reader.restore();
+
+    const session = useSessionStore.getState().sessions[SERVER_ID];
+    // agent-2 was focused last, so agent-1 is the one that gets shed.
+    expect(Array.from(session?.agentStreamTail.keys() ?? [])).toEqual(["agent-2"]);
   });
 
   it("evicts the least recently written host when the cache exceeds its byte budget", async () => {
