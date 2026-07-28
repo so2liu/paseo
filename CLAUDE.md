@@ -19,6 +19,20 @@ This repository is our fork of `getpaseo/paseo`, customized according to the own
 - **On a Mac, any Paseo "update" or "upgrade" means a whole-machine upgrade: Desktop app plus the separately installed daemon/CLI.** This applies even when the request calls out one component, such as "upgrade the local daemon"; naming a component identifies the immediate concern but does not narrow the deployment. Only an explicit exclusion such as "only upgrade the daemon; do not upgrade Desktop" narrows the scope.
 - For a whole-machine Mac upgrade, rebuild the client app (`packages/app`) and Desktop wrapper (`packages/desktop`) into the macOS Desktop app, install `/Applications/Paseo.app`, and upgrade the separately installed macOS daemon/CLI from the same customized-fork commit. Restart the daemon and verify the installed Desktop app plus CLI/daemon versions. The upgrade is not complete after replacing only the app, only the Desktop wrapper, or only the daemon.
 
+### Two delivery channels, and why owner machines report an upstream version
+
+The fork ships desktop builds two different ways. Both are correct; do not "fix" one into the other.
+
+| Channel                                                   | App version reports | Auto-update                                         |
+| --------------------------------------------------------- | ------------------- | --------------------------------------------------- |
+| Tag `vX.Y.Z-LY.N` → `fork-macos-release.yml` builds a DMG | `0.2.2-LY.1`        | Participates — the feed serves the next `LY.N`      |
+| Hand-built (the routine owner upgrade above)              | `0.2.2`             | Does not participate — replaced by the next rebuild |
+
+- **The release version scheme is `<upstream version>-LY.<n>` — a hyphen, not a plus.** SemVer ignores `+build.metadata` when comparing, so `0.2.2+LY.2` and `0.2.2+LY.1` rank equal and auto-update would never fire. The counter has to sit in the prerelease position. See [docs/fork-releases.md](docs/fork-releases.md) for the full rules, including why the separator must be `LY.3` and not `LY-3`.
+- **Do not confuse that with the `+LY` runtime marker.** `daemon-version.ts` appends `+LY` to whatever version is installed purely to mark "this is a fork build". It carries no counter, and it is not the release version.
+- **A hand-built install reporting a plain upstream version is expected, not a regression.** Routine owner upgrades deliberately leave `packages/desktop/package.json` on the upstream version, so the installed app reports e.g. `0.2.2` while the feed's newest is `0.2.2-LY.1`. Since `0.2.2-LY.1 < 0.2.2`, that machine's "check for updates" will always say it is current. That is fine — those machines are updated by rebuilding, not by the feed. Only put a machine on the auto-update track by installing a CI-built LY DMG, or by setting the desktop package version to the target `X.Y.Z-LY.N` before building locally.
+- **Never use the reported version to decide whether a daemon upgrade landed.** Consecutive fork commits usually share one workspace version, so old and new both report `0.2.2+LY`. Assert on the release path instead — see [docs/development.md](docs/development.md#macos-launchd-daemon-upgrade-safety).
+
 ## Repository map
 
 This is an npm workspace monorepo:
