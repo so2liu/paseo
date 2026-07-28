@@ -307,6 +307,35 @@ describe("JsonlAgentTimelineStore", () => {
     expect(readFile).toHaveBeenCalledTimes(1);
   });
 
+  it("discards a read that was already in flight when the log was deleted", async () => {
+    const writer = createStore();
+    await writer.ensureEpoch("agent-1", "epoch-old");
+    await writer.bulkInsert("agent-1", [row(1, "one")]);
+    await writer.flush();
+    const original = await fs.readFile(path.join(directory, "agent-1.jsonl"), "utf8");
+
+    const store = createStore();
+    let release!: (contents: string) => void;
+    const stalled = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(fs, "readFile").mockReturnValueOnce(stalled as never);
+
+    // A background append is mid-read when a failed backfill drops the log.
+    const pending = store.getCommittedRows("agent-1");
+    await Promise.resolve();
+    await store.deleteAgent("agent-1");
+    release(original);
+    await pending;
+
+    // Caching the pre-deletion read would resurrect the old epoch, and the next
+    // ensureEpoch would then skip writing a header for the recreated log.
+    expect(await store.getEpoch("agent-1")).toBeNull();
+    await store.ensureEpoch("agent-1", "epoch-new");
+    await store.flush();
+    expect(await store.getEpoch("agent-1")).toBe("epoch-new");
+  });
+
   it("does not let an agent id escape the timeline directory", async () => {
     const store = createStore();
     await store.ensureEpoch("../escaped", "epoch-1");

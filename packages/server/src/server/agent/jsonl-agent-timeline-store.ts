@@ -122,6 +122,11 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
   private readonly writeChains = new Map<string, Promise<void>>();
   /** Per-agent read in progress, so concurrent callers share one disk read. */
   private readonly inFlightLoads = new Map<string, Promise<LoadedTimeline>>();
+  /**
+   * Bumped whenever a log is invalidated. A read that started before the bump
+   * describes a file that no longer exists, so its result must not be cached.
+   */
+  private readonly cacheGenerations = new Map<string, number>();
 
   constructor(options: JsonlAgentTimelineStoreOptions) {
     this.directory = options.directory;
@@ -259,9 +264,12 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
     if (!adopted) {
       // Someone else's header is on disk. Caching this epoch with no rows would
       // make the next append reuse sequence numbers that are already committed.
-      this.cache.delete(agentId);
+      this.invalidate(agentId);
       return;
     }
+    // The file was just rewritten, so discard any read still in flight against
+    // the old one before installing the fresh state.
+    this.invalidate(agentId);
     this.cache.set(agentId, { epoch, rows: [], readable: true, bytes: 0 });
     this.evictOverflow();
   }
@@ -274,7 +282,7 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
   }
 
   async deleteAgent(agentId: string): Promise<void> {
-    this.cache.delete(agentId);
+    this.invalidate(agentId);
     await this.enqueueWrite(agentId, async () => {
       await fs.rm(this.filePath(agentId), { force: true });
     });
@@ -335,6 +343,7 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
   }
 
   private async loadUncached(agentId: string): Promise<LoadedTimeline> {
+    const generation = this.cacheGenerations.get(agentId) ?? 0;
     // Rows appended while the agent was cached are written by a queued task. A
     // cold read must not observe the file before those land.
     await this.writeChains.get(agentId);
@@ -345,9 +354,24 @@ export class JsonlAgentTimelineStore implements AgentTimelineStore {
     if (!loaded.readable) {
       return loaded;
     }
+    // The log was invalidated while this read was in flight, so what came back
+    // describes a file that is already gone. Caching it would resurrect the old
+    // epoch and rows, and the next ensureEpoch would skip header creation.
+    if ((this.cacheGenerations.get(agentId) ?? 0) !== generation) {
+      return loaded;
+    }
     this.cache.set(agentId, loaded);
     this.evictOverflow();
     return loaded;
+  }
+
+  /**
+   * Drop cached state for an agent and make any in-flight read discard itself.
+   * Every path that removes or replaces a log on disk must go through here.
+   */
+  private invalidate(agentId: string): void {
+    this.cacheGenerations.set(agentId, (this.cacheGenerations.get(agentId) ?? 0) + 1);
+    this.cache.delete(agentId);
   }
 
   private async readFromDisk(agentId: string): Promise<LoadedTimeline> {
