@@ -10,11 +10,17 @@
 
 ```bash
 git fetch upstream --tags
-gh release list --repo getpaseo/paseo --limit 10
+gh release list --repo getpaseo/paseo --exclude-drafts --limit 20 \
+  --json tagName,publishedAt,isPrerelease \
+  --jq 'sort_by(.publishedAt) | reverse | .[0]'
 ```
 
-取列表最上面那个。两个方向的错都要避免：不要为了等 stable 而跳过更新的 beta，
-也不要默认最新的一定是 prerelease。
+两个方向的错都要避免：不要为了等 stable 而跳过更新的 beta，也不要默认最新的一定
+是 prerelease。
+
+`--exclude-drafts` 不能省。草稿 release 默认会混在列表里，但它未必有能拉取的
+tag，被选中就会卡住整个同步。同样不要只取"列表第一行"，显式按 `publishedAt`
+排序 —— 列表的默认顺序不保证是发布时间序。
 
 这条规则替代的失败：早先的版本写的是"从最新 beta tag 同步"，而在 `v0.2.3` 时
 上游剩下的 prerelease（`v0.2.0-beta.4` 及更早）全都比它旧，照做会倒退一整条
@@ -51,13 +57,21 @@ typecheck 报 `Cannot find module 'mermaid'` 才暴露。
 
 正确做法是直接编辑冲突标记，保留其余已合并的内容。
 
-只有当文件完全属于上游、fork 从没碰过时 `--theirs` 才安全，而且要先证明：
+**没有例外。** 即使某个文件看起来完全属于上游（比如 `CHANGELOG.md`，fork 从不写
+它），也不要用 `--theirs` 去解冲突。用 `git log` 做归属判断并不可靠：它会漏掉重
+命名，基线选错时结论还会整个反过来，而这个命令一旦用错是完全静默的——代价和收益
+完全不成比例。
+
+确实需要整份采用上游内容时，用显式的内容替换，把意图写进命令本身：
 
 ```bash
-git log v<基线>..HEAD -- <文件>   # 输出为空才算证明
+git show v<版本>:CHANGELOG.md > CHANGELOG.md
+git add CHANGELOG.md
 ```
 
-`CHANGELOG.md` 就属于这一类。
+区别在于：这条命令替换的是一个你明确点名的文件的全部内容，语义就是"我要整份覆盖
+它"；而 `--theirs` 是把"解决冲突"这个动作偷偷变成了整份覆盖，读代码的人看不出这
+一点。
 
 ### 各类冲突的处理
 
@@ -65,7 +79,7 @@ git log v<基线>..HEAD -- <文件>   # 输出为空才算证明
 | ------------------------ | ----------------------------------------------------------------------------------------------------------- |
 | `package.json` 版本号    | 取上游版本号，只改那几行。manifest 跟随上游，见 [development.md](development.md#custom-fork-build-identity) |
 | `package-lock.json`      | 取上游整份，然后跑 `npm install` 调和                                                                       |
-| `CHANGELOG.md`           | 取上游整份（fork 不写这个文件）                                                                             |
+| `CHANGELOG.md`           | `git show v<版本>:CHANGELOG.md > CHANGELOG.md` 显式覆盖，不要用 `--theirs`                                  |
 | 双方各加各的             | 两边都保留，通常不是真冲突（新增 capability flag、新增 import 都属于这类）                                  |
 | 上游修了我们也修过的问题 | 见下面"取值比较"                                                                                            |
 
@@ -109,14 +123,32 @@ npm run lint
 
 ### 逐项复查定制
 
-合并后逐个 grep，别假设：
+**不要依赖手写清单。** fork 的定制一直在增加，写死的列表必然滞后，而它带来的"我
+已经查过了"的错觉比没有清单更危险。作为量级参考：`v0.2.2` 到同步前，fork 自己的
+提交有 52 个，任何手写清单都只列得到其中几个。
+
+正确做法是从历史推导本次真正有风险的范围——改动过本次冲突文件的 fork 提交：
+
+```bash
+# fork 自己的提交
+git log --oneline <上次基线>..<同步前的 main> --no-merges
+# 上游这次动过的文件
+git diff --name-only <上次基线>...<新基线>
+```
+
+两者的交集就是必须逐个确认的部分，比通读 52 个提交现实得多。凡是落在交集里的
+提交，都要确认它的行为在合并后还在。
+
+下面几个是历史上出过问题或容易被静默丢掉的，无论交集算出什么都单独确认一遍：
 
 - 火山引擎 STT provider（`packages/server/src/server/speech/providers/volcengine/`）
 - SQLite timeline store（`packages/server/src/server/agent/sqlite-agent-timeline-store.ts`）
-- `mermaid` 依赖（`packages/app/package.json`）
+- `mermaid` 依赖（`packages/app/package.json`）—— `v0.2.3` 那次就是从这里丢的
 - `so2liu` 更新源（`packages/desktop/electron-builder.yml`）
 - fork 的 Expo 项目 ID（`packages/app/app.config.js`）
 - idle TTL 一小时（`packages/server/src/server/bootstrap.ts`）
+- 默认排队消息（`cd38ba86b`）、native mobile lite 模式（`d137fe81e`）、
+  混合项目 push token 重试（`0fe522848`）
 
 ## 同步之后
 
