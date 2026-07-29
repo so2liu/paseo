@@ -18,7 +18,7 @@ export function HtmlPreview({ source }: HtmlPreviewProps) {
   return (
     <iframe
       title="HTML file preview"
-      sandbox=""
+      sandbox="allow-scripts"
       referrerPolicy="no-referrer"
       srcDoc={document}
       style={FRAME_STYLE}

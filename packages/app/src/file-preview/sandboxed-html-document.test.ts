@@ -11,12 +11,16 @@ describe("createSandboxedHtmlDocument", () => {
     expect(document.indexOf("Content-Security-Policy")).toBeLessThan(document.indexOf("<title>"));
   });
 
-  it("keeps a complete source document inside the sandbox wrapper", () => {
+  it("allows scripts and external resources inside the sandbox wrapper", () => {
     const document = createSandboxedHtmlDocument('<html lang="en"><body>Hello</body></html>');
 
     expect(document).toContain('<body><html lang="en"><body>Hello</body></html></body>');
-    expect(document).toContain("script-src 'none'");
-    expect(document).toContain("connect-src 'none'");
+    expect(document).toContain("default-src * data: blob:");
+    expect(document).toContain("script-src * data: blob: 'unsafe-inline' 'unsafe-eval'");
+    expect(document).toContain("style-src * data: blob: 'unsafe-inline'");
+    expect(document).toContain("img-src * data: blob:");
+    expect(document).toContain("font-src * data: blob:");
+    expect(document).toContain("connect-src * data: blob:");
   });
 
   it("wraps an HTML fragment in a complete sandboxed document", () => {

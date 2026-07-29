@@ -23,7 +23,7 @@ export function HtmlPreview({ source }: HtmlPreviewProps) {
       containerStyle={styles.preview}
       originWhitelist={["*"]}
       onShouldStartLoadWithRequest={handleShouldStartLoad}
-      javaScriptEnabled={false}
+      javaScriptEnabled
       domStorageEnabled={false}
       incognito
       scrollEnabled
