@@ -2,16 +2,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveAppVersion, resolveDisplayAppVersion } from "./app-version";
 import { withCustomBuildTag } from "./custom-build-version";
 
-const { electronRuntime } = vi.hoisted(() => ({
+const { electronRuntime, expoConfig } = vi.hoisted(() => ({
   electronRuntime: { value: false },
+  expoConfig: { extra: {} as Record<string, unknown> },
 }));
 
 vi.mock("@/constants/platform", () => ({
   getIsElectron: () => electronRuntime.value,
 }));
 
+vi.mock("expo-constants", () => ({
+  default: { expoConfig },
+}));
+
 afterEach(() => {
   electronRuntime.value = false;
+  Reflect.deleteProperty(expoConfig.extra, "forkVersion");
   Reflect.deleteProperty(globalThis, "window");
 });
 
@@ -37,6 +43,12 @@ describe("resolveDisplayAppVersion", () => {
     });
 
     expect(resolveDisplayAppVersion()).toBe("0.2.3-LY.2");
+  });
+
+  it("uses the injected fork release version without adding another LY tag", () => {
+    expoConfig.extra.forkVersion = "0.2.3-LY.3";
+
+    expect(resolveDisplayAppVersion()).toBe("0.2.3-LY.3");
   });
 
   it("keeps the client package version for non-Electron platforms", () => {

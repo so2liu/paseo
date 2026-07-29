@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 const pkg = require("./package.json");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const appVariant = process.env.APP_VARIANT ?? "production";
@@ -71,6 +72,25 @@ function getNativeBuildVersionCode(version) {
   return versionCode;
 }
 
+function resolveForkVersion() {
+  const fromEnv = process.env.PASEO_FORK_VERSION;
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
+    return fromEnv.trim();
+  }
+
+  try {
+    return execFileSync("git", ["describe", "--tags", "--match", "v*-LY.*", "--abbrev=0"], {
+      cwd: __dirname,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .trim()
+      .replace(/^v/, "");
+  } catch {
+    return null;
+  }
+}
+
 function resolveSecretFile(params) {
   const fromEnv = process.env[params.envKey];
   if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
@@ -114,6 +134,7 @@ const variants = {
 
 const variant = variants[appVariant] ?? variants.production;
 const nativeBuildVersionCode = getNativeBuildVersionCode(pkg.version);
+const forkVersion = resolveForkVersion();
 
 export default {
   expo: {
@@ -210,6 +231,7 @@ export default {
     },
     extra: {
       fdroidBuild: isFdroidBuild,
+      forkVersion,
       router: {},
       eas: {
         projectId: "8f324590-db81-442c-9fe0-886c44683f50",
