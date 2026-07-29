@@ -78,12 +78,22 @@ function resolveForkVersion() {
     return fromEnv.trim();
   }
 
+  // --exact-match is what makes this honest: without it, `git describe` walks back to
+  // the most recent *reachable* tag, so a build from any commit after v0.2.3-LY.3 —
+  // including routine builds off main — would stamp itself "0.2.3-LY.3" and claim to be
+  // a release it is not. With it, only a commit that *is* the tagged release gets the
+  // release version; everything else returns null and falls back to the plain "+LY"
+  // marker, which says "a fork build" without naming a release.
   try {
-    return execFileSync("git", ["describe", "--tags", "--match", "v*-LY.*", "--abbrev=0"], {
-      cwd: __dirname,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    })
+    return execFileSync(
+      "git",
+      ["describe", "--tags", "--match", "v*-LY.*", "--exact-match", "--abbrev=0"],
+      {
+        cwd: __dirname,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    )
       .trim()
       .replace(/^v/, "");
   } catch {
