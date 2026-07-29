@@ -142,7 +142,7 @@ npm run lint
 
 ```bash
 git diff --name-only --no-renames <上次基线>...<新基线> > /tmp/upstream-changed.txt
-git log --oneline <上次基线>..<同步前的 main> --no-merges -- $(cat /tmp/upstream-changed.txt)
+git log --oneline <上次基线>..<同步前的 main> --full-history -- $(cat /tmp/upstream-changed.txt)
 ```
 
 `--no-renames` 不能省。默认的改名检测会把一次重命名合并成一条记录、只输出**新**
@@ -150,12 +150,20 @@ git log --oneline <上次基线>..<同步前的 main> --no-merges -- $(cat /tmp/
 不到它，这条定制会被静默漏掉。加上 `--no-renames` 后重命名会拆成"删旧 + 加新"，
 新旧路径都在列表里。
 
+**不要加 `--no-merges`**，要加 `--full-history`。历次同步的 merge commit 里存放着
+上一轮的冲突解决，这些改动在两个父提交里都不存在、只存在于合并本身，`--no-merges`
+会把它们整个跳过；而 `git log` 带 pathspec 时默认还会做历史简化，同样可能把相关
+的合并剪掉，所以要用 `--full-history` 关掉简化。实测 `v0.2.3` 这次：`--no-merges`
+出 25 条，`--full-history` 出 28 条，多出来的正是 `7ae07083b`（合并 v0.2.2）和
+`01b64c6a9`（同步 v0.2.0-beta.4）这两次同步的合并提交——恰恰是最需要复查的那类。
+多出的三条噪音可以忽略。
+
 第二条命令的输出就是需要逐个确认的 fork 提交。注意两条命令不能各跑各的再"人肉
 求交集"——前者输出文件路径、后者输出提交，两种东西对不上；必须像上面这样把路径
 喂给 `git log` 当过滤条件，让 git 来算。
 
-`v0.2.3` 那次的实际数字：上游改了 211 个文件，fork 共 52 个提交，交集是 25 个。
-逐个确认 25 个提交的行为是否还在，现实得多。
+`v0.2.3` 那次的实际数字：上游改了 211 个文件，fork 共 52 个提交，交集是 28 个。
+逐个确认这 28 个提交的行为是否还在，比通读 52 个现实得多。
 
 下面几个是历史上出过问题或容易被静默丢掉的，无论交集算出什么都单独确认一遍：
 
