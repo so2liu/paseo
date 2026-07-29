@@ -194,16 +194,14 @@ interface TextAreaHandle {
 function AttachButtonIcon({
   hovered,
   onAttachButtonRef,
-  buttonIconSize,
 }: {
   hovered: boolean;
   onAttachButtonRef: ((node: View | null) => void) | undefined;
-  buttonIconSize: number;
 }) {
-  const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
+  const iconMapping = hovered ? composerIconForegroundMapping : composerIconForegroundMutedMapping;
   return (
     <View ref={onAttachButtonRef} collapsable={false} style={styles.attachButtonAnchor}>
-      <ThemedPlus size={buttonIconSize} uniProps={colorMapping} />
+      <ThemedPlus uniProps={iconMapping} />
     </View>
   );
 }
@@ -390,21 +388,19 @@ function VoiceButtonIcon({
   hovered,
   isDictating,
   isMutedRealtime,
-  buttonIconSize,
 }: {
   hovered: boolean;
   isDictating: boolean;
   isMutedRealtime: boolean;
-  buttonIconSize: number;
 }) {
   if (isDictating) {
-    return <Square size={buttonIconSize} color="white" fill="white" />;
+    return <ThemedSquare color="white" fill="white" uniProps={composerIconSizeMapping} />;
   }
-  const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
+  const iconMapping = hovered ? composerIconForegroundMapping : composerIconForegroundMutedMapping;
   if (isMutedRealtime) {
-    return <ThemedMicOff size={buttonIconSize} uniProps={colorMapping} />;
+    return <ThemedMicOff uniProps={iconMapping} />;
   }
-  return <ThemedMic size={buttonIconSize} uniProps={colorMapping} />;
+  return <ThemedMic uniProps={iconMapping} />;
 }
 
 type ShortcutChord = NonNullable<React.ComponentProps<typeof Shortcut>["chord"]>;
@@ -442,19 +438,17 @@ function SendTooltipBody({
 function SendButtonContent({
   isSubmitLoading,
   submitIcon,
-  buttonIconSize,
 }: {
   isSubmitLoading: boolean;
   submitIcon: "arrow" | "return";
-  buttonIconSize: number;
 }) {
   if (isSubmitLoading) {
     return <ThemedLoadingSpinner size="small" uniProps={iconAccentForegroundMapping} />;
   }
   if (submitIcon === "return") {
-    return <ThemedCornerDownLeft size={buttonIconSize} uniProps={iconAccentForegroundMapping} />;
+    return <ThemedCornerDownLeft uniProps={composerIconAccentForegroundMapping} />;
   }
-  return <ThemedArrowUp size={buttonIconSize} uniProps={iconAccentForegroundMapping} />;
+  return <ThemedArrowUp uniProps={composerIconAccentForegroundMapping} />;
 }
 
 interface DesktopKeyPressContext {
@@ -740,7 +734,6 @@ function SendButtonTooltip({
   isSubmitLoading,
   submitIcon,
   submitButtonTestID,
-  buttonIconSize,
   sendKeys,
   sendTooltipLabel,
 }: {
@@ -754,7 +747,6 @@ function SendButtonTooltip({
   isSubmitLoading: boolean;
   submitIcon: "arrow" | "return";
   submitButtonTestID: string | undefined;
-  buttonIconSize: number;
   sendKeys: ShortcutChord | null | undefined;
   sendTooltipLabel: string;
 }) {
@@ -769,11 +761,7 @@ function SendButtonTooltip({
         testID={submitButtonTestID}
         style={sendButtonCombinedStyle}
       >
-        <SendButtonContent
-          isSubmitLoading={isSubmitLoading}
-          submitIcon={submitIcon}
-          buttonIconSize={buttonIconSize}
-        />
+        <SendButtonContent isSubmitLoading={isSubmitLoading} submitIcon={submitIcon} />
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
         <SendTooltipBody label={sendTooltipLabel} sendKeys={sendKeys} />
@@ -1195,7 +1183,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const isCompact = useIsCompactFormFactor();
     const { height: windowHeight } = useWindowDimensions();
     const maxInputHeight = resolveMaxInputHeight(windowHeight);
-    const buttonIconSize = composerMetrics.buttonIcon.width;
     const toast = useToast();
     const voice = useVoiceOptional();
     const voiceMuteToggleKeys = useShortcutKeys("voice-mute-toggle");
@@ -1705,13 +1692,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const renderAttachButtonIcon = useCallback(
       ({ hovered }: { hovered?: boolean }) => (
-        <AttachButtonIcon
-          hovered={Boolean(hovered)}
-          onAttachButtonRef={onAttachButtonRef}
-          buttonIconSize={buttonIconSize}
-        />
+        <AttachButtonIcon hovered={Boolean(hovered)} onAttachButtonRef={onAttachButtonRef} />
       ),
-      [onAttachButtonRef, buttonIconSize],
+      [onAttachButtonRef],
     );
 
     const renderVoiceButtonIcon = useCallback(
@@ -1720,10 +1703,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           hovered={Boolean(hovered)}
           isDictating={isDictating}
           isMutedRealtime={Boolean(isRealtimeVoiceForCurrentAgent && voice?.isMuted)}
-          buttonIconSize={buttonIconSize}
         />
       ),
-      [isDictating, isRealtimeVoiceForCurrentAgent, voice?.isMuted, buttonIconSize],
+      [isDictating, isRealtimeVoiceForCurrentAgent, voice?.isMuted],
     );
 
     return (
@@ -1806,7 +1788,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 isSubmitLoading={isSubmitLoading}
                 submitIcon={submitIcon}
                 submitButtonTestID={submitButtonTestID}
-                buttonIconSize={buttonIconSize}
                 sendKeys={DEFAULT_SEND_KEYS}
                 sendTooltipLabel={sendTooltipLabel}
               />
@@ -1998,13 +1979,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
 })) as unknown as Record<string, object>;
 
-const composerMetrics = StyleSheet.create((theme) => ({
-  buttonIcon: {
-    width: resolveComposerButtonIconSize(theme),
-  },
-}));
-
 const ThemedPlus = withUnistyles(Plus);
+const ThemedSquare = withUnistyles(Square);
 const ThemedMic = withUnistyles(Mic);
 const ThemedMicOff = withUnistyles(MicOff);
 const ThemedArrowUp = withUnistyles(ArrowUp);
@@ -2012,9 +1988,22 @@ const ThemedCornerDownLeft = withUnistyles(CornerDownLeft);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedTextInput = withUnistyles(TextInput);
 
-const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const iconAccentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
+const composerIconSizeMapping = (theme: Theme) => ({
+  size: resolveComposerButtonIconSize(theme),
+});
+const composerIconForegroundMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+  size: resolveComposerButtonIconSize(theme),
+});
+const composerIconForegroundMutedMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: resolveComposerButtonIconSize(theme),
+});
+const composerIconAccentForegroundMapping = (theme: Theme) => ({
+  color: theme.colors.accentForeground,
+  size: resolveComposerButtonIconSize(theme),
+});
 const textInputPlaceholderColorMapping = (theme: Theme) => ({
   placeholderTextColor: theme.colors.surface4,
 });
