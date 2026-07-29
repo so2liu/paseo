@@ -10,7 +10,7 @@
 
 ```bash
 git fetch upstream --tags
-gh release list --repo getpaseo/paseo --exclude-drafts --limit 20 \
+gh release list --repo getpaseo/paseo --exclude-drafts --limit 200 \
   --json tagName,publishedAt,isPrerelease \
   --jq 'sort_by(.publishedAt) | reverse | .[0]'
 ```
@@ -19,8 +19,12 @@ gh release list --repo getpaseo/paseo --exclude-drafts --limit 20 \
 是 prerelease。
 
 `--exclude-drafts` 不能省。草稿 release 默认会混在列表里，但它未必有能拉取的
-tag，被选中就会卡住整个同步。同样不要只取"列表第一行"，显式按 `publishedAt`
-排序 —— 列表的默认顺序不保证是发布时间序。
+tag，被选中就会卡住整个同步。
+
+`--jq` 的排序也不能省：列表的默认顺序不保证是发布时间序。同理 `--limit` 要给足
+（上游目前不到 200 个 release）—— `--limit` 限制的是**取回多少条**，截断发生在
+排序之前，给小了等于用没保证的默认顺序先筛一遍，再对筛剩的排序，那前面的排序就
+白做了。
 
 这条规则替代的失败：早先的版本写的是"从最新 beta tag 同步"，而在 `v0.2.3` 时
 上游剩下的 prerelease（`v0.2.0-beta.4` 及更早）全都比它旧，照做会倒退一整条
@@ -127,17 +131,20 @@ npm run lint
 已经查过了"的错觉比没有清单更危险。作为量级参考：`v0.2.2` 到同步前，fork 自己的
 提交有 52 个，任何手写清单都只列得到其中几个。
 
-正确做法是从历史推导本次真正有风险的范围——改动过本次冲突文件的 fork 提交：
+正确做法是从历史推导本次真正有风险的范围——**碰过上游本次改动文件的 fork 提交**。
+把上游改动的文件当作 pathspec 传给 `git log`，一条命令直接算出来：
 
 ```bash
-# fork 自己的提交
-git log --oneline <上次基线>..<同步前的 main> --no-merges
-# 上游这次动过的文件
-git diff --name-only <上次基线>...<新基线>
+git diff --name-only <上次基线>...<新基线> > /tmp/upstream-changed.txt
+git log --oneline <上次基线>..<同步前的 main> --no-merges -- $(cat /tmp/upstream-changed.txt)
 ```
 
-两者的交集就是必须逐个确认的部分，比通读 52 个提交现实得多。凡是落在交集里的
-提交，都要确认它的行为在合并后还在。
+第二条命令的输出就是需要逐个确认的 fork 提交。注意两条命令不能各跑各的再"人肉
+求交集"——前者输出文件路径、后者输出提交，两种东西对不上；必须像上面这样把路径
+喂给 `git log` 当过滤条件，让 git 来算。
+
+`v0.2.3` 那次的实际数字：上游改了 211 个文件，fork 共 52 个提交，交集是 25 个。
+逐个确认 25 个提交的行为是否还在，现实得多。
 
 下面几个是历史上出过问题或容易被静默丢掉的，无论交集算出什么都单独确认一遍：
 
