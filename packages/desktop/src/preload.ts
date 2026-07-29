@@ -8,6 +8,7 @@ import type { BrowserKeyboardPolicy } from "./features/browser-keyboard/index.js
 // with PASEO_BROWSER_PROFILE_PARTITION in features/browser-profile.ts; preload-sandbox.test.ts
 // guards both the no-local-import rule and this drift. Type-only imports are fine (erased at emit).
 const PASEO_BROWSER_PROFILE_PARTITION = "persist:paseo-browser";
+const DESKTOP_VERSION_ARGUMENT_PREFIX = "--paseo-desktop-version=";
 
 type EventHandler = (payload: unknown) => void;
 
@@ -17,8 +18,23 @@ interface AttachedBrowserRegistration {
   webContentsId: number;
 }
 
+function resolveDesktopVersion(): string | undefined {
+  const argument = process.argv.find((value) => value.startsWith(DESKTOP_VERSION_ARGUMENT_PREFIX));
+  if (!argument) {
+    return undefined;
+  }
+
+  const encodedVersion = argument.slice(DESKTOP_VERSION_ARGUMENT_PREFIX.length);
+  try {
+    return decodeURIComponent(encodedVersion) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 contextBridge.exposeInMainWorld("paseoDesktop", {
   platform: process.platform,
+  version: resolveDesktopVersion(),
   invoke: (command: string, args?: Record<string, unknown>) =>
     ipcRenderer.invoke("paseo:invoke", command, args),
   getPendingOpenProject: () =>

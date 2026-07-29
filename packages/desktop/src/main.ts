@@ -98,6 +98,7 @@ import {
 import { AgentNavigationInbox, parseAgentDeepLinkFromArgv } from "./agent-navigation.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
+const DESKTOP_VERSION_ARGUMENT_PREFIX = "--paseo-desktop-version=";
 const APP_SCHEME = "paseo";
 const PASEO_DEBUG = process.env.PASEO_DEBUG === "1";
 const DISABLE_SINGLE_INSTANCE_LOCK = process.env.PASEO_DISABLE_SINGLE_INSTANCE_LOCK === "1";
@@ -708,6 +709,9 @@ async function createWindow(
     }),
     webPreferences: {
       preload: getPreloadPath(),
+      additionalArguments: [
+        `${DESKTOP_VERSION_ARGUMENT_PREFIX}${encodeURIComponent(app.getVersion())}`,
+      ],
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: true,

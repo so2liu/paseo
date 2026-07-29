@@ -1,4 +1,6 @@
 import Constants from "expo-constants";
+import { getIsElectron } from "@/constants/platform";
+import { getDesktopHost } from "@/desktop/host";
 import appPackage from "../../package.json";
 import { withCustomBuildTag } from "./custom-build-version";
 
@@ -37,6 +39,13 @@ export function resolveAppVersion(): string | null {
 }
 
 export function resolveDisplayAppVersion(): string | null {
+  if (getIsElectron()) {
+    const desktopVersion = toVersionOrNull(getDesktopHost()?.version);
+    if (desktopVersion) {
+      return desktopVersion;
+    }
+  }
+
   const version = resolveAppVersion();
   return version ? withCustomBuildTag(version) : null;
 }

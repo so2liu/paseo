@@ -13,6 +13,7 @@ import { PASEO_BROWSER_PROFILE_PARTITION } from "./features/browser-profile.js";
 const SANDBOX_ALLOWLIST = new Set(["electron"]);
 
 const preloadPath = join(dirname(fileURLToPath(import.meta.url)), "preload.ts");
+const mainPath = join(dirname(fileURLToPath(import.meta.url)), "main.ts");
 
 // Collect every module specifier that survives to emitted JavaScript as a runtime load.
 // Type-only imports/exports are erased by tsc and are therefore ignored.
@@ -95,5 +96,26 @@ describe("preload sandbox safety", () => {
       "PASEO_BROWSER_PROFILE_PARTITION not found as a double-quoted string literal in preload.ts",
     ).not.toBeNull();
     expect(match![1]).toBe(PASEO_BROWSER_PROFILE_PARTITION);
+  });
+
+  // The desktop version reaches the renderer as a `--paseo-desktop-version=` argv entry
+  // that main.ts writes and preload.ts parses. The sandbox rule forbids sharing the
+  // literal through an import, so both copies are compared here instead. Drift is
+  // silent otherwise: preload simply finds no match, `version` becomes undefined, and
+  // the About row quietly falls back to the client package version — the exact bug
+  // this feature fixed, with no crash and no failing test to catch it.
+  it("keeps the desktop version argv prefix in sync with main", () => {
+    const prefixPattern = /const\s+DESKTOP_VERSION_ARGUMENT_PREFIX\s*=\s*"([^"]+)"/;
+    const preloadMatch = readFileSync(preloadPath, "utf8").match(prefixPattern);
+    const mainMatch = readFileSync(mainPath, "utf8").match(prefixPattern);
+    expect(
+      preloadMatch,
+      "DESKTOP_VERSION_ARGUMENT_PREFIX not found as a double-quoted string literal in preload.ts",
+    ).not.toBeNull();
+    expect(
+      mainMatch,
+      "DESKTOP_VERSION_ARGUMENT_PREFIX not found as a double-quoted string literal in main.ts",
+    ).not.toBeNull();
+    expect(preloadMatch![1]).toBe(mainMatch![1]);
   });
 });
