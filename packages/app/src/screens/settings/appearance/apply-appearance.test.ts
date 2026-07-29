@@ -39,6 +39,8 @@ interface FakeTheme {
     "4xl": number;
   };
   lineHeight: { diff: number };
+  iconSize: { xs: number; sm: number; md: number; lg: number };
+  controlHeight: { tight: number; compact: number; field: number };
   colors: { foreground: string; syntax: Record<string, string> };
 }
 
@@ -58,6 +60,8 @@ function makeFakeTheme(): FakeTheme {
       "4xl": 34,
     },
     lineHeight: { diff: 22 },
+    iconSize: { xs: 12, sm: 14, md: 16, lg: 20 },
+    controlHeight: { tight: 28, compact: 32, field: 44 },
     colors: { foreground: "#fff", syntax: {} },
   };
 }
@@ -138,6 +142,27 @@ describe("applyAppearance", () => {
     expect(fontSize.lg).toBe(16);
   });
 
+  it("scales icons and control heights from their canonical ramps without compounding", () => {
+    applyAppearance(makeInput({ uiFontSize: 32 }));
+
+    const updater = updateTheme.mock.calls[0]?.[1] as unknown as ThemeUpdater;
+    const alreadyScaled = makeFakeTheme();
+    alreadyScaled.iconSize = { xs: 99, sm: 99, md: 99, lg: 99 };
+    alreadyScaled.controlHeight = { tight: 99, compact: 99, field: 99 };
+
+    const result = updater(alreadyScaled);
+    expect(result.iconSize).toEqual({ xs: 24, sm: 28, md: 32, lg: 40 });
+    expect(result.controlHeight).toEqual({ tight: 56, compact: 64, field: 88 });
+  });
+
+  it("keeps authored icon and control geometry at the default UI size", () => {
+    applyAppearance(makeInput({ uiFontSize: 16 }));
+
+    const result = runCapturedUpdater();
+    expect(result.iconSize).toEqual({ xs: 12, sm: 14, md: 16, lg: 20 });
+    expect(result.controlHeight).toEqual({ tight: 28, compact: 32, field: 44 });
+  });
+
   it("leaves the UI ramp at authored sizes when only the code size changes", () => {
     applyAppearance(makeInput({ uiFontSize: 16, codeFontSize: 10 }));
 
@@ -151,6 +176,14 @@ describe("applyAppearance", () => {
     applyAppearance(makeInput({ uiFontSize: 14, codeFontSize: 18 }));
 
     expect(runCapturedUpdater().fontSize.code).toBe(18);
+  });
+
+  it("does not let the independent code size affect icons or controls", () => {
+    applyAppearance(makeInput({ uiFontSize: 16, codeFontSize: 32 }));
+
+    const result = runCapturedUpdater();
+    expect(result.iconSize).toEqual({ xs: 12, sm: 14, md: 16, lg: 20 });
+    expect(result.controlHeight).toEqual({ tight: 28, compact: 32, field: 44 });
   });
 
   it("couples lineHeight.diff to the code font size", () => {

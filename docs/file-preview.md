@@ -31,21 +31,28 @@ source must never be sent to a hosted rendering service.
 ## HTML
 
 `.html` and `.htm` files render as documents instead of syntax-highlighted source. Previewed HTML
-is untrusted workspace content:
+is agent-generated workspace content, and the owner expects it to render like a normal web page:
 
-- web renders it in an iframe with an empty `sandbox` permission set;
-- native disables JavaScript and navigation in `react-native-webview`;
-- `createSandboxedHtmlDocument` injects a CSP that blocks scripts, network requests, frames,
-  objects, forms, and base-URL changes;
-- inline styles and embedded `data:`/`blob:` images, media, and fonts remain available.
+- web renders it in a sandboxed iframe with `allow-scripts`, but deliberately omits
+  `allow-same-origin`;
+- native enables JavaScript in `react-native-webview`, while top-level navigation remains limited
+  to the inline preview document;
+- `createSandboxedHtmlDocument` injects a permissive CSP for scripts, styles, images, fonts, media,
+  frames, and network connections, including external, `data:`, and `blob:` resources. Inline
+  scripts/styles and eval-based development/CDN runtimes are allowed so common agent-generated
+  pages, including Tailwind CDN documents, render correctly;
+- objects, base-URL changes, and form submissions remain disabled because they are not required to
+  render the preview.
 
 Like Markdown, HTML gets the bar's Preview/Source toggle when the file is editable. Without that,
 an editable `.html` would open straight into the source editor and the rendered document would be
 unreachable.
 
-Do not add `allow-same-origin`, `allow-scripts`, external resource origins, file access, or app
-bridges to the HTML preview. Relative workspace assets are intentionally not resolved by this
-initial sandboxed preview.
+Do not add `allow-same-origin` or app bridges to the HTML preview. On web, omitting
+`allow-same-origin` gives the document an opaque origin, so its scripts cannot enter the host's
+same-origin context or access Paseo storage and cookies. This boundary can still make pages that
+require a non-opaque origin or credentials/CORS access fail; that is an intentional tradeoff.
+Relative workspace assets are not resolved by the preview.
 
 ## File downloads
 

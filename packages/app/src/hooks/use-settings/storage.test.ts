@@ -9,6 +9,8 @@ import {
   DEFAULT_UI_FONT_SIZE,
   loadAppSettingsFromStorage,
   loadSettingsFromStorage,
+  MAX_UI_FONT_SIZE,
+  MIN_UI_FONT_SIZE,
   parseClampedFontSize,
   parseTerminalScrollbackLines,
   saveAppSettings,
@@ -377,14 +379,14 @@ describe("appearance settings", () => {
         [APP_SETTINGS_KEY]: JSON.stringify({ uiFontSize: 999 }),
       }),
     });
-    expect((await loadAppSettingsFromStorage(deps)).uiFontSize).toBe(24);
+    expect((await loadAppSettingsFromStorage(deps)).uiFontSize).toBe(MAX_UI_FONT_SIZE);
 
     const low = makeDeps({
       storage: createInMemoryKeyValueStorage({
         [APP_SETTINGS_KEY]: JSON.stringify({ uiFontSize: 8 }),
       }),
     });
-    expect((await loadAppSettingsFromStorage(low)).uiFontSize).toBe(11);
+    expect((await loadAppSettingsFromStorage(low)).uiFontSize).toBe(MIN_UI_FONT_SIZE);
 
     const bogus = makeDeps({
       storage: createInMemoryKeyValueStorage({

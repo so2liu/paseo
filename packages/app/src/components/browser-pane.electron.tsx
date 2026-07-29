@@ -43,7 +43,10 @@ import {
 } from "@/attachments/workspace-attachments-store";
 import type { AttachmentMetadata, BrowserElementAttachment } from "@/attachments/types";
 import { persistAttachmentFromDataUrl } from "@/attachments/service";
-import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import {
+  getWorkspaceSecondaryHeaderHeight,
+  scaleWorkspaceSecondaryHeaderGeometry,
+} from "@/constants/layout";
 import {
   getDesktopHost,
   isElectronRuntime,
@@ -504,8 +507,32 @@ const ThemedSmartphone = withUnistyles(Smartphone);
 const ThemedTablet = withUnistyles(Tablet);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedChevronDown = withUnistyles(ChevronDown);
-const deviceMutedIconMapping = (theme: { colors: { foregroundMuted: string } }) => ({
+const ThemedArrowLeft = withUnistyles(ArrowLeft);
+const ThemedArrowRight = withUnistyles(ArrowRight);
+const ThemedRotateCw = withUnistyles(RotateCw);
+const ThemedWrench = withUnistyles(Wrench);
+const ThemedMousePointer2 = withUnistyles(MousePointer2);
+const ThemedCamera = withUnistyles(Camera);
+const chromeMutedIconMapping = (theme: {
+  colors: { foregroundMuted: string };
+  iconSize: { md: number };
+}) => ({
   color: theme.colors.foregroundMuted,
+  size: theme.iconSize.md,
+});
+const chromeAccentIconMapping = (theme: {
+  colors: { accent: string };
+  iconSize: { md: number };
+}) => ({
+  color: theme.colors.accent,
+  size: theme.iconSize.md,
+});
+const chromeChevronIconMapping = (theme: {
+  colors: { foregroundMuted: string };
+  iconSize: { xs: number };
+}) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.xs,
 });
 
 function resolveThemedDeviceIcon(icon: LucideIcon): typeof ThemedMaximize {
@@ -530,10 +557,7 @@ function DeviceSizeMenuItem({
   const handleSelect = useCallback(() => {
     onSelect(preset.id);
   }, [onSelect, preset.id]);
-  const leading = useMemo(
-    () => <ThemedIcon size={16} uniProps={deviceMutedIconMapping} />,
-    [ThemedIcon],
-  );
+  const leading = useMemo(() => <ThemedIcon uniProps={chromeMutedIconMapping} />, [ThemedIcon]);
   return (
     <DropdownMenuItem
       onSelect={handleSelect}
@@ -566,8 +590,8 @@ function DeviceSizeMenu({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger accessibilityLabel={label} style={triggerStyle}>
             <View style={styles.deviceTrigger}>
-              <SelectedIcon size={16} uniProps={deviceMutedIconMapping} />
-              <ThemedChevronDown size={12} uniProps={deviceMutedIconMapping} />
+              <SelectedIcon uniProps={chromeMutedIconMapping} />
+              <ThemedChevronDown uniProps={chromeChevronIconMapping} />
             </View>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -1585,7 +1609,7 @@ export function BrowserPane({
             onPress={handleBack}
             style={backIconButtonStyle}
           >
-            <ArrowLeft size={16} color={theme.colors.foregroundMuted} />
+            <ThemedArrowLeft uniProps={chromeMutedIconMapping} />
           </ToolbarButton>
           <ToolbarButton
             label={t("workspace.browser.controls.forward")}
@@ -1593,7 +1617,7 @@ export function BrowserPane({
             onPress={handleForward}
             style={forwardIconButtonStyle}
           >
-            <ArrowRight size={16} color={theme.colors.foregroundMuted} />
+            <ThemedArrowRight uniProps={chromeMutedIconMapping} />
           </ToolbarButton>
           <ToolbarButton
             label={
@@ -1604,7 +1628,7 @@ export function BrowserPane({
             onPress={handleRefresh}
             style={baseIconButtonStyle}
           >
-            <RotateCw size={16} color={theme.colors.foregroundMuted} />
+            <ThemedRotateCw uniProps={chromeMutedIconMapping} />
           </ToolbarButton>
         </View>
         <View style={styles.urlBarWrap}>
@@ -1633,7 +1657,7 @@ export function BrowserPane({
             onPress={handleOpenDevTools}
             style={baseIconButtonStyle}
           >
-            <Wrench size={16} color={theme.colors.foregroundMuted} />
+            <ThemedWrench uniProps={chromeMutedIconMapping} />
           </ToolbarButton>
           <ToolbarButton
             label={
@@ -1645,10 +1669,9 @@ export function BrowserPane({
             onPress={handleToggleElementSelector}
             style={annotateIconButtonStyle}
           >
-            <MousePointer2
-              size={16}
-              color={
-                selectorMode === "annotate" ? theme.colors.accent : theme.colors.foregroundMuted
+            <ThemedMousePointer2
+              uniProps={
+                selectorMode === "annotate" ? chromeAccentIconMapping : chromeMutedIconMapping
               }
             />
           </ToolbarButton>
@@ -1662,10 +1685,9 @@ export function BrowserPane({
             onPress={handleToggleScreenshot}
             style={screenshotIconButtonStyle}
           >
-            <Camera
-              size={16}
-              color={
-                selectorMode === "screenshot" ? theme.colors.accent : theme.colors.foregroundMuted
+            <ThemedCamera
+              uniProps={
+                selectorMode === "screenshot" ? chromeAccentIconMapping : chromeMutedIconMapping
               }
             />
           </ToolbarButton>
@@ -1794,11 +1816,11 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface0,
   },
   chromeRow: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    height: getWorkspaceSecondaryHeaderHeight(theme),
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
+    gap: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
+    paddingHorizontal: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
@@ -1806,18 +1828,18 @@ const styles = StyleSheet.create((theme) => ({
   chromeLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
     flexShrink: 0,
   },
   chromeRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
     flexShrink: 0,
   },
   iconButton: {
-    width: 28,
-    height: 28,
+    width: theme.controlHeight.tight,
+    height: theme.controlHeight.tight,
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
@@ -1834,9 +1856,9 @@ const styles = StyleSheet.create((theme) => ({
   urlBarWrap: {
     flex: 1,
     minWidth: 0,
-    height: 28,
+    height: theme.controlHeight.tight,
     borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: theme.colors.surface1,

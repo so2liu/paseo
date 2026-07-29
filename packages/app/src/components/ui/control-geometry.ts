@@ -1,5 +1,5 @@
 import type { StyleProp, ViewStyle } from "react-native";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import type { Theme } from "@/styles/theme";
 
 export type ButtonControlSize = "xs" | "sm" | "md" | "lg";
 export type FieldControlSize = "sm" | "md";
@@ -22,9 +22,6 @@ export interface ControlInteractionStyleMap {
   controlDisabled?: StyleProp<ViewStyle>;
 }
 
-const TIGHT_CONTROL_HEIGHT = 28;
-const COMPACT_CONTROL_HEIGHT = 32;
-const FIELD_CONTROL_HEIGHT = 44;
 const SEGMENTED_TIGHT_INSET = 2;
 const SEGMENTED_COMPACT_INSET = 2;
 const SEGMENTED_FIELD_INSET = 3;
@@ -35,32 +32,6 @@ const CONTROL_FOCUS_RING_WIDTH = 2;
 const CONTROL_FOCUS_RING_OFFSET = 1;
 const CONTROL_CENTER_JUSTIFY_CONTENT = "center";
 const FIELD_TEXT_LINE_HEIGHT_RATIO = 1.4;
-
-const controlHeights = {
-  tight: TIGHT_CONTROL_HEIGHT,
-  compact: COMPACT_CONTROL_HEIGHT,
-  field: FIELD_CONTROL_HEIGHT,
-};
-
-export const buttonIconSize: Record<ButtonControlSize, number> = {
-  xs: ICON_SIZE.xs,
-  sm: ICON_SIZE.sm,
-  md: ICON_SIZE.md,
-  lg: ICON_SIZE.lg,
-};
-
-export const segmentedIconSize: Record<SegmentedControlSize, number> = {
-  xs: ICON_SIZE.xs,
-  sm: ICON_SIZE.sm,
-  md: ICON_SIZE.md,
-};
-
-export const switchGeometry = {
-  trackWidth: SWITCH_TRACK_WIDTH,
-  trackHeight: SWITCH_TRACK_HEIGHT,
-  thumbSize: SWITCH_THUMB_SIZE,
-  thumbTravel: SWITCH_TRACK_WIDTH - SWITCH_THUMB_SIZE - (SWITCH_TRACK_HEIGHT - SWITCH_THUMB_SIZE),
-};
 
 function fieldLineHeight(fontSize: number): number {
   return Math.round(fontSize * FIELD_TEXT_LINE_HEIGHT_RATIO);
@@ -99,6 +70,18 @@ export function resolveControlInteractionStyles(
 }
 
 export function createControlGeometry(theme: Theme) {
+  const controlHeights = theme.controlHeight;
+  const switchScale = theme.iconSize.md / SWITCH_THUMB_SIZE;
+  const switchTrackWidth = SWITCH_TRACK_WIDTH * switchScale;
+  const switchTrackHeight = SWITCH_TRACK_HEIGHT * switchScale;
+  const switchThumbSize = SWITCH_THUMB_SIZE * switchScale;
+  const switchTrackInset = (switchTrackHeight - switchThumbSize) / 2;
+  const switchGeometry = {
+    trackWidth: switchTrackWidth,
+    trackHeight: switchTrackHeight,
+    thumbSize: switchThumbSize,
+    thumbTravel: switchTrackWidth - switchThumbSize - switchTrackInset * 2,
+  };
   const fieldTextSmLineHeight = fieldLineHeight(theme.fontSize.sm);
   const fieldTextMdLineHeight = fieldLineHeight(theme.fontSize.base);
   const fieldControlSm = {
@@ -192,6 +175,7 @@ export function createControlGeometry(theme: Theme) {
       opacity: theme.opacity[50],
     },
     switchControl,
+    switchGeometry,
     segmentedContainerXs: {
       minHeight: controlHeights.tight,
       padding: 0,

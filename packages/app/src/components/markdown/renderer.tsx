@@ -1,4 +1,5 @@
 import React, {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -76,7 +77,7 @@ export interface MarkdownRendererProps {
   enableHtmlish?: boolean;
 }
 
-export function MarkdownRenderer({
+export const MarkdownRenderer = memo(function MarkdownRenderer({
   text,
   compact = false,
   rules,
@@ -115,7 +116,7 @@ export function MarkdownRenderer({
       <MarkdownPartList parts={parts} rendererProps={rendererProps} />
     </AppearanceStyleBoundary>
   );
-}
+});
 
 type MarkdownPartRendererProps = Omit<MarkdownRendererProps, "text" | "enableHtmlish"> & {
   rules: RenderRules;
@@ -167,7 +168,7 @@ function getMarkdownPartIdentity(part: MarkdownDisplayPart): string {
   return `details:${part.summary.slice(0, 80)}:${part.body.slice(0, 80)}`;
 }
 
-function MarkdownPart({
+const MarkdownPart = memo(function MarkdownPart({
   part,
   rendererProps,
 }: {
@@ -187,7 +188,7 @@ function MarkdownPart({
   }
 
   return <MarkdownFragment text={part.text} {...rendererProps} />;
-}
+});
 
 function MarkdownFragment({
   text,

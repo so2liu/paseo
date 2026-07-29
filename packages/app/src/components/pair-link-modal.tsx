@@ -76,9 +76,9 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
     inputRef.current?.clear();
   }, []);
 
-  const pairIcon = useMemo(
-    () => <Link size={16} color={theme.colors.accentForeground} />,
-    [theme.colors.accentForeground],
+  const pairIcon = useCallback(
+    (color: string, size: number) => <Link size={size} color={color} />,
+    [],
   );
 
   const handleClose = useCallback(() => {

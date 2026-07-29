@@ -298,7 +298,6 @@ const styles = StyleSheet.create((theme) => ({
 
 export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const [daemonLogs, setDaemonLogs] = useState<DesktopDaemonLogs | null>(null);
   const [logsError, setLogsError] = useState<string | null>(null);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
@@ -364,21 +363,21 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
     void Clipboard.setStringAsync(payload);
   }, [daemonLogs?.logPath, daemonLogs?.contents, logsText]);
 
-  const copyIcon = useMemo(
-    () => <Copy size={16} color={theme.colors.foreground} />,
-    [theme.colors.foreground],
+  const copyIcon = useCallback(
+    (color: string, size: number) => <Copy size={size} color={color} />,
+    [],
   );
-  const warningIcon = useMemo(
-    () => <TriangleAlert size={16} color={theme.colors.foreground} />,
-    [theme.colors.foreground],
+  const warningIcon = useCallback(
+    (color: string, size: number) => <TriangleAlert size={size} color={color} />,
+    [],
   );
-  const bookIcon = useMemo(
-    () => <BookOpen size={16} color={theme.colors.foreground} />,
-    [theme.colors.foreground],
+  const bookIcon = useCallback(
+    (color: string, size: number) => <BookOpen size={size} color={color} />,
+    [],
   );
-  const retryIcon = useMemo(
-    () => <RotateCw size={16} color={theme.colors.palette.white} />,
-    [theme.colors.palette.white],
+  const retryIcon = useCallback(
+    (color: string, size: number) => <RotateCw size={size} color={color} />,
+    [],
   );
 
   if (!isError) {

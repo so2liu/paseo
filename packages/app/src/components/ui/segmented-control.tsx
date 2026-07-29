@@ -2,11 +2,7 @@ import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  createControlGeometry,
-  segmentedIconSize,
-  type SegmentedControlSize,
-} from "@/components/ui/control-geometry";
+import { createControlGeometry, type SegmentedControlSize } from "@/components/ui/control-geometry";
 import type { Theme } from "@/styles/theme";
 
 type SegmentedControlIconRenderer = (props: { color: string; size: number }) => ReactNode;
@@ -41,9 +37,6 @@ function SegmentIcon({ icon, iconSize, iconColor }: SegmentIconProps) {
 
 const ThemedSegmentIcon = withUnistyles(SegmentIcon);
 
-const selectedIconMapping = (theme: Theme) => ({ iconColor: theme.colors.surface0 });
-const mutedIconMapping = (theme: Theme) => ({ iconColor: theme.colors.foregroundMuted });
-
 export function SegmentedControl<T extends string>({
   options,
   value,
@@ -61,8 +54,6 @@ export function SegmentedControl<T extends string>({
   const containerSizeStyle = sizeStyles.container;
   const segmentSizeStyle = sizeStyles.segment;
   const labelSizeStyle = sizeStyles.label;
-  const iconSize = segmentedIconSize[size];
-
   const containerStyle = useMemo(
     () => [styles.container, containerSizeStyle, style],
     [containerSizeStyle, style],
@@ -78,7 +69,7 @@ export function SegmentedControl<T extends string>({
             key={option.value}
             option={option}
             isSelected={isSelected}
-            iconSize={iconSize}
+            iconSizeKey={size}
             hideLabels={hideLabels}
             segmentSizeStyle={segmentSizeStyle}
             labelSizeStyle={labelSizeStyle}
@@ -94,7 +85,7 @@ export function SegmentedControl<T extends string>({
 function SegmentItem<T extends string>({
   option,
   isSelected,
-  iconSize,
+  iconSizeKey,
   hideLabels,
   segmentSizeStyle,
   labelSizeStyle,
@@ -103,13 +94,20 @@ function SegmentItem<T extends string>({
 }: {
   option: SegmentedControlOption<T>;
   isSelected: boolean;
-  iconSize: number;
+  iconSizeKey: SegmentedControlSize;
   hideLabels: boolean;
   segmentSizeStyle: StyleProp<ViewStyle>;
   labelSizeStyle: StyleProp<TextStyle>;
   currentValue: T;
   onValueChange: (value: T) => void;
 }) {
+  const iconMapping = useMemo(
+    () => (theme: Theme) => ({
+      iconColor: isSelected ? theme.colors.surface0 : theme.colors.foregroundMuted,
+      iconSize: theme.iconSize[iconSizeKey],
+    }),
+    [iconSizeKey, isSelected],
+  );
   const labelStyle = useMemo(
     () => [styles.label, labelSizeStyle, isSelected && styles.labelSelected],
     [labelSizeStyle, isSelected],
@@ -144,13 +142,7 @@ function SegmentItem<T extends string>({
       onPress={handlePress}
       style={pressableStyle}
     >
-      {option.icon ? (
-        <ThemedSegmentIcon
-          icon={option.icon}
-          iconSize={iconSize}
-          uniProps={isSelected ? selectedIconMapping : mutedIconMapping}
-        />
-      ) : null}
+      {option.icon ? <ThemedSegmentIcon icon={option.icon} uniProps={iconMapping} /> : null}
       {hideLabels ? null : (
         <Text style={labelStyle} numberOfLines={1}>
           {option.label}

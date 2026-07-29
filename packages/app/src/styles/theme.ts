@@ -464,6 +464,12 @@ export const ICON_SIZE = {
   lg: 20,
 } as const;
 
+export const CONTROL_HEIGHT = {
+  tight: 28,
+  compact: 32,
+  field: 44,
+} as const;
+
 export const FONT_WEIGHT = {
   normal: "normal" as const,
   medium: "500" as const,
@@ -509,16 +515,16 @@ export const DEFAULT_MONO_FONT_STACK: string = Platform.select({
   web: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
 });
 
-// `fontSize`, `fontFamily`, and `lineHeight` are deliberately widened to plain
-// `number`/`string` (not narrowed by `as const`) so the appearance updater can patch
-// them at runtime via `UnistylesRuntime.updateTheme`. The remaining tokens keep their
-// literal types.
+// Appearance-controlled tokens are deliberately widened to plain `number`/`string`
+// (not narrowed by `as const`) so `UnistylesRuntime.updateTheme` can patch them at
+// runtime. The remaining tokens keep their literal types.
 interface CommonTheme {
   spacing: typeof SPACING;
   fontSize: Record<keyof typeof FONT_SIZE, number>;
   fontFamily: { ui: string; mono: string };
   lineHeight: Record<keyof typeof LINE_HEIGHT, number>;
-  iconSize: typeof ICON_SIZE;
+  iconSize: Record<keyof typeof ICON_SIZE, number>;
+  controlHeight: Record<keyof typeof CONTROL_HEIGHT, number>;
   fontWeight: typeof FONT_WEIGHT;
   borderRadius: typeof BORDER_RADIUS;
   borderWidth: typeof BORDER_WIDTH;
@@ -531,6 +537,7 @@ const commonTheme: CommonTheme = {
   fontFamily: { ui: DEFAULT_UI_FONT_STACK, mono: DEFAULT_MONO_FONT_STACK },
   lineHeight: LINE_HEIGHT,
   iconSize: ICON_SIZE,
+  controlHeight: CONTROL_HEIGHT,
   fontWeight: FONT_WEIGHT,
   borderRadius: BORDER_RADIUS,
   borderWidth: BORDER_WIDTH,

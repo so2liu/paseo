@@ -11,8 +11,11 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
-import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import {
+  getWorkspaceSecondaryHeaderHeight,
+  scaleWorkspaceSecondaryHeaderGeometry,
+} from "@/constants/layout";
 import * as Clipboard from "expo-clipboard";
 import { ChevronDown, Eye, EyeOff, RotateCw } from "lucide-react-native";
 import { MaterialFileIcon } from "@/components/material-file-icon";
@@ -43,8 +46,20 @@ const SORT_OPTIONS: { value: SortOption }[] = [
 ];
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedEye = withUnistyles(Eye);
+const ThemedEyeOff = withUnistyles(EyeOff);
+const ThemedRotateCw = withUnistyles(RotateCw);
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
+});
+const headerIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.sm,
+});
+const headerChevronMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.xs,
 });
 
 function formatFileSize({ size }: { size: number }): string {
@@ -495,7 +510,6 @@ interface FileExplorerPaneContentProps {
 }
 
 function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const {
     error,
@@ -573,7 +587,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           <Text style={styles.sortTriggerText} testID="files-sort-label">
             {currentSortLabel}
           </Text>
-          <ChevronDown size={12} color={theme.colors.foregroundMuted} />
+          <ThemedChevronDown uniProps={headerChevronMapping} />
         </Pressable>
         <View style={styles.headerActions}>
           <Pressable
@@ -586,9 +600,9 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
             testID="files-hidden-toggle"
           >
             {showHiddenFiles ? (
-              <Eye size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <ThemedEye uniProps={headerIconMapping} />
             ) : (
-              <EyeOff size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <ThemedEyeOff uniProps={headerIconMapping} />
             )}
           </Pressable>
           <Pressable
@@ -606,9 +620,9 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           >
             <View style={styles.refreshIcon}>
               {isRefreshFetching ? (
-                <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+                <ThemedLoadingSpinner uniProps={headerIconMapping} />
               ) : (
-                <RotateCw size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+                <ThemedRotateCw uniProps={headerIconMapping} />
               )}
             </View>
           </Pressable>
@@ -1000,7 +1014,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   paneHeader: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    height: getWorkspaceSecondaryHeaderHeight(theme),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1012,10 +1026,10 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: theme.spacing[1],
-    marginLeft: theme.spacing[3] - theme.spacing[1],
-    paddingHorizontal: theme.spacing[1],
-    height: 24,
+    gap: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
+    marginLeft: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
+    paddingHorizontal: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
+    height: scaleWorkspaceSecondaryHeaderGeometry(theme, 24),
     borderRadius: theme.borderRadius.base,
   },
   sortTriggerHovered: {
@@ -1028,7 +1042,7 @@ const styles = StyleSheet.create((theme) => ({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
   },
   treeList: {
     flex: 1,
@@ -1135,8 +1149,8 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
   },
   iconButton: {
-    width: 22,
-    height: 22,
+    width: scaleWorkspaceSecondaryHeaderGeometry(theme, 22),
+    height: scaleWorkspaceSecondaryHeaderGeometry(theme, 22),
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
@@ -1148,8 +1162,8 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   refreshIcon: {
-    width: 16,
-    height: 16,
+    width: theme.iconSize.md,
+    height: theme.iconSize.md,
     alignItems: "center",
     justifyContent: "center",
   },

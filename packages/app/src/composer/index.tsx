@@ -159,8 +159,8 @@ const EMPTY_ATTACHMENT_SCOPE_KEYS: readonly string[] = [];
 function noop() {}
 const noopCallback = () => {};
 
-function resolveComposerButtonIconSize(): number {
-  return isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
+function resolveComposerButtonIconSize(theme: Theme): number {
+  return isWeb ? theme.iconSize.md : theme.iconSize.lg;
 }
 
 function resolveIsComposerLocked(
@@ -218,12 +218,10 @@ function buildCancelButtonStyle(isConnected: boolean, isCancellingAgent: boolean
 function buildRealtimeVoiceButtonStyle(
   hovered: boolean | undefined,
   voiceButtonDisabled: boolean,
-  reserveLeadingSpace: boolean,
 ): object[] {
   const hoveredStyle = hovered ? styles.iconButtonHovered : undefined;
   const disabledStyle = voiceButtonDisabled ? styles.buttonDisabled : undefined;
-  const reserveStyle = reserveLeadingSpace ? styles.realtimeVoiceButtonCompactReserve : undefined;
-  return [styles.realtimeVoiceButton, reserveStyle, hoveredStyle, disabledStyle].filter(
+  return [styles.realtimeVoiceButton, hoveredStyle, disabledStyle].filter(
     (value): value is object => Boolean(value),
   );
 }
@@ -250,14 +248,14 @@ function renderContextWindowMeter(
   serverId: string,
   provider: string | null,
   pending: boolean,
-  glyphSize: number,
+  glyphMapping: (theme: Theme) => { glyphSize: number },
 ): ReactElement | null {
   const hasData = contextWindowMaxTokens !== null && contextWindowUsedTokens !== null;
   if (!hasData && !pending) {
     return null;
   }
   return (
-    <ContextWindowMeter
+    <ThemedContextWindowMeter
       maxTokens={contextWindowMaxTokens}
       usedTokens={contextWindowUsedTokens}
       totalCostUsd={totalCostUsd}
@@ -265,7 +263,7 @@ function renderContextWindowMeter(
       serverId={serverId}
       provider={provider}
       pending={pending}
-      glyphSize={glyphSize}
+      uniProps={glyphMapping}
     />
   );
 }
@@ -890,7 +888,6 @@ function resolveContextWindowValues(
 }
 
 interface ComposerCancelButtonProps {
-  buttonIconSize: number;
   cancelButtonStyle: (object | undefined)[];
   handleCancelAgent: () => void;
   isConnected: boolean;
@@ -900,7 +897,6 @@ interface ComposerCancelButtonProps {
 }
 
 function ComposerCancelButton({
-  buttonIconSize,
   cancelButtonStyle,
   handleCancelAgent,
   isConnected,
@@ -914,7 +910,7 @@ function ComposerCancelButton({
   const icon = isCancellingAgent ? (
     <LoadingSpinner size="small" color="white" />
   ) : (
-    <Square size={buttonIconSize} color="white" fill="white" />
+    <ThemedSquare color="white" fill="white" uniProps={composerIconSizeMapping} />
   );
   const shortcutNode = agentInterruptKeys ? <Shortcut chord={agentInterruptKeys} /> : null;
   return (
@@ -955,7 +951,6 @@ function ComposerCancelButtonSlot({
 }
 
 interface ComposerVoiceModeButtonProps {
-  buttonIconSize: number;
   handleToggleRealtimeVoice: () => void;
   isConnected: boolean;
   isVoiceSwitching: boolean;
@@ -1000,7 +995,6 @@ function ComposerRightControlsSlot({
 }
 
 function ComposerVoiceModeButton({
-  buttonIconSize,
   handleToggleRealtimeVoice,
   isConnected,
   isVoiceSwitching,
@@ -1014,10 +1008,12 @@ function ComposerVoiceModeButton({
       if (isVoiceSwitching) {
         return <LoadingSpinner size="small" color="white" />;
       }
-      const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
-      return <ThemedAudioLines size={buttonIconSize} uniProps={colorMapping} />;
+      const iconMapping = hovered
+        ? composerIconForegroundMapping
+        : composerIconForegroundMutedMapping;
+      return <ThemedAudioLines uniProps={iconMapping} />;
     },
-    [buttonIconSize, isVoiceSwitching],
+    [isVoiceSwitching],
   );
   return (
     <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
@@ -1081,7 +1077,6 @@ export function Composer({
   isCompactLayout: isCompactLayoutOverride,
 }: ComposerProps) {
   const { t } = useTranslation();
-  const buttonIconSize = resolveComposerButtonIconSize();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const agentDirectoryStatus = useHostRuntimeAgentDirectoryStatus(serverId);
@@ -1929,8 +1924,8 @@ export function Composer({
   const voiceButtonDisabled = !isConnected || isVoiceSwitching;
   const realtimeVoiceButtonStyle = useCallback(
     (state: PressableStateCallbackType & { hovered?: boolean }) =>
-      buildRealtimeVoiceButtonStyle(state.hovered, voiceButtonDisabled, isCompactLayout),
-    [isCompactLayout, voiceButtonDisabled],
+      buildRealtimeVoiceButtonStyle(state.hovered, voiceButtonDisabled),
+    [voiceButtonDisabled],
   );
 
   const cancelButton = useMemo(
@@ -1939,7 +1934,6 @@ export function Composer({
         isAgentRunning={isAgentRunning}
         hasSendableContent={hasSendableContent}
         isProcessing={isProcessing}
-        buttonIconSize={buttonIconSize}
         cancelButtonStyle={cancelButtonStyle}
         handleCancelAgent={handleCancelAgent}
         isConnected={isConnected}
@@ -1950,7 +1944,6 @@ export function Composer({
     ),
     [
       agentInterruptKeys,
-      buttonIconSize,
       cancelButtonStyle,
       handleCancelAgent,
       hasSendableContent,
@@ -1971,7 +1964,6 @@ export function Composer({
         hasSendableContent={hasSendableContent}
         isProcessing={isProcessing}
         isCompact={isCompactLayout}
-        buttonIconSize={buttonIconSize}
         handleToggleRealtimeVoice={handleToggleRealtimeVoice}
         isConnected={isConnected}
         isVoiceSwitching={isVoiceSwitching}
@@ -1982,7 +1974,6 @@ export function Composer({
       />
     ),
     [
-      buttonIconSize,
       cancelButton,
       handleToggleRealtimeVoice,
       hasAgent,
@@ -2006,7 +1997,9 @@ export function Composer({
 
   const contextWindowPending =
     agentState.status === "initializing" || agentState.status === "running";
-  const contextWindowMeterGlyphSize = isCompactLayout ? ICON_SIZE.md : buttonIconSize;
+  const contextWindowMeterGlyphMapping = isCompactLayout
+    ? compactContextWindowMeterGlyphMapping
+    : composerContextWindowMeterGlyphMapping;
 
   const contextWindowMeter = useMemo(
     () =>
@@ -2018,7 +2011,7 @@ export function Composer({
         serverId,
         agentState.provider,
         contextWindowPending,
-        contextWindowMeterGlyphSize,
+        contextWindowMeterGlyphMapping,
       ),
     [
       contextWindowMaxTokens,
@@ -2027,7 +2020,7 @@ export function Composer({
       serverId,
       agentState.provider,
       contextWindowPending,
-      contextWindowMeterGlyphSize,
+      contextWindowMeterGlyphMapping,
     ],
   );
   const beforeVoiceContent = useMemo(
@@ -2404,35 +2397,31 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[3],
   },
   cancelButton: {
-    width: 28,
-    height: 28,
+    width: theme.controlHeight.tight,
+    height: theme.controlHeight.tight,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.palette.red[600],
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: theme.spacing[1],
   },
   rightControls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: theme.controlHeight.tight - resolveComposerButtonIconSize(theme),
   },
   contextWindowMeterSlot: {
-    width: 28,
-    height: 28,
+    width: theme.controlHeight.tight,
+    height: theme.controlHeight.tight,
     flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
   },
   realtimeVoiceButton: {
-    width: 28,
-    height: 28,
+    width: theme.controlHeight.tight,
+    height: theme.controlHeight.tight,
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
-  },
-  realtimeVoiceButtonCompactReserve: {
-    marginLeft: theme.spacing[1],
   },
   realtimeVoiceButtonActive: {
     backgroundColor: theme.colors.palette.green[600],
@@ -2520,12 +2509,31 @@ const ThemedArrowUp = withUnistyles(ArrowUp);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedAudioLines = withUnistyles(AudioLines);
+const ThemedSquare = withUnistyles(Square);
+const ThemedContextWindowMeter = withUnistyles(ContextWindowMeter);
 const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedImageIcon = withUnistyles(ImageIcon);
 const ThemedFileText = withUnistyles(FileText);
 const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const iconAccentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
+const composerIconSizeMapping = (theme: Theme) => ({
+  size: resolveComposerButtonIconSize(theme),
+});
+const composerIconForegroundMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+  size: resolveComposerButtonIconSize(theme),
+});
+const composerIconForegroundMutedMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: resolveComposerButtonIconSize(theme),
+});
+const compactContextWindowMeterGlyphMapping = (theme: Theme) => ({
+  glyphSize: theme.iconSize.md,
+});
+const composerContextWindowMeterGlyphMapping = (theme: Theme) => ({
+  glyphSize: resolveComposerButtonIconSize(theme),
+});
 
 function renderForgeAttachmentIcon(icon: string): ReactElement {
   return (

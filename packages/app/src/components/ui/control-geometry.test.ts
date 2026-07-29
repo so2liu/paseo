@@ -19,10 +19,21 @@ const theme = {
     accent: "#20744A",
     borderAccent: "#2F3534",
   },
+  controlHeight: {
+    tight: 28,
+    compact: 32,
+    field: 44,
+  },
   fontSize: {
     xs: 12,
     sm: 14,
     base: 16,
+  },
+  iconSize: {
+    xs: 12,
+    sm: 14,
+    md: 16,
+    lg: 20,
   },
   opacity: {
     50: 0.5,
@@ -139,5 +150,35 @@ describe("control geometry", () => {
     expect(geometry.segmentedSegmentXs.paddingHorizontal).toBe(geometry.buttonXs.paddingHorizontal);
     expect(geometry.segmentedSegmentSm.paddingHorizontal).toBe(geometry.buttonSm.paddingHorizontal);
     expect(geometry.segmentedSegmentMd.paddingHorizontal).toBe(geometry.buttonMd.paddingHorizontal);
+  });
+
+  it("derives control geometry from the active theme", () => {
+    const scaledTheme = {
+      ...theme,
+      controlHeight: { tight: 56, compact: 64, field: 88 },
+      iconSize: { xs: 24, sm: 28, md: 32, lg: 40 },
+    } as Theme;
+    const geometry = createControlGeometry(scaledTheme);
+
+    expect(geometry.buttonXs.minHeight).toBe(56);
+    expect(geometry.buttonSm.minHeight).toBe(64);
+    expect(geometry.buttonMd.minHeight).toBe(88);
+    expect(geometry.switchGeometry).toEqual({
+      trackWidth: 68,
+      trackHeight: 40,
+      thumbSize: 32,
+      thumbTravel: 28,
+    });
+  });
+
+  it("preserves the authored switch geometry at the default UI size", () => {
+    const geometry = createControlGeometry(theme);
+
+    expect(geometry.switchGeometry).toEqual({
+      trackWidth: 34,
+      trackHeight: 20,
+      thumbSize: 16,
+      thumbTravel: 14,
+    });
   });
 });

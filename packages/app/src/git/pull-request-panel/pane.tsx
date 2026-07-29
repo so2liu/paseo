@@ -44,7 +44,11 @@ import { useWorkspaceAttachmentsStore } from "@/attachments/workspace-attachment
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { isNative } from "@/constants/platform";
-import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import {
+  getWorkspaceSecondaryHeaderHeight,
+  scaleWorkspaceSecondaryHeaderGeometry,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { getForgePresentation } from "@/git/forge";
 import { CLIENT_FORGE_VIEW_MODULES } from "@/git/forges/view";
@@ -101,6 +105,10 @@ const ThemedMessageSquarePlus = withUnistyles(MessageSquarePlus);
 const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const secondaryHeaderIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.sm,
+});
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mergedColorMapping = (theme: Theme) => ({ color: theme.colors.statusMerged });
@@ -524,12 +532,9 @@ export function PullRequestPane({
             >
               <View style={styles.refreshIcon}>
                 {isRefreshing ? (
-                  <ThemedLoadingSpinner
-                    size={ICON_SIZE.sm}
-                    uniProps={foregroundMutedColorMapping}
-                  />
+                  <ThemedLoadingSpinner uniProps={secondaryHeaderIconMapping} />
                 ) : (
-                  <ThemedRotateCw size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+                  <ThemedRotateCw uniProps={secondaryHeaderIconMapping} />
                 )}
               </View>
             </Pressable>
@@ -1354,15 +1359,15 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.border,
   },
   toolbar: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    height: getWorkspaceSecondaryHeaderHeight(theme),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
-    paddingTop: theme.spacing[2],
+    paddingTop: 0,
     paddingRight: theme.spacing[3],
-    paddingBottom: theme.spacing[2],
+    paddingBottom: 0,
     paddingLeft: theme.spacing[3],
   },
   toolbarActions: {
@@ -1372,16 +1377,16 @@ const styles = StyleSheet.create((theme) => ({
   },
   viewButton: {
     gap: theme.spacing[1],
-    minHeight: 24,
-    height: 24,
+    minHeight: scaleWorkspaceSecondaryHeaderGeometry(theme, 24),
+    height: scaleWorkspaceSecondaryHeaderGeometry(theme, 24),
     paddingVertical: 0,
     paddingHorizontal: theme.spacing[1],
     borderRadius: theme.borderRadius.base,
   },
   refreshButton: {
     marginLeft: "auto",
-    width: 22,
-    height: 22,
+    width: scaleWorkspaceSecondaryHeaderGeometry(theme, 22),
+    height: scaleWorkspaceSecondaryHeaderGeometry(theme, 22),
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
