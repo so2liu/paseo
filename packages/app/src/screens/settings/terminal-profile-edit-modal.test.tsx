@@ -8,6 +8,7 @@ const { theme } = vi.hoisted(() => ({
   theme: {
     spacing: { 2: 8, 3: 12, 4: 16, 6: 24 },
     fontSize: { sm: 13, base: 15, xs: 11 },
+    controlHeight: { tight: 28, compact: 32, field: 44 },
     fontWeight: { medium: 500 },
     borderRadius: { md: 6, lg: 8, xl: 12 },
     borderWidth: { 1: 1 },
