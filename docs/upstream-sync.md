@@ -165,7 +165,10 @@ git log --oneline <上次基线>..<同步前的 main> --full-history -- $(cat /t
 `v0.2.3` 那次的实际数字：上游改了 211 个文件，fork 共 52 个提交，交集是 28 个。
 逐个确认这 28 个提交的行为是否还在，比通读 52 个现实得多。
 
-下面几个是历史上出过问题或容易被静默丢掉的，无论交集算出什么都单独确认一遍：
+这套推导是**启发式的，不是穷尽的**：它靠路径匹配，所以只在路径能对上时有效。
+如果 fork 自己把某个上游文件改了名，而上游后来又改了旧路径，新路径下的后续定制
+就落不进这份清单（本仓库至今没有出现过 fork 侧重命名，所以这是个理论缺口，但别
+把清单当成证明）。正因如此，下面这份单独确认清单不能省：
 
 - 火山引擎 STT provider（`packages/server/src/server/speech/providers/volcengine/`）
 - SQLite timeline store（`packages/server/src/server/agent/sqlite-agent-timeline-store.ts`）
