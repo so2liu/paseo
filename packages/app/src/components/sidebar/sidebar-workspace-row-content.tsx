@@ -482,7 +482,11 @@ const markDoneStyles = StyleSheet.create((theme) => ({
 
 export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => {
   const shortcutBadgeLineHeight = Math.round(theme.fontSize.xs * 1.2);
-  const shortcutBadgeSize = Math.max(18, shortcutBadgeLineHeight);
+  // RN sizing is border-box, so the 1px border on each side eats into the content
+  // area. Add both borders back or a large font leaves the text taller than the
+  // space inside the badge.
+  const shortcutBadgeBorderWidth = 1;
+  const shortcutBadgeSize = Math.max(18, shortcutBadgeLineHeight + shortcutBadgeBorderWidth * 2);
 
   return {
     rowRight: {
@@ -498,7 +502,7 @@ export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => {
       alignItems: "center",
       justifyContent: "center",
       borderRadius: theme.borderRadius.sm,
-      borderWidth: 1,
+      borderWidth: shortcutBadgeBorderWidth,
       borderColor: theme.colors.surface2,
       backgroundColor: theme.colors.surface0,
       flexShrink: 0,
