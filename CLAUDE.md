@@ -11,14 +11,39 @@ This repository is our fork of `getpaseo/paseo`, customized according to the own
 - Treat `so2liu/paseo` (`origin`) as our fork and `getpaseo/paseo` (`upstream`) as the upstream project.
 - Agents may commit completed, verified, in-scope work and push it to `origin` without waiting for a separate commit or push request. If the owner explicitly asks to keep changes local, leave them uncommitted, create a draft only, or not push, follow that instruction. Never push directly to `upstream`.
 - **Never push to `main` — not even a docs-only or one-line change.** Branch, push the branch, open a PR against `so2liu/paseo`, and let the automated review run. "The change is trivial" and "the owner asked me to push" are not exemptions; pushing means pushing a branch. Release tags are the one exception — `git push origin v0.2.2-LY.2` is a tag push, not a branch push, and is how [docs/fork-releases.md](docs/fork-releases.md) says to cut a release.
-- When the owner asks to pull, sync, or update from upstream, handle the Git operations for them and update from the latest upstream beta release tag, not from an arbitrary `upstream/main` commit. Fetch upstream tags and verify which GitHub prerelease is newest before choosing the base.
-- Preserve our custom features and behavior when updating. Rebase, merge, or port the custom commits onto the selected beta as appropriate, and verify that the resulting tree still contains the intended customizations.
+- When the owner asks to pull, sync, or update from upstream, handle the Git operations for them and update from the **newest upstream release tag by publish date**.
+  - **Never sync from `upstream/main`, and never from a bare commit SHA.** `main` carries unreleased, unstabilized work; basing the fork on it imports breakage that upstream has not shipped to anyone yet, and there is no version number to anchor our own `-LY.N` line to. The base is always a tag. "Take the newest commit" is not a shortcut to "take the newest release" — if the newest release is a week old, a week old is the correct base.
+  - **Pick by recency, not by channel — a beta is a perfectly good base when it is the newest.** Betas and stables compete on equal footing; never hold out for a stable, and never assume the newest tag is a prerelease either. List upstream's releases with their dates and take the top one. The failure this rule replaces: an earlier version of it said to sync from "the latest beta", and at `v0.2.3` every remaining prerelease (`v0.2.0-beta.4` and older) was already behind the newest stable, so following it would have synced backwards a whole minor line.
+- Preserve our custom features and behavior when updating. Rebase, merge, or port the custom commits onto the selected base tag as appropriate, and verify that the resulting tree still contains the intended customizations.
 - When both our fork and upstream contain a fix for the same bug, prefer the upstream implementation. Remove or adapt our redundant fix only after confirming that the upstream fix covers the same behavior; retain unrelated custom behavior.
 - Every daemon deployment and every iOS build or installation for the owner's iPhone must be produced from the current customized fork state. Never deploy an unmodified upstream checkout, upstream tag, or upstream prebuilt artifact in place of our customized version.
 - **Routine iPhone deployments must overwrite `Paseo Debug` while retaining Release performance.** App variant and compiler configuration are independent axes: use `APP_VARIANT=development` for the `Paseo Debug` identity (`com.so2liu.paseo.debug`), and use Xcode `Release` configuration for the optimized runtime. From `packages/app`, the expected flow is `CI=1 APP_VARIANT=development npx expo prebuild --platform ios`, followed by `CI=1 APP_VARIANT=development npx expo run:ios --configuration Release --device <physical-device-udid> --no-bundler`. Do not use `APP_VARIANT=production` for routine owner-device installs: its `com.so2liu.paseo` bundle identifier creates a second app instead of replacing `Paseo Debug`. Do not infer runtime performance from the `Paseo Debug` name; a development app variant built with Xcode Release has Release performance. Use Xcode Debug configuration only when an interactive native debugging session is explicitly needed. Three device-side prerequisites bite in confusing ways — Developer Mode blocking the _build_ rather than the install, a never-before-seen device needing one Xcode GUI build to register, and `expo run:ios` failing at install after a clean compile. Read [docs/development.md](docs/development.md#ios-physical-device-deployment) before deploying to a device for the first time, and install with `xcrun devicectl device install app` rather than letting Expo do it.
 - Treat owner fleet upgrades as a matched deployment unless the owner explicitly narrows the scope: update the Linux daemon on `box`, and update both the macOS Desktop app and the separately installed macOS daemon on every targeted owner Mac, all from the same customized-fork commit. Installing the Desktop app alone does not update an already-running external daemon.
 - **On a Mac, any Paseo "update" or "upgrade" means a whole-machine upgrade: Desktop app plus the separately installed daemon/CLI.** This applies even when the request calls out one component, such as "upgrade the local daemon"; naming a component identifies the immediate concern but does not narrow the deployment. Only an explicit exclusion such as "only upgrade the daemon; do not upgrade Desktop" narrows the scope.
 - For a whole-machine Mac upgrade, rebuild the client app (`packages/app`) and Desktop wrapper (`packages/desktop`) into the macOS Desktop app, install `/Applications/Paseo.app`, and upgrade the separately installed macOS daemon/CLI from the same customized-fork commit. Restart the daemon and verify the installed Desktop app plus CLI/daemon versions. The upgrade is not complete after replacing only the app, only the Desktop wrapper, or only the daemon.
+
+### Resolving an upstream sync
+
+The full procedure — choosing the base tag, per-conflict handling, the verification
+order, and the customization checklist — is in
+[docs/upstream-sync.md](docs/upstream-sync.md). Read it before starting a sync. The
+rules that are easiest to violate without noticing:
+
+- **Never resolve a conflict with `git checkout --theirs` (or `--ours`).** It replaces
+  the entire file, not the conflicting hunks, so fork changes elsewhere in that file
+  are discarded silently. Edit the conflict markers instead.
+- **Run `npm run build:server` before believing any type error.** `build:client` does
+  not rebuild `relay` or `highlight`, and their stale declarations produce errors in
+  files neither side touched.
+- **`npm run typecheck` is mandatory after a sync**, because Git merges semantic
+  conflicts cleanly — upstream adds a required field, our customized fixture lacks it,
+  and nothing complains until typecheck runs.
+- **When upstream fixes the same bug we did, compare the actual values before
+  deferring.** Preferring upstream assumes it covers our behavior; verify that it does.
+- **Keep the sync PR faithful.** Don't fix upstream's bugs inside it — that hides what
+  changed and creates fork-only divergence that re-conflicts on every future sync.
+- **The LY counter restarts when the upstream base moves** — after syncing to `0.2.3`,
+  the next fork release is `v0.2.3-LY.1`.
 
 ### Two delivery channels, and why owner machines report an upstream version
 
@@ -73,6 +98,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/custom-providers.md](docs/custom-providers.md)               | Custom provider config: Z.AI, Alibaba/Qwen, ACP agents, profiles, custom binaries                                              |
 | [docs/service-proxy.md](docs/service-proxy.md)                     | Service proxy: exposing workspace scripts at public URLs, DNS setup, reverse proxy config                                      |
 | [docs/development.md](docs/development.md)                         | Dev server, build sync gotchas, CLI reference, agent state, Playwright MCP                                                     |
+| [docs/upstream-sync.md](docs/upstream-sync.md)                     | Syncing from upstream — choosing the base tag, conflict handling, verification order, customization checklist                  |
 | [docs/rpc-namespacing.md](docs/rpc-namespacing.md)                 | WebSocket RPC naming convention — dotted namespaces and `.request`/`.response` pairs                                           |
 | [docs/protocol-validation.md](docs/protocol-validation.md)         | zod-aot generated inbound WebSocket validation, patched compiler regressions, schema-purity rules                              |
 | [docs/terminal-performance.md](docs/terminal-performance.md)       | Terminal latency pipeline, coalescing/backpressure invariants, benchmark + perf spec usage                                     |
