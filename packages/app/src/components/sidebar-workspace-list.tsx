@@ -393,7 +393,7 @@ const prBadgeStyles = StyleSheet.create((theme) => ({
   text: {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
     color: theme.colors.foregroundMuted,
   },
   textHovered: {
@@ -2743,7 +2743,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: "400",
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.sm * 1.4),
     opacity: 0.76,
     flex: 1,
     minWidth: 0,

@@ -441,7 +441,7 @@ const prBadgeStyles = StyleSheet.create((theme) => ({
   text: {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
     color: theme.colors.foregroundMuted,
   },
   textHovered: {
@@ -458,7 +458,7 @@ const checksBadgeStyles = StyleSheet.create((theme) => ({
   text: {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
     color: theme.colors.palette.red[500],
   },
 }));
@@ -472,7 +472,7 @@ const markDoneStyles = StyleSheet.create((theme) => ({
   text: {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
     color: theme.colors.palette.green[500],
   },
   textHovered: {
@@ -503,7 +503,7 @@ export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.medium,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
   },
   hidden: { opacity: 0 },
   trailingActionSlot: {
@@ -611,7 +611,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: "400",
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.sm * 1.4),
     opacity: 0.76,
     minWidth: 0,
   },
@@ -636,7 +636,7 @@ const styles = StyleSheet.create((theme) => ({
   workspaceSubtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
   },
   workspacePrBadgeRow: {
     flexDirection: "row",

@@ -804,7 +804,7 @@ const styles = StyleSheet.create((theme) => ({
   scriptName: {
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 18,
+    lineHeight: Math.round(theme.fontSize.sm * 1.3),
     flexShrink: 1,
     minWidth: 0,
     color: theme.colors.foregroundMuted,
@@ -838,7 +838,7 @@ const styles = StyleSheet.create((theme) => ({
   hostLabel: {
     flexShrink: 1,
     fontSize: theme.fontSize.xs,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
     color: theme.colors.foregroundMuted,
   },
   hostLabelActive: {

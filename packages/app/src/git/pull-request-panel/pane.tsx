@@ -1305,7 +1305,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
-    lineHeight: 22,
+    lineHeight: Math.round(theme.fontSize.base * 1.4),
   },
   titleNumber: {
     color: theme.colors.foregroundMuted,

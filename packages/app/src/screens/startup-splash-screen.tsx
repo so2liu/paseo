@@ -230,12 +230,12 @@ const styles = StyleSheet.create((theme) => ({
   errorDescription: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
-    lineHeight: 22,
+    lineHeight: Math.round(theme.fontSize.base * 1.4),
   },
   errorMessage: {
     color: theme.colors.destructive,
     fontSize: theme.fontSize.code,
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.code * 1.7),
     fontFamily: theme.fontFamily.mono,
   },
   logsMeta: {
@@ -260,7 +260,7 @@ const styles = StyleSheet.create((theme) => ({
     fontFamily: theme.fontFamily.mono,
     fontSize: theme.fontSize.code,
     color: theme.colors.foreground,
-    lineHeight: 18,
+    lineHeight: Math.round(theme.fontSize.code * 1.5),
     ...(isWeb
       ? {
           whiteSpace: "pre",

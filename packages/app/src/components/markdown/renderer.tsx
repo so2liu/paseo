@@ -749,7 +749,7 @@ const detailsStyles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 18,
+    lineHeight: Math.round(theme.fontSize.sm * 1.3),
   },
   body: {
     paddingHorizontal: theme.spacing[2],

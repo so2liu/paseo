@@ -117,7 +117,7 @@ const styles = StyleSheet.create((theme) => ({
   body: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
-    lineHeight: 22,
+    lineHeight: Math.round(theme.fontSize.base * 1.4),
   },
   messageBox: {
     gap: theme.spacing[2],
@@ -135,7 +135,7 @@ const styles = StyleSheet.create((theme) => ({
   message: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.sm * 1.4),
   },
   retryButton: {
     alignSelf: "flex-start",
