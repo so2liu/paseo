@@ -43,7 +43,7 @@ import {
 } from "@/attachments/workspace-attachments-store";
 import type { AttachmentMetadata, BrowserElementAttachment } from "@/attachments/types";
 import { persistAttachmentFromDataUrl } from "@/attachments/service";
-import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { getWorkspaceSecondaryHeaderHeight } from "@/constants/layout";
 import {
   getDesktopHost,
   isElectronRuntime,
@@ -1794,7 +1794,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface0,
   },
   chromeRow: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    height: getWorkspaceSecondaryHeaderHeight(theme),
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],

@@ -12,7 +12,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
-import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { getWorkspaceSecondaryHeaderHeight } from "@/constants/layout";
 import * as Clipboard from "expo-clipboard";
 import { ChevronDown, Eye, EyeOff, RotateCw } from "lucide-react-native";
 import { MaterialFileIcon } from "@/components/material-file-icon";
@@ -1000,7 +1000,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   paneHeader: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    height: getWorkspaceSecondaryHeaderHeight(theme),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

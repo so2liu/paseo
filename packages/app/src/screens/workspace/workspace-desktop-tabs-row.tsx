@@ -60,7 +60,7 @@ import {
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { getWorkspaceSecondaryHeaderHeight } from "@/constants/layout";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-layout";
 import {
@@ -1245,7 +1245,7 @@ function ResolvedDesktopTabChip({
 const styles = StyleSheet.create((theme) => ({
   tabsContainer: {
     minWidth: 0,
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    height: getWorkspaceSecondaryHeaderHeight(theme),
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,

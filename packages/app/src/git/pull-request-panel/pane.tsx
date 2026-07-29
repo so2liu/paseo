@@ -44,7 +44,7 @@ import { useWorkspaceAttachmentsStore } from "@/attachments/workspace-attachment
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { isNative } from "@/constants/platform";
-import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { getWorkspaceSecondaryHeaderHeight, useIsCompactFormFactor } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { getForgePresentation } from "@/git/forge";
 import { CLIENT_FORGE_VIEW_MODULES } from "@/git/forges/view";
@@ -1354,7 +1354,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.border,
   },
   toolbar: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    height: getWorkspaceSecondaryHeaderHeight(theme),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

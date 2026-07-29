@@ -31,7 +31,6 @@ import {
 import {
   DEFAULT_MONO_FONT_STACK,
   DEFAULT_UI_FONT_STACK,
-  ICON_SIZE,
   THEME_SWATCHES,
   type Theme,
 } from "@/styles/theme";
@@ -40,9 +39,8 @@ import { settingsStyles } from "@/styles/settings";
 import { AppearancePreview } from "./appearance-preview";
 
 // ---------------------------------------------------------------------------
-// Theme-reactive leaf icons (withUnistyles + uniProps color mapping — no
-// useUnistyles). Icon sizes read the static ICON_SIZE token; the appearance
-// feature does not scale icons.
+// Theme-reactive leaf icons (withUnistyles + uniProps mapping — no
+// useUnistyles). Both color and size update without re-rendering the parent.
 // ---------------------------------------------------------------------------
 
 const ThemedSun = withUnistyles(Sun);
@@ -50,7 +48,14 @@ const ThemedMoon = withUnistyles(Moon);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const mutedMdIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.md,
+});
+const mutedSmIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.sm,
+});
 
 function getThemeLabel(t: TFunction, value: AppSettings["theme"]): string {
   const labelKeys: Record<AppSettings["theme"], string> = {
@@ -104,11 +109,11 @@ interface ThemeLeadingProps {
 function ThemeLeading({ themeValue }: ThemeLeadingProps) {
   switch (themeValue) {
     case "light":
-      return <ThemedSun size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedSun uniProps={mutedMdIconMapping} />;
     case "dark":
-      return <ThemedMoon size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedMoon uniProps={mutedMdIconMapping} />;
     case "auto":
-      return <ThemedMonitor size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedMonitor uniProps={mutedMdIconMapping} />;
     default:
       return <ThemeSwatch color={THEME_SWATCHES[themeValue]} />;
   }
@@ -164,7 +169,7 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
         >
           <ThemeLeading themeValue={value} />
           <Text style={styles.triggerText}>{selectedLabel}</Text>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown uniProps={mutedSmIconMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {PRIMARY_THEMES.map((themeValue) => (
@@ -264,7 +269,7 @@ function ToolCallDetailRow({ value, onChange }: ToolCallDetailRowProps) {
           })}
         >
           <Text style={styles.triggerText}>{selectedLabel}</Text>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown uniProps={mutedSmIconMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {TOOL_CALL_DETAIL_LEVELS.map((option) => (
@@ -434,7 +439,7 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
           })}
         >
           <Text style={styles.triggerText}>{selectedLabel}</Text>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown uniProps={mutedSmIconMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {SYNTAX_THEME_OPTIONS.map((option) => (
@@ -683,9 +688,9 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
   },
   swatch: {
-    width: ICON_SIZE.md,
-    height: ICON_SIZE.md,
-    borderRadius: ICON_SIZE.md / 2,
+    width: theme.iconSize.md,
+    height: theme.iconSize.md,
+    borderRadius: theme.iconSize.md / 2,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
   },

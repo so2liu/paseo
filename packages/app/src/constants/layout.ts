@@ -8,8 +8,16 @@ export const FOOTER_HEIGHT = 75;
 // This ensures both headers have the same visual height
 export const HEADER_INNER_HEIGHT = 48;
 export const HEADER_INNER_HEIGHT_MOBILE = 56;
-export const WORKSPACE_SECONDARY_HEADER_HEIGHT = 36;
 export const HEADER_TOP_PADDING_MOBILE = 8;
+
+const WORKSPACE_SECONDARY_HEADER_BASE_HEIGHT = 36;
+const BASE_UI_FONT_SIZE = 16;
+
+export function getWorkspaceSecondaryHeaderHeight(theme: { fontSize: { base: number } }): number {
+  return Math.round(
+    WORKSPACE_SECONDARY_HEADER_BASE_HEIGHT * (theme.fontSize.base / BASE_UI_FONT_SIZE),
+  );
+}
 
 // Max width for chat content (stream view, input area, new agent form)
 export const MAX_CONTENT_WIDTH = 820;

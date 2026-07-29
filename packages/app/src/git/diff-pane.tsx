@@ -27,7 +27,7 @@ import {
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { BORDER_WIDTH, ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
-import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { getWorkspaceSecondaryHeaderHeight, useIsCompactFormFactor } from "@/constants/layout";
 import {
   AlignJustify,
   Archive,
@@ -2971,7 +2971,7 @@ const styles = StyleSheet.create((theme) => ({
     borderBottomColor: theme.colors.border,
   },
   diffStatusContainer: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    height: getWorkspaceSecondaryHeaderHeight(theme),
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
