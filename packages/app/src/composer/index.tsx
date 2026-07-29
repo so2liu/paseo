@@ -159,8 +159,8 @@ const EMPTY_ATTACHMENT_SCOPE_KEYS: readonly string[] = [];
 function noop() {}
 const noopCallback = () => {};
 
-function resolveComposerButtonIconSize(): number {
-  return isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
+function resolveComposerButtonIconSize(theme: Theme): number {
+  return isWeb ? theme.iconSize.md : theme.iconSize.lg;
 }
 
 function resolveIsComposerLocked(
@@ -1079,7 +1079,7 @@ export function Composer({
   isCompactLayout: isCompactLayoutOverride,
 }: ComposerProps) {
   const { t } = useTranslation();
-  const buttonIconSize = resolveComposerButtonIconSize();
+  const buttonIconSize = composerMetrics.buttonIcon.width;
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const agentDirectoryStatus = useHostRuntimeAgentDirectoryStatus(serverId);
@@ -2412,7 +2412,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   rightControls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.controlHeight.tight - theme.iconSize.lg,
+    gap: theme.controlHeight.tight - resolveComposerButtonIconSize(theme),
   },
   contextWindowMeterSlot: {
     width: theme.controlHeight.tight,
@@ -2508,6 +2508,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
     fontSize: theme.fontSize.sm,
   },
 })) as unknown as Record<string, object>;
+
+const composerMetrics = StyleSheet.create((theme) => ({
+  buttonIcon: {
+    width: resolveComposerButtonIconSize(theme),
+  },
+}));
 
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedArrowUp = withUnistyles(ArrowUp);

@@ -23,7 +23,7 @@ import {
 } from "react";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import type { Theme } from "@/styles/theme";
 import { ArrowUp, Mic, MicOff, CornerDownLeft, Plus, Square } from "lucide-react-native";
 import { useDictation } from "@/hooks/use-dictation";
 import { DictationOverlay } from "@/components/dictation-controls";
@@ -76,6 +76,10 @@ import {
 
 const DEFAULT_SEND_KEYS: ShortcutKey[][] = [["Enter"]];
 const COMPOSER_INPUT_DATASET = { composerInput: "" } as const;
+
+function resolveComposerButtonIconSize(theme: Theme): number {
+  return isWeb ? theme.iconSize.md : theme.iconSize.lg;
+}
 
 export interface AttachmentMenuItem {
   id: string;
@@ -1191,7 +1195,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const isCompact = useIsCompactFormFactor();
     const { height: windowHeight } = useWindowDimensions();
     const maxInputHeight = resolveMaxInputHeight(windowHeight);
-    const buttonIconSize = isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
+    const buttonIconSize = composerMetrics.buttonIcon.width;
     const toast = useToast();
     const voice = useVoiceOptional();
     const voiceMuteToggleKeys = useShortcutKeys("voice-mute-toggle");
@@ -1907,7 +1911,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.controlHeight.tight - theme.iconSize.lg,
+    gap: theme.controlHeight.tight - resolveComposerButtonIconSize(theme),
   },
   attachButton: {
     width: theme.controlHeight.tight,
@@ -1993,6 +1997,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
     bottom: 0,
   },
 })) as unknown as Record<string, object>;
+
+const composerMetrics = StyleSheet.create((theme) => ({
+  buttonIcon: {
+    width: resolveComposerButtonIconSize(theme),
+  },
+}));
 
 const ThemedPlus = withUnistyles(Plus);
 const ThemedMic = withUnistyles(Mic);
