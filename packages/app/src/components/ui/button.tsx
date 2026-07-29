@@ -18,11 +18,7 @@ import type {
   ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  buttonIconSize,
-  createControlGeometry,
-  type ButtonControlSize,
-} from "@/components/ui/control-geometry";
+import { createControlGeometry, type ButtonControlSize } from "@/components/ui/control-geometry";
 import type { Theme } from "@/styles/theme";
 
 type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "destructive";
@@ -73,17 +69,6 @@ function ButtonIcon({ loading, leftIcon, iconSize, iconColor }: ButtonIconProps)
 }
 
 const ThemedButtonIcon = withUnistyles(ButtonIcon);
-
-const foregroundIconMapping = (theme: Theme) => ({ iconColor: theme.colors.foreground });
-const foregroundMutedIconMapping = (theme: Theme) => ({
-  iconColor: theme.colors.foregroundMuted,
-});
-const accentForegroundIconMapping = (theme: Theme) => ({
-  iconColor: theme.colors.accentForeground,
-});
-const destructiveForegroundIconMapping = (theme: Theme) => ({
-  iconColor: theme.colors.destructiveForeground,
-});
 
 const styles = StyleSheet.create((theme) => {
   const geometry = createControlGeometry(theme);
@@ -244,18 +229,21 @@ export function Button({
     [accessibilityStateProp, isDisabled, loading],
   );
 
-  function resolveIconMapping() {
-    if (variant === "default") {
-      return accentForegroundIconMapping;
-    }
-    if (variant === "destructive") {
-      return destructiveForegroundIconMapping;
-    }
-    if (variant === "ghost") {
-      return isGhostHovered ? foregroundIconMapping : foregroundMutedIconMapping;
-    }
-    return foregroundIconMapping;
-  }
+  const iconMapping = useMemo(() => {
+    return (theme: Theme) => {
+      let iconColor: string;
+      if (variant === "default") {
+        iconColor = theme.colors.accentForeground;
+      } else if (variant === "destructive") {
+        iconColor = theme.colors.destructiveForeground;
+      } else if (variant === "ghost" && !isGhostHovered) {
+        iconColor = theme.colors.foregroundMuted;
+      } else {
+        iconColor = theme.colors.foreground;
+      }
+      return { iconColor, iconSize: theme.iconSize[size] };
+    };
+  }, [isGhostHovered, size, variant]);
 
   return (
     <Pressable
@@ -267,12 +255,7 @@ export function Button({
       onHoverOut={handleHoverOut}
       style={pressableStyle}
     >
-      <ThemedButtonIcon
-        loading={loading}
-        leftIcon={leftIcon}
-        iconSize={buttonIconSize[size]}
-        uniProps={resolveIconMapping()}
-      />
+      <ThemedButtonIcon loading={loading} leftIcon={leftIcon} uniProps={iconMapping} />
       {children != null ? <Text style={resolvedTextStyle}>{children}</Text> : null}
       {trailing}
     </Pressable>

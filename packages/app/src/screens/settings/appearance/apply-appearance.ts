@@ -3,7 +3,9 @@ import { resolveSyntaxColors, type SyntaxThemeId } from "@getpaseo/highlight";
 import {
   DEFAULT_UI_FONT_STACK,
   DEFAULT_MONO_FONT_STACK,
+  CONTROL_HEIGHT,
   FONT_SIZE,
+  ICON_SIZE,
   type Theme,
 } from "@/styles/theme";
 import { applyRootUiFont } from "./apply-root-font";
@@ -55,6 +57,23 @@ function scaleFontSize(uiSize: number, codeSize: number): Theme["fontSize"] {
   };
 }
 
+function scaleUiGeometry(uiSize: number) {
+  const r = uiSize / BASE_UI_REFERENCE;
+  const scale = (value: number) => Math.round(value * r);
+  const iconSize: Theme["iconSize"] = {
+    xs: scale(ICON_SIZE.xs),
+    sm: scale(ICON_SIZE.sm),
+    md: scale(ICON_SIZE.md),
+    lg: scale(ICON_SIZE.lg),
+  };
+  const controlHeight: Theme["controlHeight"] = {
+    tight: scale(CONTROL_HEIGHT.tight),
+    compact: scale(CONTROL_HEIGHT.compact),
+    field: scale(CONTROL_HEIGHT.field),
+  };
+  return { iconSize, controlHeight };
+}
+
 /**
  * Patch every registered Unistyles theme with the user's appearance choices.
  * All six keys are patched because the active theme can change and adaptive mode
@@ -79,12 +98,15 @@ export function applyAppearance(input: AppearanceInput): void {
     UnistylesRuntime.updateTheme(key, (t) => {
       const fontFamily = { ui, mono };
       const fontSize = scaleFontSize(input.uiFontSize, input.codeFontSize);
+      const { iconSize, controlHeight } = scaleUiGeometry(input.uiFontSize);
       const lineHeight = { ...t.lineHeight, diff: diffLineHeight };
       if (t.colorScheme === "light") {
         return {
           ...t,
           fontFamily,
           fontSize,
+          iconSize,
+          controlHeight,
           lineHeight,
           colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
         };
@@ -93,6 +115,8 @@ export function applyAppearance(input: AppearanceInput): void {
         ...t,
         fontFamily,
         fontSize,
+        iconSize,
+        controlHeight,
         lineHeight,
         colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
       };
