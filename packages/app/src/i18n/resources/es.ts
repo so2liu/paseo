@@ -46,6 +46,14 @@ export const es: TranslationResources = {
       error: "Error",
       idle: "Inactivo",
     },
+    timeAgo: {
+      justNow: "ahora mismo",
+      seconds: "hace {{count}} s",
+      minutes: "hace {{count}} min",
+      hours: "hace {{count}} h",
+      yesterday: "ayer",
+      days: "hace {{count}} d",
+    },
   },
   shell: {
     menu: {

@@ -135,6 +135,7 @@ export interface WorkspaceDescriptor {
   workspaceKind: WorkspaceDescriptorPayload["workspaceKind"];
   name: string;
   title?: string | null;
+  createdAt?: Date | null;
   pinnedAt?: string | null;
   status: WorkspaceDescriptorPayload["status"];
   statusEnteredAt: Date | null;
@@ -155,6 +156,10 @@ export function normalizeWorkspaceDescriptor(
     typeof statusEnteredAtRaw === "string" && statusEnteredAtRaw.length > 0
       ? new Date(statusEnteredAtRaw)
       : null;
+  const createdAt: Date | null =
+    typeof payload.createdAt === "string" && payload.createdAt.length > 0
+      ? new Date(payload.createdAt)
+      : null;
   return {
     id: normalizeWorkspaceOpaqueId(payload.id) ?? payload.id,
     projectId: payload.projectId,
@@ -169,6 +174,7 @@ export function normalizeWorkspaceDescriptor(
     workspaceKind: payload.workspaceKind,
     name: payload.name,
     title: payload.title ?? null,
+    createdAt,
     pinnedAt: payload.pinnedAt ?? null,
     status: payload.status,
     statusEnteredAt,

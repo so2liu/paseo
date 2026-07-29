@@ -1,3 +1,5 @@
+import { i18n } from "@/i18n/i18next";
+
 /**
  * Format a date as a human-friendly relative time string
  * Examples: "just now", "5m ago", "2h ago", "3d ago", "Jan 15"
@@ -10,29 +12,33 @@ export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   const diffDay = Math.floor(diffHour / 24);
 
   if (diffSec < 10) {
-    return "just now";
+    return i18n.t("common.timeAgo.justNow");
   }
 
   if (diffMin < 1) {
-    return `${diffSec}s ago`;
+    return i18n.t("common.timeAgo.seconds", { count: diffSec });
   }
 
   if (diffHour < 1) {
-    return `${diffMin}m ago`;
+    return i18n.t("common.timeAgo.minutes", { count: diffMin });
   }
 
   if (diffDay < 1) {
-    return `${diffHour}h ago`;
+    return i18n.t("common.timeAgo.hours", { count: diffHour });
+  }
+
+  if (diffDay < 2) {
+    return i18n.t("common.timeAgo.yesterday");
   }
 
   if (diffDay < 7) {
-    return `${diffDay}d ago`;
+    return i18n.t("common.timeAgo.days", { count: diffDay });
   }
 
-  // For older dates, show abbreviated month and day
-  const month = date.toLocaleDateString("en-US", { month: "short" });
-  const day = date.getDate();
-  return `${month} ${day}`;
+  return date.toLocaleDateString(i18n.resolvedLanguage ?? i18n.language, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function isSameLocalDay(a: Date, b: Date): boolean {

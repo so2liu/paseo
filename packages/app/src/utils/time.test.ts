@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { i18n } from "@/i18n/i18next";
 import { formatDuration, formatMessageTimestamp, formatTimeAgo } from "./time";
 
 describe("formatTimeAgo", () => {
@@ -9,10 +10,24 @@ describe("formatTimeAgo", () => {
     ["2026-07-16T11:59:30.000Z", "30s ago"],
     ["2026-07-16T11:55:00.000Z", "5m ago"],
     ["2026-07-16T10:00:00.000Z", "2h ago"],
+    ["2026-07-15T12:00:00.000Z", "yesterday"],
     ["2026-07-13T12:00:00.000Z", "3d ago"],
     ["2026-01-15T12:00:00.000Z", "Jan 15"],
   ])("formats %s as %s", (date, expected) => {
     expect(formatTimeAgo(new Date(date), now)).toBe(expected);
+  });
+
+  it("localizes relative time and calendar dates in Simplified Chinese", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      expect(formatTimeAgo(new Date("2026-07-16T11:59:55.000Z"), now)).toBe("刚刚");
+      expect(formatTimeAgo(new Date("2026-07-16T11:55:00.000Z"), now)).toBe("5 分钟前");
+      expect(formatTimeAgo(new Date("2026-07-16T09:00:00.000Z"), now)).toBe("3 小时前");
+      expect(formatTimeAgo(new Date("2026-07-15T12:00:00.000Z"), now)).toBe("昨天");
+      expect(formatTimeAgo(new Date("2026-01-15T12:00:00.000Z"), now)).toBe("1月15日");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 });
 

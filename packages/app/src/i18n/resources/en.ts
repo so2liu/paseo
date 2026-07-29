@@ -44,6 +44,14 @@ export const en = {
       error: "Error",
       idle: "Idle",
     },
+    timeAgo: {
+      justNow: "just now",
+      seconds: "{{count}}s ago",
+      minutes: "{{count}}m ago",
+      hours: "{{count}}h ago",
+      yesterday: "yesterday",
+      days: "{{count}}d ago",
+    },
   },
   shell: {
     menu: {

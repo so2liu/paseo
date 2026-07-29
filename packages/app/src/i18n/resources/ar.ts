@@ -46,6 +46,14 @@ export const ar: TranslationResources = {
       error: "خطأ",
       idle: "عاطل",
     },
+    timeAgo: {
+      justNow: "الآن",
+      seconds: "قبل {{count}} ث",
+      minutes: "قبل {{count}} د",
+      hours: "قبل {{count}} س",
+      yesterday: "أمس",
+      days: "قبل {{count}} أيام",
+    },
   },
   shell: {
     menu: {

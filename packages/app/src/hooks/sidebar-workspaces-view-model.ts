@@ -27,6 +27,7 @@ export interface SidebarWorkspacePlacement {
   projectKind: WorkspaceDescriptor["projectKind"];
   workspaceKind: WorkspaceDescriptor["workspaceKind"];
   name: string;
+  createdAt?: Date | null;
 }
 
 export interface SidebarStatusWorkspacePlacement extends SidebarWorkspacePlacement {
@@ -160,6 +161,7 @@ export function createSidebarWorkspaceEntry(input: {
     projectKind: input.workspace.projectKind,
     workspaceKind: input.workspace.workspaceKind,
     name: input.workspace.name,
+    createdAt: input.workspace.createdAt ?? null,
     title: input.workspace.title ?? null,
     pinnedAt: input.workspace.pinnedAt,
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
@@ -261,6 +263,7 @@ function createStructuralWorkspaceEntry(input: {
     projectKind: input.project.projectKind,
     workspaceKind: "checkout",
     name: identity.workspaceId,
+    createdAt: null,
   };
 }
 

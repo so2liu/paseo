@@ -219,6 +219,37 @@ describe("normalizeWorkspaceDescriptor", () => {
     expect(missing.statusEnteredAt).toBeNull();
   });
 
+  it("normalizes createdAt strings and treats an old daemon's missing field as null", () => {
+    const basePayload = {
+      id: "1",
+      projectId: "1",
+      projectDisplayName: "Project 1",
+      projectRootPath: "/repo",
+      workspaceDirectory: "/repo",
+      projectKind: "git",
+      workspaceKind: "checkout",
+      name: "main",
+      status: "done",
+      statusEnteredAt: null,
+      activityAt: null,
+      diffStat: null,
+      scripts: [],
+    } satisfies Omit<WorkspaceDescriptorPayload, "createdAt" | "archivingAt">;
+
+    const withCreatedAt = normalizeWorkspaceDescriptor({
+      ...basePayload,
+      archivingAt: null,
+      createdAt: "2026-07-20T08:30:00.000Z",
+    });
+    const missing = normalizeWorkspaceDescriptor({
+      ...basePayload,
+      archivingAt: null,
+    });
+
+    expect(withCreatedAt.createdAt).toEqual(new Date("2026-07-20T08:30:00.000Z"));
+    expect(missing.createdAt).toBeNull();
+  });
+
   it("preserves project placement from workspace descriptor payloads", () => {
     const workspace = normalizeWorkspaceDescriptor({
       id: "1",

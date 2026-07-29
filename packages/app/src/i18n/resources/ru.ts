@@ -46,6 +46,14 @@ export const ru: TranslationResources = {
       error: "Ошибка",
       idle: "Праздный",
     },
+    timeAgo: {
+      justNow: "только что",
+      seconds: "{{count}} с назад",
+      minutes: "{{count}} мин назад",
+      hours: "{{count}} ч назад",
+      yesterday: "вчера",
+      days: "{{count}} дн. назад",
+    },
   },
   shell: {
     menu: {

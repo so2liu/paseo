@@ -46,6 +46,14 @@ export const ja: TranslationResources = {
       error: "エラー",
       idle: "アイドル",
     },
+    timeAgo: {
+      justNow: "たった今",
+      seconds: "{{count}}秒前",
+      minutes: "{{count}}分前",
+      hours: "{{count}}時間前",
+      yesterday: "昨日",
+      days: "{{count}}日前",
+    },
   },
   shell: {
     menu: {

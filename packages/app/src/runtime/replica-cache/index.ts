@@ -208,6 +208,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): WorkspaceDescriptor
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
     title: workspace.title ?? null,
+    createdAt: workspace.createdAt?.toISOString(),
     pinnedAt: workspace.pinnedAt ?? null,
     status: workspace.status,
     statusEnteredAt: workspace.statusEnteredAt?.toISOString() ?? null,
