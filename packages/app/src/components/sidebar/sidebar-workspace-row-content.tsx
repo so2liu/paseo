@@ -480,46 +480,51 @@ const markDoneStyles = StyleSheet.create((theme) => ({
   },
 }));
 
-export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
-  rowRight: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: theme.spacing[2],
-    flexShrink: 0,
-  },
-  shortcutBadge: {
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: theme.spacing[1],
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.surface2,
-    backgroundColor: theme.colors.surface0,
-    flexShrink: 0,
-  },
-  shortcutBadgeText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.medium,
-    lineHeight: Math.round(theme.fontSize.xs * 1.2),
-  },
-  hidden: { opacity: 0 },
-  trailingActionSlot: {
-    position: "relative",
-    minWidth: 18,
-    minHeight: 20,
-    flexShrink: 0,
-    alignItems: "flex-end",
-    justifyContent: "flex-start",
-  },
-  trailingActionOverlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-  },
-}));
+export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => {
+  const shortcutBadgeLineHeight = Math.round(theme.fontSize.xs * 1.2);
+  const shortcutBadgeSize = Math.max(18, shortcutBadgeLineHeight);
+
+  return {
+    rowRight: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing[2],
+      flexShrink: 0,
+    },
+    shortcutBadge: {
+      minWidth: shortcutBadgeSize,
+      height: shortcutBadgeSize,
+      paddingHorizontal: theme.spacing[1],
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: theme.borderRadius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.surface2,
+      backgroundColor: theme.colors.surface0,
+      flexShrink: 0,
+    },
+    shortcutBadgeText: {
+      color: theme.colors.foregroundMuted,
+      fontSize: theme.fontSize.xs,
+      fontWeight: theme.fontWeight.medium,
+      lineHeight: shortcutBadgeLineHeight,
+    },
+    hidden: { opacity: 0 },
+    trailingActionSlot: {
+      position: "relative",
+      minWidth: 18,
+      minHeight: 20,
+      flexShrink: 0,
+      alignItems: "flex-end",
+      justifyContent: "flex-start",
+    },
+    trailingActionOverlay: {
+      position: "absolute",
+      top: 0,
+      right: 0,
+    },
+  };
+});
 
 export function SidebarWorkspaceShortcutBadge({ number }: { number: number }) {
   return (
