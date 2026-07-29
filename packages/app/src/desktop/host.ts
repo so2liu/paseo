@@ -171,6 +171,7 @@ export interface DesktopInvokeBridge {
 
 export interface DesktopHostBridge {
   platform?: string;
+  version?: string;
   invoke?: DesktopInvokeBridge["invoke"];
   getPendingOpenProject?: () => Promise<string | null>;
   agentNavigation?: DesktopAgentNavigationBridge;
