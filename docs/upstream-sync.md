@@ -40,9 +40,15 @@ main" 不成立 —— 一周前就是正确基线。
 用 merge，不用 rebase。fork 有几十个自定义提交，rebase 代价大且容易丢东西。
 
 ```bash
-git switch -c sync/upstream-v<版本>
+git fetch origin
+git switch -c sync/upstream-v<版本> origin/main
 git merge v<版本>
 ```
+
+分支必须**显式从 `origin/main` 建**。`git switch -c` 不带起点时是从当前 `HEAD`
+分出去的，如果开始同步时正好停在某个功能分支或过期的 checkout 上，同步 PR 就会
+夹带无关提交、或者缺掉别人刚合进 main 的 fork 改动——两种情况都会让这次同步的
+基线不是"当前的定制化 fork 状态"。
 
 ## 解冲突
 
@@ -135,9 +141,14 @@ npm run lint
 把上游改动的文件当作 pathspec 传给 `git log`，一条命令直接算出来：
 
 ```bash
-git diff --name-only <上次基线>...<新基线> > /tmp/upstream-changed.txt
+git diff --name-only --no-renames <上次基线>...<新基线> > /tmp/upstream-changed.txt
 git log --oneline <上次基线>..<同步前的 main> --no-merges -- $(cat /tmp/upstream-changed.txt)
 ```
+
+`--no-renames` 不能省。默认的改名检测会把一次重命名合并成一条记录、只输出**新**
+路径；如果某个 fork 提交是在旧路径下改的，后面按路径过滤的 `git log` 就完全匹配
+不到它，这条定制会被静默漏掉。加上 `--no-renames` 后重命名会拆成"删旧 + 加新"，
+新旧路径都在列表里。
 
 第二条命令的输出就是需要逐个确认的 fork 提交。注意两条命令不能各跑各的再"人肉
 求交集"——前者输出文件路径、后者输出提交，两种东西对不上；必须像上面这样把路径
