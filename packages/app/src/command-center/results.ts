@@ -58,6 +58,14 @@ export interface CommandCenterListProjection {
   offsets: readonly number[];
 }
 
+export interface CommandCenterRowMetrics {
+  compactRow: number;
+  tallRow: number;
+  sectionTitled: number;
+  sectionTitledDivider: number;
+  sectionDividerOnly: number;
+}
+
 function matchesQuery(searchText: string, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   return !normalized || searchText.includes(normalized);
@@ -76,12 +84,12 @@ function contributionSearchText(contribution: CommandCenterContribution): string
   return [...presentationText, ...contribution.keywords].join(" ").toLowerCase();
 }
 
-function resultHeight(result: CommandCenterResult): number {
-  if (result.kind === "workspace" || result.kind === "agent") return 56;
+function resultHeight(result: CommandCenterResult, metrics: CommandCenterRowMetrics): number {
+  if (result.kind === "workspace" || result.kind === "agent") return metrics.tallRow;
   if (result.contribution.presentation.kind === "action") {
-    return result.contribution.presentation.subtitle ? 56 : 36;
+    return result.contribution.presentation.subtitle ? metrics.tallRow : metrics.compactRow;
   }
-  return 36;
+  return metrics.compactRow;
 }
 
 export function buildContributionSections(
@@ -123,6 +131,7 @@ export function buildContributionSections(
 
 export function projectCommandCenterRows(
   sections: readonly CommandCenterResultSection[],
+  metrics: CommandCenterRowMetrics,
 ): CommandCenterListProjection {
   const populated = sections
     .filter((section) => section.results.length > 0)
@@ -136,9 +145,9 @@ export function projectCommandCenterRows(
   for (const [sectionIndex, section] of populated.entries()) {
     const divider = sectionIndex > 0;
     let sectionHeight = 0;
-    if (section.title && divider) sectionHeight = 49;
-    if (section.title && !divider) sectionHeight = 32;
-    if (!section.title && divider) sectionHeight = 17;
+    if (section.title && divider) sectionHeight = metrics.sectionTitledDivider;
+    if (section.title && !divider) sectionHeight = metrics.sectionTitled;
+    if (!section.title && divider) sectionHeight = metrics.sectionDividerOnly;
     if (sectionHeight > 0) {
       offsets.push(offset);
       rows.push({
@@ -151,7 +160,7 @@ export function projectCommandCenterRows(
       offset += sectionHeight;
     }
     for (const result of section.results) {
-      const height = resultHeight(result);
+      const height = resultHeight(result, metrics);
       offsets.push(offset);
       rowIndexByResultId.set(result.id, rows.length);
       rows.push({ kind: "result", key: result.id, result, height });

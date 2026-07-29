@@ -6,8 +6,17 @@ import {
   moveActiveResultId,
   preserveActiveResultId,
   projectCommandCenterRows,
+  type CommandCenterRowMetrics,
   type CommandCenterWorkspaceResult,
 } from "./results";
+
+const DEFAULT_METRICS: CommandCenterRowMetrics = {
+  compactRow: 36,
+  tallRow: 56,
+  sectionTitled: 32,
+  sectionTitledDivider: 49,
+  sectionDividerOnly: 17,
+};
 
 function contribution(input: {
   id: string;
@@ -58,10 +67,13 @@ describe("Command Center result projection", () => {
     expect(sectionResultIds(emptySections)).toEqual(["settings"]);
 
     const sections = buildContributionSections(contributions, "o");
-    const projection = projectCommandCenterRows([
-      ...sections,
-      { id: "workspaces", rank: 2, title: "Workspaces", results: [workspace("workspace:1")] },
-    ]);
+    const projection = projectCommandCenterRows(
+      [
+        ...sections,
+        { id: "workspaces", rank: 2, title: "Workspaces", results: [workspace("workspace:1")] },
+      ],
+      DEFAULT_METRICS,
+    );
     expect(projection.rows.map((row) => row.key)).toEqual([
       "section:models",
       "opus",
@@ -89,9 +101,10 @@ describe("Command Center result projection", () => {
 
   it("keeps keyboard selection aligned with rows beyond the render window", () => {
     const workspaces = Array.from({ length: 200 }, (_, index) => workspace(`workspace:${index}`));
-    const projection = projectCommandCenterRows([
-      { id: "workspaces", rank: 0, title: "Workspaces", results: workspaces },
-    ]);
+    const projection = projectCommandCenterRows(
+      [{ id: "workspaces", rank: 0, title: "Workspaces", results: workspaces }],
+      DEFAULT_METRICS,
+    );
 
     let activeId: string | null = workspaces[0].id;
     for (let index = 0; index < 150; index += 1) {
