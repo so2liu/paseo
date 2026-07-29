@@ -92,7 +92,12 @@ function getMeterGeometry(showPercentage: boolean, glyphSize?: number) {
     radius: (resolvedSize - resolvedStrokeWidth) / 2,
     strokeWidth: resolvedStrokeWidth,
     circumference: Math.PI * (resolvedSize - resolvedStrokeWidth),
-    containerStyle: styles.container,
+    // The container is also the Pressable that opens the tooltip, so it has to track
+    // the ring. Leaving it at the authored 28 makes a scaled ring overflow its own hit
+    // target: the glyph looks large while only the middle 28×28 stays tappable.
+    containerStyle: glyphSize
+      ? [styles.container, { width: resolvedSize, height: resolvedSize }]
+      : styles.container,
   };
 }
 
