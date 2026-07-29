@@ -31,6 +31,7 @@ import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregate
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useProjects } from "@/hooks/use-projects";
+import { useAppSettings } from "@/hooks/use-settings";
 import {
   OverlayLayerProvider,
   useGlobalWebOverlayLayer,
@@ -53,6 +54,7 @@ import { formatTimeAgo } from "@/utils/time";
 import { shortenPath } from "@/utils/shorten-path";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { ShortcutKey } from "@/utils/format-shortcut";
+import { FONT_SIZE, SPACING } from "@/styles/theme";
 import type { CommandCenterContribution, CommandCenterIconProps } from "./contributions";
 import { useCommandCenterActions, useCommandCenterContributions } from "./provider";
 import {
@@ -65,6 +67,7 @@ import {
   type CommandCenterListRow,
   type CommandCenterResult,
   type CommandCenterResultSection,
+  type CommandCenterRowMetrics,
   type CommandCenterWorkspaceResult,
 } from "./results";
 
@@ -86,6 +89,22 @@ const ThemedSettings = withUnistyles(Settings, (theme) => ({
 const ThemedHome = withUnistyles(Home, (theme) => ({ color: theme.colors.foregroundMuted }));
 const COMMAND_CENTER_SNAP_POINTS = ["60%", "90%"];
 const KEYBOARD_SHOULD_PERSIST_TAPS = "always" as const;
+
+function commandCenterRowMetrics(uiFontSize: number): CommandCenterRowMetrics {
+  const scale = uiFontSize / FONT_SIZE.base;
+  const titleLineHeight = Math.round(Math.round(FONT_SIZE.sm * scale) * 1.4);
+  const subtitleLineHeight = Math.round(Math.round(FONT_SIZE.xs * scale) * 1.5);
+  const verticalPadding = SPACING[2] * 2;
+  const sectionGrowth = Math.max(0, subtitleLineHeight - 18);
+
+  return {
+    compactRow: Math.max(36, titleLineHeight + verticalPadding),
+    tallRow: Math.max(56, titleLineHeight + subtitleLineHeight + verticalPadding),
+    sectionTitled: 32 + sectionGrowth,
+    sectionTitledDivider: 49 + sectionGrowth,
+    sectionDividerOnly: 17,
+  };
+}
 
 function PlusIcon({ size }: CommandCenterIconProps) {
   return <ThemedPlus size={size} strokeWidth={2.4} />;
@@ -314,14 +333,19 @@ function useCommandCenterState(): CommandCenterState {
   const previousOpenRef = useRef(open);
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const { settings } = useAppSettings();
+  const metrics = useMemo(
+    () => commandCenterRowMetrics(settings.uiFontSize),
+    [settings.uiFontSize],
+  );
   const builtInSections = useBuiltInSections(open, query);
   const contributionSections = useMemo(
     () => buildContributionSections(snapshot.contributions, query),
     [query, snapshot.contributions],
   );
   const projection = useMemo(
-    () => projectCommandCenterRows([...contributionSections, ...builtInSections]),
-    [builtInSections, contributionSections],
+    () => projectCommandCenterRows([...contributionSections, ...builtInSections], metrics),
+    [builtInSections, contributionSections, metrics],
   );
   const resolvedActiveId = preserveActiveResultId(activeId, projection.selectableResults);
 
@@ -395,24 +419,20 @@ function useCommandCenterState(): CommandCenterState {
 
 interface ResultRowProps {
   result: CommandCenterResult;
+  height: number;
   active: boolean;
   onSelect(result: CommandCenterResult): void;
 }
 
-const ResultRow = memo(function ResultRow({ result, active, onSelect }: ResultRowProps) {
+const ResultRow = memo(function ResultRow({ result, height, active, onSelect }: ResultRowProps) {
   const press = useCallback(() => onSelect(result), [onSelect, result]);
   const style = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
-      (result.kind === "agent" ||
-        result.kind === "workspace" ||
-        (result.kind === "contribution" &&
-          result.contribution.presentation.kind === "action" &&
-          Boolean(result.contribution.presentation.subtitle))) &&
-        styles.tallRow,
+      { height },
       (Boolean(hovered) || pressed || active) && styles.activeRow,
     ],
-    [active, result],
+    [active, height],
   );
   return (
     <Pressable style={style} onPress={press}>
@@ -533,11 +553,8 @@ function ResultContent({ result }: { result: CommandCenterResult }) {
 }
 
 function SectionRow({ row }: { row: Extract<CommandCenterListRow, { kind: "section" }> }) {
-  let sizeStyle = styles.dividerSection;
-  if (row.title && row.divider) sizeStyle = styles.dividedSection;
-  if (row.title && !row.divider) sizeStyle = styles.titledSection;
   return (
-    <View style={sizeStyle}>
+    <View style={[styles.section, { height: row.height }]}>
       {row.divider ? <View style={styles.sectionDivider} /> : null}
       {row.title ? <Text style={styles.sectionLabel}>{row.title}</Text> : null}
     </View>
@@ -579,6 +596,7 @@ export function CommandCenter() {
       ) : (
         <ResultRow
           result={item.result}
+          height={item.height}
           active={item.result.id === state.activeId}
           onSelect={state.select}
         />
@@ -749,8 +767,7 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[2],
     backgroundColor: theme.colors.border,
   },
-  row: { height: 36, paddingHorizontal: theme.spacing[4], paddingVertical: theme.spacing[2] },
-  tallRow: { height: 56 },
+  row: { paddingHorizontal: theme.spacing[4], paddingVertical: theme.spacing[2] },
   activeRow: { backgroundColor: theme.colors.surface1 },
   rowContent: {
     flexDirection: "row",
@@ -769,10 +786,14 @@ const styles = StyleSheet.create((theme) => ({
   title: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.sm * 1.4),
     flexShrink: 1,
   },
-  subtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.xs, lineHeight: 18 },
+  subtitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: Math.round(theme.fontSize.xs * 1.5),
+  },
   iconSlot: { width: 16, height: 20, alignItems: "center", justifyContent: "center" },
   rowShortcut: { flexShrink: 0 },
   breadcrumb: {
@@ -791,7 +812,7 @@ const styles = StyleSheet.create((theme) => ({
   breadcrumbGroup: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.sm * 1.4),
     flexShrink: 0,
   },
   emptyText: {
@@ -803,7 +824,5 @@ const styles = StyleSheet.create((theme) => ({
   },
   sheetBackground: { backgroundColor: theme.colors.surface0 },
   sheetHandle: { backgroundColor: theme.colors.palette.zinc[600] },
-  titledSection: { height: 32, justifyContent: "flex-end" },
-  dividedSection: { height: 49, justifyContent: "flex-end" },
-  dividerSection: { height: 17, justifyContent: "flex-end" },
+  section: { justifyContent: "flex-end" },
 }));

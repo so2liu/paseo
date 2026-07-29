@@ -816,7 +816,7 @@ const styles = StyleSheet.create((theme) => {
       fontFamily: theme.fontFamily.ui,
       fontSize: theme.fontSize.base,
       color: theme.colors.foreground,
-      lineHeight: 22,
+      lineHeight: Math.round(theme.fontSize.base * 1.4),
       overflowWrap: "anywhere",
     },
     sectionTitle: {
@@ -869,7 +869,7 @@ const styles = StyleSheet.create((theme) => {
       fontFamily: theme.fontFamily.mono,
       fontSize: theme.fontSize.code,
       color: theme.colors.foreground,
-      lineHeight: 18,
+      lineHeight: Math.round(theme.fontSize.code * 1.5),
       ...(isWeb
         ? {
             whiteSpace: "pre",
@@ -884,7 +884,7 @@ const styles = StyleSheet.create((theme) => {
       fontFamily: theme.fontFamily.mono,
       fontSize: theme.fontSize.code,
       color: theme.colors.foregroundMuted,
-      lineHeight: 18,
+      lineHeight: Math.round(theme.fontSize.code * 1.5),
       marginBottom: theme.spacing[2],
     },
     subAgentActions: {
@@ -900,13 +900,13 @@ const styles = StyleSheet.create((theme) => {
       fontFamily: theme.fontFamily.mono,
       fontSize: theme.fontSize.code,
       color: theme.colors.foregroundMuted,
-      lineHeight: 18,
+      lineHeight: Math.round(theme.fontSize.code * 1.5),
     },
     subAgentActionSummary: {
       fontFamily: theme.fontFamily.mono,
       fontSize: theme.fontSize.code,
       color: theme.colors.foreground,
-      lineHeight: 18,
+      lineHeight: Math.round(theme.fontSize.code * 1.5),
     },
     jsonScroll: {
       borderWidth: theme.borderWidth[1],

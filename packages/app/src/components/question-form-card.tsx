@@ -628,7 +628,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
-    lineHeight: 22,
+    lineHeight: Math.round(theme.fontSize.base * 1.4),
   },
   optionsWrap: {
     gap: theme.spacing[1],
@@ -677,11 +677,11 @@ const styles = StyleSheet.create((theme) => ({
   optionLabel: {
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.semibold,
-    lineHeight: 22,
+    lineHeight: Math.round(theme.fontSize.base * 1.4),
   },
   optionDescription: {
     fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.sm * 1.4),
   },
   selectionControl: {
     width: 18,

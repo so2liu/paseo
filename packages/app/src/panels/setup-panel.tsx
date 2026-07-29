@@ -556,7 +556,7 @@ const styles = StyleSheet.create((theme) => ({
   logText: {
     fontFamily: theme.fontFamily.mono,
     fontSize: theme.fontSize.code,
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.code * 1.7),
     color: theme.colors.foreground,
   },
   emptyLogText: {

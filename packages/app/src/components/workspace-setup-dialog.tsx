@@ -490,7 +490,7 @@ const styles = StyleSheet.create((theme) => ({
   errorText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.destructive,
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.sm * 1.4),
   },
   composerInputWrapper: {
     backgroundColor: theme.colors.surface2,

@@ -441,7 +441,7 @@ const prBadgeStyles = StyleSheet.create((theme) => ({
   text: {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
     color: theme.colors.foregroundMuted,
   },
   textHovered: {
@@ -458,7 +458,7 @@ const checksBadgeStyles = StyleSheet.create((theme) => ({
   text: {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
     color: theme.colors.palette.red[500],
   },
 }));
@@ -472,7 +472,7 @@ const markDoneStyles = StyleSheet.create((theme) => ({
   text: {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
     color: theme.colors.palette.green[500],
   },
   textHovered: {
@@ -480,46 +480,55 @@ const markDoneStyles = StyleSheet.create((theme) => ({
   },
 }));
 
-export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
-  rowRight: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: theme.spacing[2],
-    flexShrink: 0,
-  },
-  shortcutBadge: {
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: theme.spacing[1],
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.surface2,
-    backgroundColor: theme.colors.surface0,
-    flexShrink: 0,
-  },
-  shortcutBadgeText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.medium,
-    lineHeight: 14,
-  },
-  hidden: { opacity: 0 },
-  trailingActionSlot: {
-    position: "relative",
-    minWidth: 18,
-    minHeight: 20,
-    flexShrink: 0,
-    alignItems: "flex-end",
-    justifyContent: "flex-start",
-  },
-  trailingActionOverlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-  },
-}));
+export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => {
+  const shortcutBadgeLineHeight = Math.round(theme.fontSize.xs * 1.2);
+  // RN sizing is border-box, so the 1px border on each side eats into the content
+  // area. Add both borders back or a large font leaves the text taller than the
+  // space inside the badge.
+  const shortcutBadgeBorderWidth = 1;
+  const shortcutBadgeSize = Math.max(18, shortcutBadgeLineHeight + shortcutBadgeBorderWidth * 2);
+
+  return {
+    rowRight: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing[2],
+      flexShrink: 0,
+    },
+    shortcutBadge: {
+      minWidth: shortcutBadgeSize,
+      height: shortcutBadgeSize,
+      paddingHorizontal: theme.spacing[1],
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: theme.borderRadius.sm,
+      borderWidth: shortcutBadgeBorderWidth,
+      borderColor: theme.colors.surface2,
+      backgroundColor: theme.colors.surface0,
+      flexShrink: 0,
+    },
+    shortcutBadgeText: {
+      color: theme.colors.foregroundMuted,
+      fontSize: theme.fontSize.xs,
+      fontWeight: theme.fontWeight.medium,
+      lineHeight: shortcutBadgeLineHeight,
+    },
+    hidden: { opacity: 0 },
+    trailingActionSlot: {
+      position: "relative",
+      minWidth: 18,
+      minHeight: 20,
+      flexShrink: 0,
+      alignItems: "flex-end",
+      justifyContent: "flex-start",
+    },
+    trailingActionOverlay: {
+      position: "absolute",
+      top: 0,
+      right: 0,
+    },
+  };
+});
 
 export function SidebarWorkspaceShortcutBadge({ number }: { number: number }) {
   return (
@@ -611,7 +620,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: "400",
-    lineHeight: 20,
+    lineHeight: Math.round(theme.fontSize.sm * 1.4),
     opacity: 0.76,
     minWidth: 0,
   },
@@ -636,7 +645,7 @@ const styles = StyleSheet.create((theme) => ({
   workspaceSubtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    lineHeight: 14,
+    lineHeight: Math.round(theme.fontSize.xs * 1.2),
   },
   workspacePrBadgeRow: {
     flexDirection: "row",
