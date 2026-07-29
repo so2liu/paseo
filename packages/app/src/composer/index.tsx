@@ -218,12 +218,10 @@ function buildCancelButtonStyle(isConnected: boolean, isCancellingAgent: boolean
 function buildRealtimeVoiceButtonStyle(
   hovered: boolean | undefined,
   voiceButtonDisabled: boolean,
-  reserveLeadingSpace: boolean,
 ): object[] {
   const hoveredStyle = hovered ? styles.iconButtonHovered : undefined;
   const disabledStyle = voiceButtonDisabled ? styles.buttonDisabled : undefined;
-  const reserveStyle = reserveLeadingSpace ? styles.realtimeVoiceButtonCompactReserve : undefined;
-  return [styles.realtimeVoiceButton, reserveStyle, hoveredStyle, disabledStyle].filter(
+  return [styles.realtimeVoiceButton, hoveredStyle, disabledStyle].filter(
     (value): value is object => Boolean(value),
   );
 }
@@ -1929,8 +1927,8 @@ export function Composer({
   const voiceButtonDisabled = !isConnected || isVoiceSwitching;
   const realtimeVoiceButtonStyle = useCallback(
     (state: PressableStateCallbackType & { hovered?: boolean }) =>
-      buildRealtimeVoiceButtonStyle(state.hovered, voiceButtonDisabled, isCompactLayout),
-    [isCompactLayout, voiceButtonDisabled],
+      buildRealtimeVoiceButtonStyle(state.hovered, voiceButtonDisabled),
+    [voiceButtonDisabled],
   );
 
   const cancelButton = useMemo(
@@ -2404,35 +2402,31 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[3],
   },
   cancelButton: {
-    width: 28,
-    height: 28,
+    width: theme.controlHeight.tight,
+    height: theme.controlHeight.tight,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.palette.red[600],
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: theme.spacing[1],
   },
   rightControls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: theme.controlHeight.tight - theme.iconSize.lg,
   },
   contextWindowMeterSlot: {
-    width: 28,
-    height: 28,
+    width: theme.controlHeight.tight,
+    height: theme.controlHeight.tight,
     flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
   },
   realtimeVoiceButton: {
-    width: 28,
-    height: 28,
+    width: theme.controlHeight.tight,
+    height: theme.controlHeight.tight,
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
-  },
-  realtimeVoiceButtonCompactReserve: {
-    marginLeft: theme.spacing[1],
   },
   realtimeVoiceButtonActive: {
     backgroundColor: theme.colors.palette.green[600],
