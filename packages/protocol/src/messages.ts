@@ -3162,6 +3162,8 @@ export const WorkspaceDescriptorPayloadSchema = z
     // its input and offer a "reset to branch name" action. Null means the name
     // is derived from the branch/directory.
     title: z.string().nullable().optional(),
+    // COMPAT(workspaceCreatedAt): added in v0.2.4, remove optional after 2027-01-29.
+    createdAt: z.string().optional(),
     // COMPAT(workspacePinning): added in v0.1.107, remove optional after 2027-01-12.
     pinnedAt: z.string().nullable().optional(),
     archivingAt: z.string().nullable().optional().default(null),

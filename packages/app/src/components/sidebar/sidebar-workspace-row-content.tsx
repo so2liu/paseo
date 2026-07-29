@@ -27,6 +27,7 @@ import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { formatTimeAgo } from "@/utils/time";
 
 const DEFAULT_STATUS_DOT_SIZE = 7;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
@@ -155,6 +156,11 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
           {subtitle ? (
             <Text style={styles.workspaceSubtitle} numberOfLines={1}>
               {subtitle}
+            </Text>
+          ) : null}
+          {workspace.createdAt ? (
+            <Text style={styles.workspaceSubtitle} numberOfLines={1}>
+              {formatTimeAgo(workspace.createdAt)}
             </Text>
           ) : null}
           {workspace.prHint || onMarkDone ? (

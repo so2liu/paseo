@@ -46,6 +46,14 @@ export const ptBR: TranslationResources = {
       error: "Erro",
       idle: "Ocioso",
     },
+    timeAgo: {
+      justNow: "agora mesmo",
+      seconds: "há {{count}} s",
+      minutes: "há {{count}} min",
+      hours: "há {{count}} h",
+      yesterday: "ontem",
+      days: "há {{count}} d",
+    },
   },
   shell: {
     menu: {

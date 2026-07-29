@@ -25,6 +25,7 @@ function workspaceWithForge(forge: string | undefined, prUrl: string): Workspace
     workspaceKind: "worktree",
     name: "feature",
     title: null,
+    createdAt: null,
     status: "done",
     statusEnteredAt: null,
     archivingAt: null,
@@ -61,6 +62,24 @@ describe("createSidebarWorkspaceEntry forge threading", () => {
       workspace: workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42"),
     });
     expect(entry.prHint).toMatchObject({ number: 42, forge: "github" });
+  });
+});
+
+describe("createSidebarWorkspaceEntry creation time", () => {
+  it("threads the normalized workspace creation time to the sidebar row", () => {
+    const createdAt = new Date("2026-07-20T08:30:00.000Z");
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: workspace({
+        id: "created-at",
+        name: "created-at",
+        projectId: "proj",
+        projectDisplayName: "repo",
+        createdAt,
+      }),
+    });
+
+    expect(entry.createdAt).toBe(createdAt);
   });
 });
 
@@ -177,6 +196,7 @@ function workspace(input: {
   projectDisplayName: string;
   status?: WorkspaceDescriptor["status"];
   statusEnteredAt?: Date | null;
+  createdAt?: Date | null;
 }): WorkspaceDescriptor {
   return {
     id: input.id,
@@ -187,6 +207,7 @@ function workspace(input: {
     projectKind: "git",
     workspaceKind: input.name === "main" ? "local_checkout" : "worktree",
     name: input.name,
+    createdAt: input.createdAt ?? null,
     status: input.status ?? "done",
     statusEnteredAt: input.statusEnteredAt ?? null,
     archivingAt: null,

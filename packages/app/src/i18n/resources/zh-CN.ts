@@ -46,6 +46,14 @@ export const zhCN: TranslationResources = {
       error: "错误",
       idle: "空闲",
     },
+    timeAgo: {
+      justNow: "刚刚",
+      seconds: "{{count}} 秒前",
+      minutes: "{{count}} 分钟前",
+      hours: "{{count}} 小时前",
+      yesterday: "昨天",
+      days: "{{count}} 天前",
+    },
   },
   shell: {
     menu: {
