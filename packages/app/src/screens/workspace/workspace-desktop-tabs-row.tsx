@@ -60,7 +60,10 @@ import {
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { getWorkspaceSecondaryHeaderHeight } from "@/constants/layout";
+import {
+  getWorkspaceSecondaryHeaderHeight,
+  scaleWorkspaceSecondaryHeaderGeometry,
+} from "@/constants/layout";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-layout";
 import {
@@ -111,12 +114,23 @@ const ThemedGlobe = withUnistyles(Globe);
 const ThemedColumns2 = withUnistyles(Columns2);
 const ThemedRows2 = withUnistyles(Rows2);
 const ThemedPlus = withUnistyles(Plus);
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const mutedHeaderIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.sm,
+});
+const foregroundHeaderSmallIconMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+  size: theme.iconSize.xs,
+});
+const mutedHeaderSmallIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.xs,
+});
 
-const AGENT_ICON = <ThemedSquarePen size={14} uniProps={mutedColorMapping} />;
-const TERMINAL_ICON = <ThemedSquareTerminal size={14} uniProps={mutedColorMapping} />;
-const BROWSER_ICON = <ThemedGlobe size={14} uniProps={mutedColorMapping} />;
+const AGENT_ICON = <ThemedSquarePen uniProps={mutedHeaderIconMapping} />;
+const TERMINAL_ICON = <ThemedSquareTerminal uniProps={mutedHeaderIconMapping} />;
+const BROWSER_ICON = <ThemedGlobe uniProps={mutedHeaderIconMapping} />;
 
 const DRAFT_TARGET: PinnedTabTarget = { kind: "draft" };
 const TERMINAL_TARGET: PinnedTabTarget = { kind: "terminal" };
@@ -195,7 +209,7 @@ function WorkspaceInlineAddTabButton({
           accessibilityLabel={tooltipText}
           style={inlineAddActionButtonStyle}
         >
-          <ThemedPlus size={14} uniProps={mutedColorMapping} />
+          <ThemedPlus uniProps={mutedHeaderIconMapping} />
         </TooltipTrigger>
         <TooltipContent side="bottom" align="center" offset={8}>
           <View style={styles.newTabTooltipRow}>
@@ -702,16 +716,22 @@ function TabChip({
                     if (isClosingTab) {
                       return (
                         <ThemedLoadingSpinner
-                          size={12}
-                          uniProps={highlighted ? foregroundColorMapping : mutedColorMapping}
+                          uniProps={
+                            highlighted
+                              ? foregroundHeaderSmallIconMapping
+                              : mutedHeaderSmallIconMapping
+                          }
                         />
                       );
                     }
                     if (highlighted || !presentation.modified) {
                       return (
                         <ThemedX
-                          size={12}
-                          uniProps={highlighted ? foregroundColorMapping : mutedColorMapping}
+                          uniProps={
+                            highlighted
+                              ? foregroundHeaderSmallIconMapping
+                              : mutedHeaderSmallIconMapping
+                          }
                         />
                       );
                     }
@@ -1028,7 +1048,7 @@ export function WorkspaceDesktopTabsRow({
               accessibilityLabel={t("workspace.tabs.actions.exitFocusMode")}
               style={inlineAddActionButtonStyle}
             >
-              <ThemedX size={14} uniProps={mutedColorMapping} />
+              <ThemedX uniProps={mutedHeaderIconMapping} />
             </TooltipTrigger>
             <TooltipContent side="bottom" align="center" offset={8}>
               <View style={styles.newTabTooltipRow}>
@@ -1275,23 +1295,23 @@ const styles = StyleSheet.create((theme) => ({
     alignSelf: "stretch",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: theme.spacing[1],
+    paddingHorizontal: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
     borderRightWidth: 1,
     borderRightColor: theme.colors.border,
   },
   inlineAddButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: theme.spacing[1],
+    paddingHorizontal: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
   },
   tab: {
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingHorizontal: scaleWorkspaceSecondaryHeaderGeometry(theme, 12),
+    paddingVertical: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
     borderRightWidth: 1,
     borderRightColor: theme.colors.border,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
     userSelect: "none",
   },
   tabSlot: {
@@ -1301,7 +1321,7 @@ const styles = StyleSheet.create((theme) => ({
   tabHandle: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
     flex: 1,
     minWidth: 0,
     userSelect: "none",
@@ -1364,8 +1384,8 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
   tabCloseButton: {
-    width: 18,
-    height: 18,
+    width: scaleWorkspaceSecondaryHeaderGeometry(theme, 18),
+    height: scaleWorkspaceSecondaryHeaderGeometry(theme, 18),
     marginLeft: 0,
     borderRadius: theme.borderRadius.sm,
     alignItems: "center",
@@ -1378,21 +1398,21 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface3,
   },
   tabModifiedDot: {
-    width: 8,
-    height: 8,
+    width: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
+    height: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.foregroundMuted,
   },
   newTabActionButton: {
-    width: 22,
-    height: 22,
+    width: scaleWorkspaceSecondaryHeaderGeometry(theme, 22),
+    height: scaleWorkspaceSecondaryHeaderGeometry(theme, 22),
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   inlineAddActionButton: {
-    width: 28,
-    height: 28,
+    width: theme.controlHeight.tight,
+    height: theme.controlHeight.tight,
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",

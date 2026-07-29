@@ -26,8 +26,12 @@ import {
   type TextStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { BORDER_WIDTH, ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
-import { getWorkspaceSecondaryHeaderHeight, useIsCompactFormFactor } from "@/constants/layout";
+import { BORDER_WIDTH, SPACING, type Theme } from "@/styles/theme";
+import {
+  getWorkspaceSecondaryHeaderHeight,
+  scaleWorkspaceSecondaryHeaderGeometry,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import {
   AlignJustify,
   Archive,
@@ -1318,6 +1322,18 @@ type PressableStyleFn = (
 ) => StyleProp<ViewStyle>;
 
 const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const secondaryHeaderIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.sm,
+});
+const secondaryHeaderMobileIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: scaleWorkspaceSecondaryHeaderGeometry(theme, 18),
+});
+const secondaryHeaderSmallIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: theme.iconSize.xs,
+});
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedAlignJustify = withUnistyles(AlignJustify);
@@ -1379,11 +1395,12 @@ export function DiffLayoutToggle({
           style={toggleStyle ?? defaultToggleStyle}
         >
           {layout === "unified" ? (
-            <ThemedColumns2 size={isMobile ? 18 : 14} uniProps={foregroundMutedIconColorMapping} />
+            <ThemedColumns2
+              uniProps={isMobile ? secondaryHeaderMobileIconMapping : secondaryHeaderIconMapping}
+            />
           ) : (
             <ThemedAlignJustify
-              size={isMobile ? 18 : 14}
-              uniProps={foregroundMutedIconColorMapping}
+              uniProps={isMobile ? secondaryHeaderMobileIconMapping : secondaryHeaderIconMapping}
             />
           )}
         </Pressable>
@@ -1431,7 +1448,7 @@ export function DiffModeMenu({
         <Text style={styles.diffStatusText} numberOfLines={1}>
           {diffMode === "uncommitted" ? uncommittedLabel : committedLabel}
         </Text>
-        <ThemedChevronDown size={12} uniProps={foregroundMutedIconColorMapping} />
+        <ThemedChevronDown uniProps={secondaryHeaderSmallIconMapping} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" width={260} testID={`${testIDPrefix}-status-menu`}>
         <DropdownMenuItem
@@ -1477,7 +1494,7 @@ function ChangesTabToggle({ isMobile, selected, onPress }: ChangesTabToggleProps
           onPress={onPress}
           style={buttonStyle}
         >
-          <ThemedMaximize2 size={14} uniProps={foregroundMutedIconColorMapping} />
+          <ThemedMaximize2 uniProps={secondaryHeaderIconMapping} />
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="bottom">
@@ -1517,11 +1534,12 @@ function DiffViewModeToggle({
         >
           {viewMode === "flat" ? (
             <ThemedFolderTree
-              size={isMobile ? 18 : 14}
-              uniProps={foregroundMutedIconColorMapping}
+              uniProps={isMobile ? secondaryHeaderMobileIconMapping : secondaryHeaderIconMapping}
             />
           ) : (
-            <ThemedList size={isMobile ? 18 : 14} uniProps={foregroundMutedIconColorMapping} />
+            <ThemedList
+              uniProps={isMobile ? secondaryHeaderMobileIconMapping : secondaryHeaderIconMapping}
+            />
           )}
         </Pressable>
       </TooltipTrigger>
@@ -1565,13 +1583,11 @@ export function DiffFilesToolbar({
           >
             {allFileDiffsExpanded ? (
               <ThemedListChevronsDownUp
-                size={isMobile ? 18 : 14}
-                uniProps={foregroundMutedIconColorMapping}
+                uniProps={isMobile ? secondaryHeaderMobileIconMapping : secondaryHeaderIconMapping}
               />
             ) : (
               <ThemedListChevronsUpDown
-                size={isMobile ? 18 : 14}
-                uniProps={foregroundMutedIconColorMapping}
+                uniProps={isMobile ? secondaryHeaderMobileIconMapping : secondaryHeaderIconMapping}
               />
             )}
           </Pressable>
@@ -1629,9 +1645,9 @@ export function DiffOptionsMenu({
   const refreshIcon = useMemo(
     () =>
       isRefreshing ? (
-        <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedIconColorMapping} />
+        <ThemedLoadingSpinner uniProps={secondaryHeaderIconMapping} />
       ) : (
-        <ThemedRotateCw size={ICON_SIZE.sm} uniProps={foregroundMutedIconColorMapping} />
+        <ThemedRotateCw uniProps={secondaryHeaderIconMapping} />
       ),
     [isRefreshing],
   );
@@ -1647,8 +1663,7 @@ export function DiffOptionsMenu({
             style={overflowToggleStyle ?? defaultToggleStyle}
           >
             <ThemedChevronDown
-              size={isMobile ? 18 : 14}
-              uniProps={foregroundMutedIconColorMapping}
+              uniProps={isMobile ? secondaryHeaderMobileIconMapping : secondaryHeaderIconMapping}
             />
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -2986,14 +3001,14 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: theme.spacing[1],
+    gap: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
     // Align text with header branch icon (at spacing[3] from edge, minus our horizontal padding)
-    marginLeft: theme.spacing[3] - theme.spacing[1],
-    paddingHorizontal: theme.spacing[1],
+    marginLeft: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
+    paddingHorizontal: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
     height: {
-      xs: 28,
-      sm: 28,
-      md: 24,
+      xs: theme.controlHeight.tight,
+      sm: theme.controlHeight.tight,
+      md: scaleWorkspaceSecondaryHeaderGeometry(theme, 24),
     },
     borderRadius: theme.borderRadius.base,
     flexShrink: 0,
@@ -3028,31 +3043,31 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: theme.spacing[1],
+    gap: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
     minWidth: {
-      xs: 32,
-      sm: 32,
-      md: 24,
+      xs: theme.controlHeight.compact,
+      sm: theme.controlHeight.compact,
+      md: scaleWorkspaceSecondaryHeaderGeometry(theme, 24),
     },
     height: {
-      xs: 32,
-      sm: 32,
-      md: 24,
+      xs: theme.controlHeight.compact,
+      sm: theme.controlHeight.compact,
+      md: scaleWorkspaceSecondaryHeaderGeometry(theme, 24),
     },
     paddingHorizontal: {
-      xs: theme.spacing[2],
-      sm: theme.spacing[2],
-      md: theme.spacing[1],
+      xs: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
+      sm: scaleWorkspaceSecondaryHeaderGeometry(theme, 8),
+      md: scaleWorkspaceSecondaryHeaderGeometry(theme, 4),
     },
     borderRadius: theme.borderRadius.base,
     flexShrink: 0,
   },
   overflowButton: {
-    width: FILE_ACTIONS_MENU_WIDTH,
+    width: scaleWorkspaceSecondaryHeaderGeometry(theme, FILE_ACTIONS_MENU_WIDTH),
     height: {
-      xs: 32,
-      sm: 32,
-      md: 24,
+      xs: theme.controlHeight.compact,
+      sm: theme.controlHeight.compact,
+      md: scaleWorkspaceSecondaryHeaderGeometry(theme, 24),
     },
     alignItems: "center",
     justifyContent: "center",
