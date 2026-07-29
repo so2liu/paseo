@@ -31,6 +31,7 @@ const { theme, pressablePropsByLabel } = vi.hoisted(() => {
       borderRadius: { base: 4, md: 6, lg: 8, xl: 12, full: 999 },
       opacity: { 50: 0.5 },
       fontSize: { xs: 11, sm: 13 },
+      iconSize: { xs: 12, sm: 14, md: 16, lg: 20 },
       controlHeight: { tight: 28, compact: 32, field: 44 },
       fontWeight: { normal: "400", medium: "500" },
       lineHeight: { diff: 18 },

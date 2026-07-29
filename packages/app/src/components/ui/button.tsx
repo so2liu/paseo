@@ -27,7 +27,7 @@ type ButtonSize = ButtonControlSize;
 type LeftIcon =
   | ReactElement
   | ComponentType<{ color: string; size: number }>
-  | ((color: string) => ReactElement)
+  | ((color: string, size: number) => ReactElement)
   | null;
 
 interface ButtonIconProps {
@@ -49,7 +49,11 @@ function ButtonIcon({ loading, leftIcon, iconSize, iconColor }: ButtonIconProps)
   if (!leftIcon) return null;
 
   if (typeof leftIcon === "object" && "type" in leftIcon) {
-    return <View>{leftIcon}</View>;
+    return (
+      <View>
+        {React.cloneElement(leftIcon as ReactElement<{ size?: number }>, { size: iconSize })}
+      </View>
+    );
   }
 
   if (
@@ -57,7 +61,11 @@ function ButtonIcon({ loading, leftIcon, iconSize, iconColor }: ButtonIconProps)
     !leftIcon.prototype?.isReactComponent &&
     leftIcon.length > 0
   ) {
-    return <View>{(leftIcon as (color: string) => ReactElement)(iconColor)}</View>;
+    return (
+      <View>
+        {(leftIcon as (color: string, size: number) => ReactElement)(iconColor, iconSize)}
+      </View>
+    );
   }
 
   const Icon = leftIcon as ComponentType<{ color: string; size: number }>;

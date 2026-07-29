@@ -13,7 +13,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { createControlGeometry, switchGeometry } from "@/components/ui/control-geometry";
+import { createControlGeometry } from "@/components/ui/control-geometry";
 import type { Theme } from "@/styles/theme";
 
 interface SwitchProps {
@@ -33,6 +33,7 @@ interface SwitchTrackProps {
   trackOnColor: string;
   thumbOffColor: string;
   thumbOnColor: string;
+  thumbTravel: number;
 }
 
 function SwitchTrack({
@@ -41,6 +42,7 @@ function SwitchTrack({
   trackOnColor,
   thumbOffColor,
   thumbOnColor,
+  thumbTravel,
 }: SwitchTrackProps) {
   const progress = useDerivedValue(() => withTiming(value ? 1 : 0, TIMING));
 
@@ -50,7 +52,7 @@ function SwitchTrack({
 
   const thumbAnimatedStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(progress.value, [0, 1], [thumbOffColor, thumbOnColor]),
-    transform: [{ translateX: progress.value * switchGeometry.thumbTravel }],
+    transform: [{ translateX: progress.value * thumbTravel }],
   }));
 
   const trackStyle = useMemo(() => [styles.switchTrack, trackAnimatedStyle], [trackAnimatedStyle]);
@@ -71,6 +73,7 @@ const ThemedSwitchTrack = withUnistyles(SwitchTrack, (theme: Theme) => ({
   trackOnColor: theme.colors.accent,
   thumbOffColor: theme.colors.palette.white,
   thumbOnColor: theme.colors.accentForeground,
+  thumbTravel: createControlGeometry(theme).switchGeometry.thumbTravel,
 }));
 
 export function Switch({
@@ -121,16 +124,16 @@ const styles = StyleSheet.create((theme) => {
       ...geometry.switchControl,
     },
     switchTrack: {
-      width: switchGeometry.trackWidth,
-      height: switchGeometry.trackHeight,
-      borderRadius: switchGeometry.trackHeight / 2,
-      padding: (switchGeometry.trackHeight - switchGeometry.thumbSize) / 2,
+      width: geometry.switchGeometry.trackWidth,
+      height: geometry.switchGeometry.trackHeight,
+      borderRadius: geometry.switchGeometry.trackHeight / 2,
+      padding: (geometry.switchGeometry.trackHeight - geometry.switchGeometry.thumbSize) / 2,
       justifyContent: "center",
     },
     switchThumb: {
-      width: switchGeometry.thumbSize,
-      height: switchGeometry.thumbSize,
-      borderRadius: switchGeometry.thumbSize / 2,
+      width: geometry.switchGeometry.thumbSize,
+      height: geometry.switchGeometry.thumbSize,
+      borderRadius: geometry.switchGeometry.thumbSize / 2,
     },
     thumb: {
       shadowColor: "rgba(0, 0, 0, 0.25)",

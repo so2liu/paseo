@@ -163,5 +163,22 @@ describe("control geometry", () => {
     expect(geometry.buttonXs.minHeight).toBe(56);
     expect(geometry.buttonSm.minHeight).toBe(64);
     expect(geometry.buttonMd.minHeight).toBe(88);
+    expect(geometry.switchGeometry).toEqual({
+      trackWidth: 68,
+      trackHeight: 40,
+      thumbSize: 32,
+      thumbTravel: 28,
+    });
+  });
+
+  it("preserves the authored switch geometry at the default UI size", () => {
+    const geometry = createControlGeometry(theme);
+
+    expect(geometry.switchGeometry).toEqual({
+      trackWidth: 34,
+      trackHeight: 20,
+      thumbSize: 16,
+      thumbTravel: 14,
+    });
   });
 });

@@ -7,8 +7,10 @@ import { GitHubIcon } from "@/components/icons/github-icon";
 import { DiscordIcon } from "@/components/icons/discord-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
 
-const renderGitHubIcon = (color: string) => <GitHubIcon color={color} size={14} />;
-const renderDiscordIcon = (color: string) => <DiscordIcon color={color} size={14} />;
+const renderGitHubIcon = (color: string, size: number) => <GitHubIcon color={color} size={size} />;
+const renderDiscordIcon = (color: string, size: number) => (
+  <DiscordIcon color={color} size={size} />
+);
 
 export function CommunityLinks() {
   const handleOpenGitHub = useCallback(() => {
