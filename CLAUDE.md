@@ -40,6 +40,12 @@ rules that are easiest to violate without noticing:
   and nothing complains until typecheck runs.
 - **When upstream fixes the same bug we did, compare the actual values before
   deferring.** Preferring upstream assumes it covers our behavior; verify that it does.
+- **Merge the sync PR with a merge commit — never squash it.** Squashing flattens the
+  branch into a single-parent commit, so `main` no longer records that the upstream tag
+  was merged and the next sync replays every conflict this one already resolved. Use
+  `gh pr merge <n> --merge`, then verify with
+  `git merge-base --is-ancestor v<version> main`. Ordinary PRs still squash — the sync
+  PR is the exception, and GitHub's default button is the wrong one.
 - **Keep the sync PR faithful.** Don't fix upstream's bugs inside it — that hides what
   changed and creates fork-only divergence that re-conflicts on every future sync.
 - **The LY counter restarts when the upstream base moves** — after syncing to `0.2.3`,

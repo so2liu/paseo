@@ -179,6 +179,35 @@ git log --oneline <上次基线>..<同步前的 main> --full-history -- $(cat /t
 - 默认排队消息（`cd38ba86b`）、native mobile lite 模式（`d137fe81e`）、
   混合项目 push token 重试（`0fe522848`）
 
+## 合并同步 PR
+
+**必须用 merge commit，绝对不能 squash。** 这是整个流程里最容易一键毁掉、而且当场
+看不出任何异常的一步。
+
+```bash
+gh pr merge <PR 号> --repo so2liu/paseo --merge --delete-branch
+```
+
+原因：squash 会把整个分支压成一个只有单亲的普通提交，main 上就不再记录"`v0.2.3`
+这个 tag 被合并过"这件事。Git 算下一次同步的 merge base 时会一路退回到更早的基线，
+于是 `git merge v0.2.4` 会把这次已经逐个解决过的冲突**原样重演一遍**——这次花在
+解冲突上的所有工作全部作废，而且下次的人根本不知道这些冲突上次是怎么解的。
+
+`--rebase` 同样不行，理由一样：合并关系没了。
+
+注意这和本仓库其它 PR 的习惯相反。普通 PR 用 squash 是对的，历史干净；**只有同步
+PR 是例外**，而 GitHub 网页上的默认按钮很可能就是 Squash，手一快就点下去了。
+
+合完立刻验证合并基线还在：
+
+```bash
+git switch main && git pull
+git merge-base --is-ancestor v<版本> main && echo "基线 OK" || echo "基线丢了"
+```
+
+这条要当场跑。一旦被 squash 掉，事后没有干净的补救办法——只能靠下次同步时重解一遍
+全部冲突，或者手工造一个假的合并提交。
+
 ## 同步之后
 
 **LY 序号重新从 1 开始。** 同步到 `0.2.3` 之后下一个 fork 版本是 `v0.2.3-LY.1`，
