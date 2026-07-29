@@ -46,6 +46,11 @@ export function resolveDisplayAppVersion(): string | null {
     }
   }
 
+  const forkVersion = toVersionOrNull(Constants.expoConfig?.extra?.forkVersion);
+  if (forkVersion) {
+    return forkVersion;
+  }
+
   const version = resolveAppVersion();
   return version ? withCustomBuildTag(version) : null;
 }

@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 const pkg = require("./package.json");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const appVariant = process.env.APP_VARIANT ?? "production";
@@ -71,6 +72,35 @@ function getNativeBuildVersionCode(version) {
   return versionCode;
 }
 
+function resolveForkVersion() {
+  const fromEnv = process.env.PASEO_FORK_VERSION;
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
+    return fromEnv.trim();
+  }
+
+  // --exact-match is what makes this honest: without it, `git describe` walks back to
+  // the most recent *reachable* tag, so a build from any commit after v0.2.3-LY.3 —
+  // including routine builds off main — would stamp itself "0.2.3-LY.3" and claim to be
+  // a release it is not. With it, only a commit that *is* the tagged release gets the
+  // release version; everything else returns null and falls back to the plain "+LY"
+  // marker, which says "a fork build" without naming a release.
+  try {
+    return execFileSync(
+      "git",
+      ["describe", "--tags", "--match", "v*-LY.*", "--exact-match", "--abbrev=0"],
+      {
+        cwd: __dirname,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    )
+      .trim()
+      .replace(/^v/, "");
+  } catch {
+    return null;
+  }
+}
+
 function resolveSecretFile(params) {
   const fromEnv = process.env[params.envKey];
   if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
@@ -114,6 +144,7 @@ const variants = {
 
 const variant = variants[appVariant] ?? variants.production;
 const nativeBuildVersionCode = getNativeBuildVersionCode(pkg.version);
+const forkVersion = resolveForkVersion();
 
 export default {
   expo: {
@@ -210,6 +241,7 @@ export default {
     },
     extra: {
       fdroidBuild: isFdroidBuild,
+      forkVersion,
       router: {},
       eas: {
         projectId: "8f324590-db81-442c-9fe0-886c44683f50",
