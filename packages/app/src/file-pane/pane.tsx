@@ -22,6 +22,7 @@ import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { isRenderedHtmlFile, isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
 import { FileMarkdownPreview } from "@/file-preview/file-markdown-preview";
 import { HtmlPreview } from "@/file-preview/html-preview";
+import { MermaidViewportScroll } from "@/file-preview/mermaid-viewport-scroll";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes } from "@/attachments/service";
@@ -349,14 +350,14 @@ function FilePreviewBody({
     if (isMarkdownFile) {
       return (
         <View style={styles.previewScrollContainer}>
-          <RNScrollView
+          <MermaidViewportScroll
             ref={previewScrollRef}
             style={styles.previewContent}
             contentContainerStyle={styles.previewMarkdownScrollContent}
             showsVerticalScrollIndicator
           >
             <FileMarkdownPreview source={preview.content ?? ""} />
-          </RNScrollView>
+          </MermaidViewportScroll>
         </View>
       );
     }
