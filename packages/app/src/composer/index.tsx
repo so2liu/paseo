@@ -871,7 +871,8 @@ interface ComposerProps {
   isCompactLayout?: boolean;
 }
 
-const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024;
+const MAX_FILE_SIZE_LABEL = "1GB";
 
 const EMPTY_ARRAY: readonly QueuedMessage[] = [];
 const EMPTY_STREAM_ITEMS: readonly StreamItem[] = [];
@@ -1598,7 +1599,10 @@ export function Composer({
       const oversized = files.find((f) => f.bytes.byteLength > MAX_FILE_SIZE_BYTES);
       if (oversized) {
         toastErrorRef.current(
-          t("composer.errors.fileTooLarge", { size: "50MB", fileName: oversized.fileName }),
+          t("composer.errors.fileTooLarge", {
+            size: MAX_FILE_SIZE_LABEL,
+            fileName: oversized.fileName,
+          }),
         );
         return;
       }
