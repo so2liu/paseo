@@ -29,7 +29,14 @@ function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
   const measurementSequenceRef = useRef(0);
   const hasRenderedRef = useRef(false);
   const [height, setHeight] = useState(MIN_DIAGRAM_HEIGHT);
-  const [isMounted, setIsMounted] = useState(true);
+  // Under a viewport provider, start unmounted: the dynamic import resolves from the
+  // native bundle almost immediately, so defaulting to mounted would spin up a WebView
+  // for every fence in the document before the async measurements demote the distant
+  // ones — exactly the startup cost this lazy mounting exists to avoid. The first
+  // measureLayout callback re-evaluates and mounts the nearby ones. With no provider
+  // (chat stream and other MarkdownRenderer callers) the old always-mounted behavior
+  // is preserved.
+  const [isMounted, setIsMounted] = useState(viewport === null);
   const [webViewSource, setWebViewSource] = useState<{ html: string } | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isReady, setIsReady] = useState(false);
