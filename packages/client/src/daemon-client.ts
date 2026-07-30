@@ -4276,13 +4276,20 @@ export class DaemonClient {
 
     const chunkSize = input.chunkSize ?? 1024 * 1024;
     for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
+      const nextOffset = offset + chunkSize;
       this.sendBinaryFrame(
         encodeFileTransferFrame({
           opcode: FileTransferOpcode.FileChunk,
           requestId: resolvedRequestId,
-          payload: bytes.subarray(offset, Math.min(offset + chunkSize, bytes.byteLength)),
+          payload: bytes.subarray(offset, Math.min(nextOffset, bytes.byteLength)),
         }),
       );
+      if (nextOffset < bytes.byteLength) {
+        // Transport buffering is not observable end-to-end: E2EE and desktop transports add
+        // asynchronous queues above the WebSocket. Yield between chunks so those queues and
+        // the UI can make progress without pretending a socket watermark is true backpressure.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      }
     }
 
     this.sendBinaryFrame(

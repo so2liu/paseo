@@ -1867,6 +1867,13 @@ test("uploadFile sends metadata request and file bytes as binary chunks", async 
       requestId: "req-upload",
       payload: new TextEncoder().encode("hello"),
     },
+  ]);
+
+  await vi.waitFor(() => {
+    expect(mock.sent).toHaveLength(6);
+  });
+
+  expect(mock.sent.slice(3).map(assertUint8Array).map(decodeFileTransferFrame)).toEqual([
     {
       opcode: FileTransferOpcode.FileChunk,
       requestId: "req-upload",
