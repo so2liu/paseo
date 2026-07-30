@@ -56,12 +56,6 @@ function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
   );
 
   useEffect(() => {
-    if (!viewport) return;
-    updateMountState(viewport.getSnapshot());
-    return viewport.subscribe(updateMountState);
-  }, [updateMountState, viewport]);
-
-  useEffect(() => {
     if (!isMounted) return;
     let active = true;
     async function loadRenderer() {
@@ -107,21 +101,36 @@ function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
     }
   }, []);
 
+  const measureLayout = useCallback(() => {
+    if (!viewport) return;
+    const container = containerRef.current;
+    const contentContainer = viewport.contentContainerRef.current;
+    if (!container || !contentContainer) return;
+
+    const measurementSequence = ++measurementSequenceRef.current;
+    container.measureLayout(contentContainer, (_x, y, _width, measuredHeight) => {
+      if (measurementSequence !== measurementSequenceRef.current) return;
+      layoutRef.current = { y, height: measuredHeight, isMeasured: true };
+      updateMountState(viewport.getSnapshot());
+    });
+  }, [updateMountState, viewport]);
+
+  useEffect(() => {
+    if (!viewport) return;
+    updateMountState(viewport.getSnapshot());
+    const unsubscribeViewport = viewport.subscribe(updateMountState);
+    const unsubscribeContentLayout = viewport.subscribeContentLayout(measureLayout);
+    return () => {
+      unsubscribeViewport();
+      unsubscribeContentLayout();
+    };
+  }, [measureLayout, updateMountState, viewport]);
+
   const handleLayout = useCallback(
     (_event: LayoutChangeEvent) => {
-      if (!viewport) return;
-      const container = containerRef.current;
-      const contentContainer = viewport.contentContainerRef.current;
-      if (!container || !contentContainer) return;
-
-      const measurementSequence = ++measurementSequenceRef.current;
-      container.measureLayout(contentContainer, (_x, y, _width, measuredHeight) => {
-        if (measurementSequence !== measurementSequenceRef.current) return;
-        layoutRef.current = { y, height: measuredHeight, isMeasured: true };
-        updateMountState(viewport.getSnapshot());
-      });
+      measureLayout();
     },
-    [updateMountState, viewport],
+    [measureLayout],
   );
 
   const handleShouldStartLoad = useCallback<

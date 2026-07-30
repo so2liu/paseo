@@ -10,6 +10,7 @@ export interface MermaidViewportSubscription {
   contentContainerRef: RefObject<View | null>;
   getSnapshot: () => MermaidViewportSnapshot;
   subscribe: (listener: (snapshot: MermaidViewportSnapshot) => void) => () => void;
+  subscribeContentLayout: (listener: () => void) => () => void;
 }
 
 export const MermaidViewportContext = createContext<MermaidViewportSubscription | null>(null);
