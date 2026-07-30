@@ -1,6 +1,14 @@
-import { forwardRef, useCallback, useMemo, useRef, type ComponentProps } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useMemo,
+  useRef,
+  type ComponentProps,
+  type RefObject,
+} from "react";
 import {
   ScrollView,
+  View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -13,13 +21,16 @@ import {
 
 type MermaidViewportScrollProps = ComponentProps<typeof ScrollView>;
 
-function createViewportSubscription(): MermaidViewportSubscription & {
+function createViewportSubscription(
+  contentContainerRef: RefObject<View | null>,
+): MermaidViewportSubscription & {
   update: (snapshot: MermaidViewportSnapshot) => void;
 } {
   let snapshot: MermaidViewportSnapshot = { scrollY: 0, viewportHeight: 0 };
   const listeners = new Set<(nextSnapshot: MermaidViewportSnapshot) => void>();
 
   return {
+    contentContainerRef,
     getSnapshot: () => snapshot,
     subscribe(listener) {
       listeners.add(listener);
@@ -40,7 +51,11 @@ function createViewportSubscription(): MermaidViewportSubscription & {
 
 export const MermaidViewportScroll = forwardRef<ScrollView, MermaidViewportScrollProps>(
   function MermaidViewportScroll({ onLayout, onScroll, scrollEventThrottle, ...props }, ref) {
-    const viewport = useMemo(createViewportSubscription, []);
+    const contentContainerRef = useRef<View>(null);
+    const viewport = useMemo(
+      () => createViewportSubscription(contentContainerRef),
+      [contentContainerRef],
+    );
     const viewportHeightRef = useRef(0);
     const scrollYRef = useRef(0);
 
@@ -74,6 +89,7 @@ export const MermaidViewportScroll = forwardRef<ScrollView, MermaidViewportScrol
         <ScrollView
           {...props}
           ref={ref}
+          innerViewRef={contentContainerRef as RefObject<View>}
           onLayout={handleLayout}
           onScroll={handleScroll}
           scrollEventThrottle={scrollEventThrottle ?? 100}

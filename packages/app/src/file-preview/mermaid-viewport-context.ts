@@ -1,4 +1,5 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, type RefObject } from "react";
+import type { View } from "react-native";
 
 export interface MermaidViewportSnapshot {
   scrollY: number;
@@ -6,6 +7,7 @@ export interface MermaidViewportSnapshot {
 }
 
 export interface MermaidViewportSubscription {
+  contentContainerRef: RefObject<View | null>;
   getSnapshot: () => MermaidViewportSnapshot;
   subscribe: (listener: (snapshot: MermaidViewportSnapshot) => void) => () => void;
 }

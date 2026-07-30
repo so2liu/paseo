@@ -23,11 +23,13 @@ type WebViewProps = ComponentProps<typeof WebView>;
 function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
   const { t } = useTranslation();
   const viewport = useMermaidViewport();
+  const containerRef = useRef<View>(null);
   const webViewRef = useRef<WebView>(null);
   const layoutRef = useRef({ y: 0, height: MIN_DIAGRAM_HEIGHT, isMeasured: false });
+  const measurementSequenceRef = useRef(0);
   const hasRenderedRef = useRef(false);
   const [height, setHeight] = useState(MIN_DIAGRAM_HEIGHT);
-  const [isMounted, setIsMounted] = useState(viewport === null);
+  const [isMounted, setIsMounted] = useState(true);
   const [webViewSource, setWebViewSource] = useState<{ html: string } | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -106,10 +108,18 @@ function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
   }, []);
 
   const handleLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      const { y, height: layoutHeight } = event.nativeEvent.layout;
-      layoutRef.current = { y, height: layoutHeight, isMeasured: true };
-      if (viewport) updateMountState(viewport.getSnapshot());
+    (_event: LayoutChangeEvent) => {
+      if (!viewport) return;
+      const container = containerRef.current;
+      const contentContainer = viewport.contentContainerRef.current;
+      if (!container || !contentContainer) return;
+
+      const measurementSequence = ++measurementSequenceRef.current;
+      container.measureLayout(contentContainer, (_x, y, _width, measuredHeight) => {
+        if (measurementSequence !== measurementSequenceRef.current) return;
+        layoutRef.current = { y, height: measuredHeight, isMeasured: true };
+        updateMountState(viewport.getSnapshot());
+      });
     },
     [updateMountState, viewport],
   );
@@ -129,11 +139,13 @@ function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
   }
 
   if (!isMounted || !webViewSource) {
-    return <View onLayout={handleLayout} style={[styles.container, dynamicHeight]} />;
+    return (
+      <View ref={containerRef} onLayout={handleLayout} style={[styles.container, dynamicHeight]} />
+    );
   }
 
   return (
-    <View onLayout={handleLayout} style={[styles.container, dynamicHeight]}>
+    <View ref={containerRef} onLayout={handleLayout} style={[styles.container, dynamicHeight]}>
       <WebView
         ref={webViewRef}
         source={webViewSource}
