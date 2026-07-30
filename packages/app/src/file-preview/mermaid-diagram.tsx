@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { Text, View } from "react-native";
+import { Text, View, type LayoutChangeEvent } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -10,22 +10,57 @@ import {
   type ThemedMermaidDiagramProps,
 } from "./mermaid-diagram-types";
 import { isInlineDocumentNavigation } from "./inline-document-navigation";
+import { useMermaidViewport, type MermaidViewportSnapshot } from "./mermaid-viewport-context";
 
 const MERMAID_WEBVIEW_ORIGIN_WHITELIST = ["*"];
 const MIN_DIAGRAM_HEIGHT = 80;
+const MOUNT_VIEWPORTS = 1;
+const UNMOUNT_VIEWPORTS = 2;
+const RENDERED_UNMOUNT_VIEWPORTS = 4;
 
 type WebViewProps = ComponentProps<typeof WebView>;
 
 function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
   const { t } = useTranslation();
+  const viewport = useMermaidViewport();
   const webViewRef = useRef<WebView>(null);
+  const layoutRef = useRef({ y: 0, height: MIN_DIAGRAM_HEIGHT, isMeasured: false });
+  const hasRenderedRef = useRef(false);
   const [height, setHeight] = useState(MIN_DIAGRAM_HEIGHT);
+  const [isMounted, setIsMounted] = useState(viewport === null);
   const [webViewSource, setWebViewSource] = useState<{ html: string } | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const request = useMemo(() => createMermaidRenderRequest({ source, colors }), [colors, source]);
 
+  const updateMountState = useCallback(
+    (snapshot: MermaidViewportSnapshot) => {
+      const layout = layoutRef.current;
+      if (!layout.isMeasured || snapshot.viewportHeight === 0) return;
+
+      const distanceAbove = snapshot.scrollY - (layout.y + layout.height);
+      const distanceBelow = layout.y - (snapshot.scrollY + snapshot.viewportHeight);
+      const distanceFromViewport = Math.max(distanceAbove, distanceBelow, 0);
+      const unmountViewports = hasRenderedRef.current
+        ? RENDERED_UNMOUNT_VIEWPORTS
+        : UNMOUNT_VIEWPORTS;
+      const thresholdViewports = isMounted ? unmountViewports : MOUNT_VIEWPORTS;
+      const shouldMount = distanceFromViewport <= snapshot.viewportHeight * thresholdViewports;
+      if (shouldMount === isMounted) return;
+      if (!shouldMount) setIsReady(false);
+      setIsMounted(shouldMount);
+    },
+    [isMounted],
+  );
+
   useEffect(() => {
+    if (!viewport) return;
+    updateMountState(viewport.getSnapshot());
+    return viewport.subscribe(updateMountState);
+  }, [updateMountState, viewport]);
+
+  useEffect(() => {
+    if (!isMounted) return;
     let active = true;
     async function loadRenderer() {
       try {
@@ -39,7 +74,7 @@ function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [isMounted]);
 
   const renderDiagram = useCallback(() => {
     webViewRef.current?.injectJavaScript(
@@ -65,9 +100,19 @@ function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
       return;
     }
     if (message.height !== undefined) {
+      hasRenderedRef.current = true;
       setHeight(Math.max(MIN_DIAGRAM_HEIGHT, message.height));
     }
   }, []);
+
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const { y, height: layoutHeight } = event.nativeEvent.layout;
+      layoutRef.current = { y, height: layoutHeight, isMeasured: true };
+      if (viewport) updateMountState(viewport.getSnapshot());
+    },
+    [updateMountState, viewport],
+  );
 
   const handleShouldStartLoad = useCallback<
     NonNullable<WebViewProps["onShouldStartLoadWithRequest"]>
@@ -83,12 +128,12 @@ function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
     );
   }
 
-  if (!webViewSource) {
-    return <View style={[styles.container, dynamicHeight]} />;
+  if (!isMounted || !webViewSource) {
+    return <View onLayout={handleLayout} style={[styles.container, dynamicHeight]} />;
   }
 
   return (
-    <View style={[styles.container, dynamicHeight]}>
+    <View onLayout={handleLayout} style={[styles.container, dynamicHeight]}>
       <WebView
         ref={webViewRef}
         source={webViewSource}
@@ -101,6 +146,7 @@ function MermaidDiagramBase({ source, colors }: ThemedMermaidDiagramProps) {
         domStorageEnabled={false}
         incognito
         scrollEnabled={false}
+        pointerEvents="none"
         bounces={false}
         overScrollMode="never"
         automaticallyAdjustContentInsets={false}
