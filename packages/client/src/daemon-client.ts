@@ -4260,9 +4260,18 @@ export class DaemonClient {
       options: { skipQueue: true },
     });
     let uploadFailed = false;
-    void responsePromise.catch(() => {
-      uploadFailed = true;
-    });
+    void responsePromise.then(
+      (response) => {
+        if (response.error) {
+          uploadFailed = true;
+        }
+        return undefined;
+      },
+      () => {
+        uploadFailed = true;
+        return undefined;
+      },
+    );
 
     this.sendBinaryFrame(
       encodeFileTransferFrame({
