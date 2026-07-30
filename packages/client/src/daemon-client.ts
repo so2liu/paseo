@@ -4259,6 +4259,10 @@ export class DaemonClient {
       responseType: "file.upload.response",
       options: { skipQueue: true },
     });
+    let uploadFailed = false;
+    void responsePromise.catch(() => {
+      uploadFailed = true;
+    });
 
     this.sendBinaryFrame(
       encodeFileTransferFrame({
@@ -4276,6 +4280,9 @@ export class DaemonClient {
 
     const chunkSize = input.chunkSize ?? 1024 * 1024;
     for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
+      if (uploadFailed) {
+        break;
+      }
       const nextOffset = offset + chunkSize;
       this.sendBinaryFrame(
         encodeFileTransferFrame({
@@ -4292,12 +4299,14 @@ export class DaemonClient {
       }
     }
 
-    this.sendBinaryFrame(
-      encodeFileTransferFrame({
-        opcode: FileTransferOpcode.FileEnd,
-        requestId: resolvedRequestId,
-      }),
-    );
+    if (!uploadFailed) {
+      this.sendBinaryFrame(
+        encodeFileTransferFrame({
+          opcode: FileTransferOpcode.FileEnd,
+          requestId: resolvedRequestId,
+        }),
+      );
+    }
 
     return responsePromise;
   }
