@@ -1867,6 +1867,13 @@ test("uploadFile sends metadata request and file bytes as binary chunks", async 
       requestId: "req-upload",
       payload: new TextEncoder().encode("hello"),
     },
+  ]);
+
+  await vi.waitFor(() => {
+    expect(mock.sent).toHaveLength(6);
+  });
+
+  expect(mock.sent.slice(3).map(assertUint8Array).map(decodeFileTransferFrame)).toEqual([
     {
       opcode: FileTransferOpcode.FileChunk,
       requestId: "req-upload",
@@ -1914,6 +1921,126 @@ test("uploadFile sends metadata request and file bytes as binary chunks", async 
     },
     error: null,
   });
+});
+
+test("uploadFile stops sending chunks when its response rejects mid-transfer", async () => {
+  vi.useFakeTimers();
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    suppressSendErrors: true,
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.uploadFile({
+    fileName: "notes.txt",
+    mimeType: "text/plain",
+    bytes: new TextEncoder().encode("hello world"),
+    modifiedAt: "2026-05-02T00:00:00.000Z",
+    requestId: "req-upload-rejected",
+    chunkSize: 5,
+  });
+  const observedRejection = responsePromise.catch((error: unknown) => error);
+
+  expect(mock.sent).toHaveLength(3);
+  mock.triggerClose({ code: 1006, reason: "upload connection lost" });
+  await vi.runAllTimersAsync();
+
+  expect(mock.sent.slice(1).map(assertUint8Array).map(decodeFileTransferFrame)).toEqual([
+    {
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "req-upload-rejected",
+      metadata: {
+        mime: "text/plain",
+        size: 11,
+        encoding: "binary",
+        modifiedAt: "2026-05-02T00:00:00.000Z",
+        fileName: "notes.txt",
+      },
+      payload: new Uint8Array(),
+    },
+    {
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-upload-rejected",
+      payload: new TextEncoder().encode("hello"),
+    },
+  ]);
+
+  const originalError = await observedRejection;
+  await expect(responsePromise).rejects.toBe(originalError);
+});
+
+test("uploadFile stops sending chunks when its response reports an error mid-transfer", async () => {
+  vi.useFakeTimers();
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.uploadFile({
+    fileName: "notes.txt",
+    mimeType: "text/plain",
+    bytes: new TextEncoder().encode("hello world"),
+    modifiedAt: "2026-05-02T00:00:00.000Z",
+    requestId: "req-upload-error",
+    chunkSize: 5,
+  });
+
+  expect(mock.sent).toHaveLength(3);
+  const response = {
+    requestId: "req-upload-error",
+    file: null,
+    error: "Failed to create upload directory",
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file.upload.response",
+      payload: response,
+    }),
+  );
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(mock.sent.slice(1).map(assertUint8Array).map(decodeFileTransferFrame)).toEqual([
+    {
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "req-upload-error",
+      metadata: {
+        mime: "text/plain",
+        size: 11,
+        encoding: "binary",
+        modifiedAt: "2026-05-02T00:00:00.000Z",
+        fileName: "notes.txt",
+      },
+      payload: new Uint8Array(),
+    },
+    {
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-upload-error",
+      payload: new TextEncoder().encode("hello"),
+    },
+  ]);
+  await expect(responsePromise).resolves.toEqual(response);
 });
 
 test("normalizes workspace_setup_progress into a workspace-scoped daemon event", async () => {
