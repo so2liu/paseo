@@ -2,6 +2,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   View,
   Pressable,
+  ScrollView,
   Text,
   StyleSheet as RNStyleSheet,
   type PressableStateCallbackType,
@@ -46,6 +47,7 @@ import { useFilePicker } from "@/hooks/use-file-picker";
 import { useFileDrop } from "@/components/file-drop/use-file-drop";
 import type { DroppedItem } from "@/components/file-drop/types";
 import { MessageInput, type MessageInputRef, type AttachmentMenuItem } from "./input/input";
+import { usesCompactNativeComposerLayout } from "@/composer/layout";
 import type { ImageAttachment, MessagePayload } from "./types";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
@@ -306,6 +308,7 @@ function renderLeftContent(args: RenderLeftContentArgs): ReactElement {
 
 interface RenderAttachmentTrayArgs {
   selectedAttachments: ComposerAttachment[];
+  useCompactLayout: boolean;
   isComposerLocked: boolean;
   handleOpenAttachment: (attachment: ComposerAttachment) => void;
   handleRemoveAttachment: (index: number) => void;
@@ -321,24 +324,39 @@ interface RenderAttachmentTrayArgs {
 function renderAttachmentTray(args: RenderAttachmentTrayArgs): ReactElement | null {
   const {
     selectedAttachments,
+    useCompactLayout,
     isComposerLocked,
     handleOpenAttachment,
     handleRemoveAttachment,
     labels,
   } = args;
   if (selectedAttachments.length === 0) return null;
+  const pills = selectedAttachments.map((attachment, index) =>
+    renderComposerAttachmentPill({
+      attachment,
+      index,
+      disabled: isComposerLocked,
+      onOpen: handleOpenAttachment,
+      onRemove: handleRemoveAttachment,
+      labels,
+    }),
+  );
+  if (useCompactLayout) {
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.compactAttachmentTray}
+        contentContainerStyle={styles.compactAttachmentTrayContent}
+        testID="composer-attachment-tray"
+      >
+        {pills}
+      </ScrollView>
+    );
+  }
   return (
     <View style={styles.attachmentTray} testID="composer-attachment-tray">
-      {selectedAttachments.map((attachment, index) =>
-        renderComposerAttachmentPill({
-          attachment,
-          index,
-          disabled: isComposerLocked,
-          onOpen: handleOpenAttachment,
-          onRemove: handleRemoveAttachment,
-          labels,
-        }),
-      )}
+      {pills}
     </View>
   );
 }
@@ -1008,7 +1026,6 @@ function ComposerVoiceModeButton({
   isVoiceSwitching,
   realtimeVoiceButtonStyle,
   voiceToggleKeys,
-  isCompact,
   t,
 }: ComposerVoiceModeButtonProps) {
   const shortcutNode = voiceToggleKeys ? <Shortcut chord={voiceToggleKeys} /> : null;
@@ -1020,16 +1037,9 @@ function ComposerVoiceModeButton({
       const iconMapping = hovered
         ? composerIconForegroundMapping
         : composerIconForegroundMutedMapping;
-      return (
-        <>
-          <ThemedAudioLines uniProps={iconMapping} />
-          {isCompact ? (
-            <Text style={styles.realtimeVoiceButtonLabel}>{t("composer.voice.voiceMode")}</Text>
-          ) : null}
-        </>
-      );
+      return <ThemedAudioLines uniProps={iconMapping} />;
     },
-    [isCompact, isVoiceSwitching, t],
+    [isVoiceSwitching],
   );
   return (
     <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
@@ -1140,6 +1150,7 @@ export function Composer({
 
   const isCompactFormFactor = useIsCompactFormFactor();
   const isCompactLayout = resolveCompactLayout(isCompactLayoutOverride, isCompactFormFactor);
+  const useCompactNativeComposer = usesCompactNativeComposerLayout(isNative, isCompactLayout);
   const isDesktopWebBreakpoint = resolveIsDesktopWebBreakpoint(isCompactFormFactor);
   const isDesktopLayout = resolveIsDesktopWebBreakpoint(isCompactLayout);
   const messagePlaceholder = resolveMessagePlaceholder(isDesktopLayout, t);
@@ -2236,6 +2247,7 @@ export function Composer({
     () =>
       renderAttachmentTray({
         selectedAttachments,
+        useCompactLayout: useCompactNativeComposer,
         isComposerLocked,
         handleOpenAttachment,
         handleRemoveAttachment,
@@ -2249,7 +2261,14 @@ export function Composer({
             t("composer.attachments.removeGithub", { kind, number: numberLabel }),
         },
       }),
-    [handleOpenAttachment, handleRemoveAttachment, isComposerLocked, selectedAttachments, t],
+    [
+      handleOpenAttachment,
+      handleRemoveAttachment,
+      isComposerLocked,
+      selectedAttachments,
+      t,
+      useCompactNativeComposer,
+    ],
   );
 
   const queueList = useMemo(
@@ -2453,16 +2472,9 @@ const styles = StyleSheet.create((theme: Theme) => ({
     justifyContent: "center",
   },
   realtimeVoiceButtonCompact: {
-    width: "auto",
-    minHeight: theme.controlHeight.tight,
-    flexDirection: "row",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-  },
-  realtimeVoiceButtonLabel: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
+    width: theme.controlHeight.tight,
+    height: theme.controlHeight.tight,
+    paddingHorizontal: 0,
   },
   realtimeVoiceButtonActive: {
     backgroundColor: theme.colors.palette.green[600],
@@ -2475,6 +2487,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexDirection: "row",
     gap: theme.spacing[2],
     flexWrap: "wrap",
+  },
+  compactAttachmentTray: {
+    flexGrow: 0,
+  },
+  compactAttachmentTrayContent: {
+    flexDirection: "row",
+    gap: theme.spacing[2],
+    paddingTop: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
   },
   tooltipRow: {
     flexDirection: "row",
