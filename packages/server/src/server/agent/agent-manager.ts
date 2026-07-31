@@ -4046,8 +4046,15 @@ export class AgentManager {
       return;
     }
 
-    // Skip if already requires attention
-    if (agent.attention.requiresAttention) {
+    const completedAfterError =
+      previousStatus === "running" &&
+      currentStatus === "idle" &&
+      agent.attention.requiresAttention &&
+      agent.attention.attentionReason === "error";
+
+    // Preserve unread attention (and its timestamp/notification), except when a
+    // successful recovery makes a previously reported error obsolete.
+    if (agent.attention.requiresAttention && !completedAfterError) {
       return;
     }
 

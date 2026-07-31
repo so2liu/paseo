@@ -28,7 +28,7 @@ describe("deriveAgentStateBucket", () => {
     ).toBe("needs_input");
   });
 
-  it("prioritizes error attention before running status", () => {
+  it("keeps a running agent active despite stale error attention", () => {
     expect(
       deriveAgentStateBucket({
         status: "running",
@@ -36,7 +36,7 @@ describe("deriveAgentStateBucket", () => {
         requiresAttention: true,
         attentionReason: "error",
       }),
-    ).toBe("failed");
+    ).toBe("running");
   });
 
   it("treats unread finished agents as attention", () => {
@@ -88,5 +88,15 @@ describe("getAgentStatusPriority", () => {
     expect(permission).toBeLessThan(
       getAgentStatusPriority({ status: "running", pendingPermissionCount: 0 }),
     );
+  });
+
+  it("uses running priority despite stale error attention", () => {
+    expect(
+      getAgentStatusPriority({
+        status: "running",
+        requiresAttention: true,
+        attentionReason: "error",
+      }),
+    ).toBe(getAgentStatusPriority({ status: "running" }));
   });
 });
