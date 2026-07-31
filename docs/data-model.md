@@ -596,6 +596,17 @@ These small files are not validated as full Zod schemas but are persisted under 
 
 These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the daemon filesystem.
 
+### Host registry
+
+**AsyncStorage key:** `@paseo:daemon-registry`
+
+The host registry contains each known daemon identity and its direct or relay connection options.
+Electron mirrors the serialized registry to
+`<userData>/host-registry-backup.json` with mode `0600` and an atomic temp-file rename. On startup,
+the renderer restores this mirror only when Chromium storage has no registry. Keeping the mirror
+outside `Local Storage/leveldb` prevents a Chromium origin reset or LevelDB loss during an app
+upgrade from silently discarding every remote host; ordinary host mutations update both copies.
+
 New-workspace form preferences are app-local. In addition to provider/model controls, they keep a
 `workspaceByProject` record keyed by stable project key. Each entry may remember the
 `local | worktree` isolation for that project. Host selection is never stored per project:

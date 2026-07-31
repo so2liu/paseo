@@ -19,6 +19,7 @@ import {
   readInitialDaemonConnectionHint,
   type HostRuntimeControllerDeps,
   type HostRuntimeStorage,
+  type HostRegistryBackup,
 } from "./host-runtime";
 import { ReplicaCache } from "./replica-cache";
 
@@ -441,6 +442,19 @@ function createMemoryHostRuntimeStorage(entries: Record<string, string> = {}): H
     setItem: async (key, value) => {
       values.set(key, value);
     },
+  };
+}
+
+function createMemoryHostRegistryBackup(value: string | null = null): HostRegistryBackup & {
+  getValue: () => string | null;
+} {
+  let stored = value;
+  return {
+    read: async () => stored,
+    write: async (next) => {
+      stored = next;
+    },
+    getValue: () => stored,
   };
 }
 
@@ -1450,6 +1464,49 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it("restores a missing renderer registry from the desktop backup", async () => {
+    const host = makeHost();
+    const storage = createMemoryHostRuntimeStorage({ "@paseo:e2e": "1" });
+    const hostRegistryBackup = createMemoryHostRegistryBackup(JSON.stringify([host]));
+    const store = new HostRuntimeStore({ storage, hostRegistryBackup });
+
+    store.boot();
+    await onceHostListMatches(store, () => store.isHostRegistryLoaded());
+
+    expect(store.getHosts()).toHaveLength(1);
+    expect(store.getHosts()[0]?.serverId).toBe(host.serverId);
+    await expect(storage.getItem("@paseo:daemon-registry")).resolves.toBe(
+      JSON.stringify(store.getHosts()),
+    );
+  });
+
+  it("mirrors registry changes to the desktop backup", async () => {
+    const storage = createMemoryHostRuntimeStorage({ "@paseo:e2e": "1" });
+    const hostRegistryBackup = createMemoryHostRegistryBackup();
+    const store = new HostRuntimeStore({ storage, hostRegistryBackup });
+    store.boot();
+    await onceHostListMatches(store, () => store.isHostRegistryLoaded());
+
+    await store.importHosts([makeHost()]);
+
+    expect(hostRegistryBackup.getValue()).toBe(JSON.stringify(store.getHosts()));
+  });
+
+  it("seeds the desktop backup from an existing renderer registry", async () => {
+    const host = makeHost();
+    const storage = createMemoryHostRuntimeStorage({
+      "@paseo:daemon-registry": JSON.stringify([host]),
+      "@paseo:e2e": "1",
+    });
+    const hostRegistryBackup = createMemoryHostRegistryBackup();
+    const store = new HostRuntimeStore({ storage, hostRegistryBackup });
+
+    store.boot();
+    await onceHostListMatches(store, () => store.isHostRegistryLoaded());
+
+    expect(hostRegistryBackup.getValue()).toBe(JSON.stringify(store.getHosts()));
+  });
+
   it("restores the display replica before declaring the host registry loaded", async () => {
     const host = makeHost();
     const storage = createMemoryHostRuntimeStorage();
