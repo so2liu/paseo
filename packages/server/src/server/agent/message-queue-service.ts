@@ -105,9 +105,30 @@ export class AgentMessageQueueService {
     if (!item) {
       throw new Error("Queued message not found");
     }
-    const prompt = buildAgentPrompt(item.text, item.images, item.attachments);
-    await this.agentManager.steerAgent(agentId, prompt);
-    return await this.remove(agentId, messageId);
+    if (this.draining.has(agentId)) {
+      throw new Error("Queued message is already being dispatched");
+    }
+    this.draining.add(agentId);
+    try {
+      const prompt = buildAgentPrompt(item.text, item.images, item.attachments);
+      const steered = await this.agentManager.steerAgent(agentId, prompt);
+      if (!steered) {
+        // The provider may finish between the UI rendering the steer action and
+        // this request reaching the daemon. Preserve the user's intent by
+        // starting the same queued message as the next ordinary turn.
+        await sendPromptToAgent({
+          agentManager: this.agentManager,
+          agentStorage: this.agentStorage,
+          agentId,
+          prompt,
+          messageId: item.id,
+          logger: this.logger,
+        });
+      }
+      return await this.remove(agentId, messageId);
+    } finally {
+      this.draining.delete(agentId);
+    }
   }
 
   async drain(agentId: string): Promise<void> {

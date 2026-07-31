@@ -253,7 +253,7 @@ interface AutonomousTurnState {
 }
 
 interface AsyncMessageInput<T> {
-  push: (item: T) => void;
+  push: (item: T) => boolean;
   end: () => void;
   iterable: AsyncIterable<T>;
 }
@@ -2000,6 +2000,7 @@ class ClaudeAgentSession implements AgentSession {
   private lastRuntimeModel: string | null = null;
   private compacting = false;
   private queryPumpPromise: Promise<void> | null = null;
+  private queryInitializationPromise: Promise<Query> | null = null;
   private queryRestartNeeded = false;
   private pendingInterruptAbort = false;
   private foregroundHasVisibleActivity = false;
@@ -2191,16 +2192,23 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   async steer(prompt: AgentPromptInput): Promise<void> {
-    if (!this.activeForegroundTurnId) {
+    const turnId = this.activeForegroundTurnId;
+    if (!turnId) {
       throw new Error("Claude has no active turn to steer");
     }
-    await this.ensureQuery();
-    if (!this.input) {
+    const query = await this.ensureQuery();
+    if (this.activeForegroundTurnId !== turnId) {
+      throw new Error("Claude turn finished before the steer message was accepted");
+    }
+    const input = this.input;
+    if (!input || this.query !== query) {
       throw new Error("Claude session input stream not initialized");
     }
     const message = this.toSdkUserMessage(prompt);
     message.priority = "now";
-    this.input.push(message);
+    if (!input.push(message)) {
+      throw new Error("Claude session input stream closed before accepting the steer message");
+    }
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
@@ -2883,11 +2891,24 @@ class ClaudeAgentSession implements AgentSession {
     return { kind: "fork", messageId: previousTurn.assistantMessageId };
   }
 
-  private async ensureQuery(): Promise<Query> {
+  private ensureQuery(): Promise<Query> {
+    if (this.queryInitializationPromise) {
+      return this.queryInitializationPromise;
+    }
     if (this.query && !this.queryRestartNeeded) {
-      return this.query;
+      return Promise.resolve(this.query);
     }
 
+    const initialization = this.initializeQuery().finally(() => {
+      if (this.queryInitializationPromise === initialization) {
+        this.queryInitializationPromise = null;
+      }
+    });
+    this.queryInitializationPromise = initialization;
+    return initialization;
+  }
+
+  private async initializeQuery(): Promise<Query> {
     if (this.queryRestartNeeded && this.query) {
       const oldQuery = this.query;
       const oldInput = this.input;
@@ -2924,6 +2945,9 @@ class ClaudeAgentSession implements AgentSession {
 
     const input = createAsyncMessageInput<SDKUserMessage>();
     const options = await this.buildOptions();
+    if (this.closed) {
+      throw new Error("Claude session is closed");
+    }
     this.logger.debug({ options: summarizeClaudeOptionsForLog(options) }, "claude query");
     this.input = input;
     this.query = claudeQuery(
@@ -5469,14 +5493,15 @@ function createAsyncMessageInput<T>(): AsyncMessageInput<T> {
   return {
     push(item: T) {
       if (closed) {
-        return;
+        return false;
       }
       const resolve = resolvers.shift();
       if (resolve) {
         resolve({ value: item, done: false });
-        return;
+        return true;
       }
       queue.push(item);
+      return true;
     },
     end() {
       closed = true;

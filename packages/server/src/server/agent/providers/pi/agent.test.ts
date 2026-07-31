@@ -129,6 +129,18 @@ test("starts internal Pi agents without persisting a native session", async () =
   await session.close();
 });
 
+test("steers an active Pi turn through the native RPC command", async () => {
+  const { pi, session } = await createSession();
+  await session.startTurn("initial task");
+
+  await session.steer?.("change direction");
+
+  expect(pi.latestSession().steerRequests).toEqual([
+    { message: "change direction", imageCount: 0 },
+  ]);
+  await session.close();
+});
+
 test("keeps normal Pi agent sessions persisted", async () => {
   const pi = new FakePi();
   const client = createClient(pi);

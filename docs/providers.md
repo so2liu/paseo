@@ -18,11 +18,15 @@ Implement the `AgentClient` and `AgentSession` interfaces from `agent-sdk-types.
 
 Existing direct providers: `claude` (in `providers/claude/agent.ts`), `codex` (`codex-app-server-agent.ts`), `opencode` (`opencode-agent.ts`), `pi` (`providers/pi/agent.ts`), and `omp` (`providers/omp/agent.ts`). The dev-only `mock` provider (`mock-load-test-agent.ts`) is also direct.
 
+Claude active-turn steering is a streamed SDK user message with `priority: "now"`. The first foreground turn becomes steerable before asynchronous query setup finishes, so every caller must share the same in-flight query initialization; creating a second query/input stream for an early steer loses ordering and can strand one subprocess.
+
 Claude first-party model metadata lives in `packages/server/src/server/agent/providers/claude/model-manifest.ts`. When adding or updating a Claude model, update that manifest only; the model picker thinking options and Claude-specific feature gates are derived from the manifest. Do not add model-specific Claude capability lists in feature code.
 
 Paseo tools are not implemented as MCP tools internally. They live in a shared tool catalog under `packages/server/src/server/agent/tools/`; MCP is only the fallback adapter. A provider that can register runtime tools directly should set `supportsNativePaseoTools: true` and consume `launchContext.paseoTools` in `createSession`/`resumeSession`. When native tools are present, `AgentManager` strips the internal Paseo MCP server from the provider launch config so the provider does not receive the same tools twice. Providers that only know MCP should keep `supportsMcpServers: true` and let the daemon inject `/mcp/agents`.
 
 Pi is a process-backed provider. Paseo requires the user to have the `pi` binary installed and talks to it through `pi --mode rpc`; the server package does not embed Pi's SDK/runtime packages.
+
+Active-turn steering uses Pi's native `steer` RPC command and waits for its response before acknowledging the queued message. Do not send a second `prompt` while Pi is streaming; Pi rejects that race and requires `steer` (or `follow_up`) explicitly.
 
 Paseo's per-agent and daemon-wide system prompts are appended by its generated Pi integration extension. Paseo deliberately does not pass `--append-system-prompt`, because that flag replaces Pi's automatic `APPEND_SYSTEM.md` discovery instead of composing with it.
 

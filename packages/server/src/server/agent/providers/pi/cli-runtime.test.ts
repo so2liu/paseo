@@ -119,6 +119,26 @@ function writePiResponse(
 }
 
 describe("PiCliRuntime", () => {
+  test("steers the active Pi turn and waits for the RPC acknowledgement", async () => {
+    const child = createPiChild();
+    const pendingSteer = capturePendingCommand(child, "steer");
+    const session = await createRuntime(child).startSession({ cwd: "/workspace/project" });
+
+    const steerPromise = session.steer("change direction", [
+      { type: "image", data: "aGVsbG8=", mimeType: "image/png" },
+    ]);
+    const command = await pendingSteer;
+
+    expect(command).toMatchObject({
+      type: "steer",
+      message: "change direction",
+      images: [{ type: "image", data: "aGVsbG8=", mimeType: "image/png" }],
+    });
+    writePiResponse(child, command);
+    await expect(steerPromise).resolves.toBeUndefined();
+    await session.close();
+  });
+
   test("starts pi in rpc mode and resolves command responses", async () => {
     const child = createPiChild();
     replyToCommands(child, (command) =>

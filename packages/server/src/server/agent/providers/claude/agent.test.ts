@@ -727,6 +727,46 @@ describe("ClaudeAgentSession features", () => {
     await session.close();
   });
 
+  test("shares query initialization when the first steer races session startup", async () => {
+    const { queryFactory } = createQueryMock();
+    let resolveBinary!: (value: string) => void;
+    const binary = new Promise<string>((resolve) => {
+      resolveBinary = resolve;
+    });
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: () => binary,
+    });
+    const session = await client.createSession({ provider: "claude", cwd: process.cwd() });
+
+    const startPromise = session.startTurn("initial task");
+    const steerPromise = session.steer?.("change direction");
+    resolveBinary("/test/claude/bin");
+    await Promise.all([startPromise, steerPromise]);
+
+    expect(queryFactory).toHaveBeenCalledTimes(1);
+    const prompt = queryFactory.mock.calls[0]?.[0].prompt;
+    if (typeof prompt === "string") throw new Error("Expected streaming Claude input");
+    const iterator = prompt[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: {
+        type: "user",
+        message: { role: "user", content: [{ type: "text", text: "initial task" }] },
+      },
+    });
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: {
+        type: "user",
+        priority: "now",
+        message: { role: "user", content: [{ type: "text", text: "change direction" }] },
+      },
+    });
+    await session.close();
+  });
+
   test("maps Ultracode to xhigh effort and Claude ultracode settings", async () => {
     const { queryFactory } = createQueryMock();
     const client = new ClaudeAgentClient({

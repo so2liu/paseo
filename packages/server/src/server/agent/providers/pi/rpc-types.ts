@@ -6,10 +6,6 @@ export interface PiImageContent {
   mimeType: string;
 }
 export interface PiPromptAck {
-  agentInvoked?: boolean;
-}
-
-export interface PiPromptAck {
   requestId?: string;
   agentInvoked?: boolean;
 }
@@ -128,6 +124,7 @@ export interface PiRpcSlashCommand {
 
 export type PiRpcCommand =
   | { id?: string; type: "prompt"; message: string; images?: PiImageContent[] }
+  | { id?: string; type: "steer"; message: string; images?: PiImageContent[] }
   | { id?: string; type: "compact"; customInstructions?: string }
   | { id?: string; type: "set_auto_compaction"; enabled: boolean }
   | { id?: string; type: "abort" }
