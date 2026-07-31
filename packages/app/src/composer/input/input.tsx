@@ -56,7 +56,7 @@ import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
-import { isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerHeightMirror } from "./height-mirror";
 import {
@@ -1357,7 +1357,12 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const showRealtimeOverlay = isRealtimeVoiceForCurrentAgent;
     const showOverlay = showDictationOverlay || showRealtimeOverlay;
     const surfacePresentation = resolveComposerSurfacePresentation(showOverlay);
-    const isCompactVoiceInput = isCompact && compactInputMode === "voice";
+    // Voice-first is gated on native *and* compact, not compact alone. The form-factor
+    // hook only measures width, so a narrow desktop browser or Electron window counts as
+    // compact — and those have a keyboard, a Cmd/Ctrl+L focus shortcut, and a web textarea
+    // whose ref/paste hooks bind on mount. Rendering voice there both defeats the intent
+    // (the owner asked for phones) and strands those web-only affordances.
+    const isCompactVoiceInput = isNative && isCompact && compactInputMode === "voice";
 
     useEffect(() => {
       if (isDictating || isDictationProcessing) {
