@@ -85,6 +85,11 @@ export const fr: TranslationResources = {
     input: {
       accessibilityLabel: "Agent de messagerie...",
       focusHint: "{{shortcut}}pour se concentrer",
+      voiceInput: "Dictée",
+      textInput: "Texte",
+      switchToVoiceInput: "Passer à la saisie vocale",
+      switchToTextInput: "Passer à la saisie de texte",
+      tapToDictate: "Touchez pour dicter",
       addAttachment: "Ajouter une pièce jointe",
       interruptAgent: "Agent d'interruption",
       queueMessage: "Message de file d'attente",

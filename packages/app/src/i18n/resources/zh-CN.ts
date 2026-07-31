@@ -83,6 +83,11 @@ export const zhCN: TranslationResources = {
     input: {
       accessibilityLabel: "给 Agent 发消息...",
       focusHint: "{{shortcut}} 聚焦",
+      voiceInput: "听写",
+      textInput: "文字",
+      switchToVoiceInput: "切换到语音输入",
+      switchToTextInput: "切换到文字输入",
+      tapToDictate: "点按开始听写",
       addAttachment: "添加附件",
       interruptAgent: "中断 Agent",
       queueMessage: "消息排队",

@@ -83,6 +83,11 @@ export const ja: TranslationResources = {
     input: {
       accessibilityLabel: "エージェントにメッセージ...",
       focusHint: "{{shortcut}}でフォーカス",
+      voiceInput: "音声入力",
+      textInput: "テキスト",
+      switchToVoiceInput: "音声入力に切り替え",
+      switchToTextInput: "テキスト入力に切り替え",
+      tapToDictate: "タップして音声入力",
       addAttachment: "添付ファイルを追加",
       interruptAgent: "エージェントを中断",
       queueMessage: "メッセージをキューに追加",

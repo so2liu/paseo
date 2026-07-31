@@ -83,6 +83,11 @@ export const ar: TranslationResources = {
     input: {
       accessibilityLabel: "وكيل الرسائل...",
       focusHint: "{{shortcut}}للتركيز",
+      voiceInput: "إملاء",
+      textInput: "نص",
+      switchToVoiceInput: "التبديل إلى الإدخال الصوتي",
+      switchToTextInput: "التبديل إلى الإدخال النصي",
+      tapToDictate: "اضغط للإملاء",
       addAttachment: "إضافة مرفق",
       interruptAgent: "عامل المقاطعة",
       queueMessage: "رسالة قائمة الانتظار",

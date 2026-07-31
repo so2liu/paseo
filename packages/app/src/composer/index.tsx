@@ -218,12 +218,16 @@ function buildCancelButtonStyle(isConnected: boolean, isCancellingAgent: boolean
 function buildRealtimeVoiceButtonStyle(
   hovered: boolean | undefined,
   voiceButtonDisabled: boolean,
+  isCompact: boolean,
 ): object[] {
   const hoveredStyle = hovered ? styles.iconButtonHovered : undefined;
   const disabledStyle = voiceButtonDisabled ? styles.buttonDisabled : undefined;
-  return [styles.realtimeVoiceButton, hoveredStyle, disabledStyle].filter(
-    (value): value is object => Boolean(value),
-  );
+  return [
+    styles.realtimeVoiceButton,
+    isCompact ? styles.realtimeVoiceButtonCompact : undefined,
+    hoveredStyle,
+    disabledStyle,
+  ].filter((value): value is object => Boolean(value));
 }
 
 function buildAgentStateSelector(serverId: string, agentId: string) {
@@ -959,6 +963,7 @@ interface ComposerVoiceModeButtonProps {
     state: PressableStateCallbackType & { hovered?: boolean },
   ) => (object | undefined)[];
   voiceToggleKeys: ReturnType<typeof useShortcutKeys>;
+  isCompact: boolean;
   t: TFunction;
 }
 
@@ -989,7 +994,9 @@ function ComposerRightControlsSlot({
   if (!showVoiceModeButton && !shouldShowCancelButton) return null;
   return (
     <View style={styles.rightControls}>
-      {showVoiceModeButton ? <ComposerVoiceModeButton {...voiceProps} /> : null}
+      {showVoiceModeButton ? (
+        <ComposerVoiceModeButton {...voiceProps} isCompact={isCompact} />
+      ) : null}
       {cancelButton}
     </View>
   );
@@ -1001,6 +1008,7 @@ function ComposerVoiceModeButton({
   isVoiceSwitching,
   realtimeVoiceButtonStyle,
   voiceToggleKeys,
+  isCompact,
   t,
 }: ComposerVoiceModeButtonProps) {
   const shortcutNode = voiceToggleKeys ? <Shortcut chord={voiceToggleKeys} /> : null;
@@ -1012,9 +1020,16 @@ function ComposerVoiceModeButton({
       const iconMapping = hovered
         ? composerIconForegroundMapping
         : composerIconForegroundMutedMapping;
-      return <ThemedAudioLines uniProps={iconMapping} />;
+      return (
+        <>
+          <ThemedAudioLines uniProps={iconMapping} />
+          {isCompact ? (
+            <Text style={styles.realtimeVoiceButtonLabel}>{t("composer.voice.voiceMode")}</Text>
+          ) : null}
+        </>
+      );
     },
-    [isVoiceSwitching],
+    [isCompact, isVoiceSwitching, t],
   );
   return (
     <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
@@ -1093,7 +1108,15 @@ export function Composer({
     agentDirectoryStatus,
   });
 
-  const { settings: appSettings } = useAppSettings();
+  const { settings: appSettings, updateSettings: updateAppSettings } = useAppSettings();
+  const handleCompactInputModeChange = useCallback(
+    (mode: "voice" | "text") => {
+      void updateAppSettings({ mobileComposerInputMode: mode }).catch((error) => {
+        console.error("[Composer] Failed to save mobile composer input mode", error);
+      });
+    },
+    [updateAppSettings],
+  );
 
   const agentState = useSessionStore(useShallow(buildAgentStateSelector(serverId, agentId)));
 
@@ -1928,8 +1951,8 @@ export function Composer({
   const voiceButtonDisabled = !isConnected || isVoiceSwitching;
   const realtimeVoiceButtonStyle = useCallback(
     (state: PressableStateCallbackType & { hovered?: boolean }) =>
-      buildRealtimeVoiceButtonStyle(state.hovered, voiceButtonDisabled),
-    [voiceButtonDisabled],
+      buildRealtimeVoiceButtonStyle(state.hovered, voiceButtonDisabled, isCompactLayout),
+    [isCompactLayout, voiceButtonDisabled],
   );
 
   const cancelButton = useMemo(
@@ -2336,6 +2359,8 @@ export function Composer({
                 onHeightChange={onComposerHeightChange}
                 inputWrapperStyle={inputWrapperStyle}
                 attachmentSlot={attachmentTray}
+                compactInputMode={appSettings.mobileComposerInputMode}
+                onCompactInputModeChange={handleCompactInputModeChange}
               />
               <Combobox
                 options={githubSearchOptions}
@@ -2426,6 +2451,18 @@ const styles = StyleSheet.create((theme: Theme) => ({
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
+  },
+  realtimeVoiceButtonCompact: {
+    width: "auto",
+    minHeight: theme.controlHeight.tight,
+    flexDirection: "row",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+  },
+  realtimeVoiceButtonLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
   },
   realtimeVoiceButtonActive: {
     backgroundColor: theme.colors.palette.green[600],

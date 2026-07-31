@@ -13,6 +13,7 @@ export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
 export type WorkspaceTitleSource = "title" | "branch";
 export type ToolCallDetailLevel = "overview" | "detailed";
+export type MobileComposerInputMode = "voice" | "text";
 
 const VALID_THEMES = new Set<string>([...Object.keys(THEME_TO_UNISTYLES), "auto"]);
 const VALID_SERVICE_URL_BEHAVIORS = new Set<ServiceUrlBehavior>(["ask", "in-app", "external"]);
@@ -48,6 +49,7 @@ export interface AppSettings {
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
   vimKeybindings: boolean;
+  mobileComposerInputMode: MobileComposerInputMode;
 }
 
 export interface Settings extends AppSettings {
@@ -72,6 +74,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
   vimKeybindings: false,
+  mobileComposerInputMode: "voice",
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -192,8 +195,17 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
   return null;
 }
 
+function pickMobileComposerInputMode(
+  stored: StoredAppSettings,
+): Partial<Pick<AppSettings, "mobileComposerInputMode">> {
+  if (stored.mobileComposerInputMode === "voice" || stored.mobileComposerInputMode === "text") {
+    return { mobileComposerInputMode: stored.mobileComposerInputMode };
+  }
+  return {};
+}
+
 function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
-  const result: Partial<AppSettings> = {};
+  const result: Partial<AppSettings> = { ...pickMobileComposerInputMode(stored) };
   if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
     result.theme = stored.theme;
   }

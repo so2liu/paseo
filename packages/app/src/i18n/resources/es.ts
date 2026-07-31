@@ -83,6 +83,11 @@ export const es: TranslationResources = {
     input: {
       accessibilityLabel: "Agente de mensajes...",
       focusHint: "{{shortcut}}para enfocar",
+      voiceInput: "Dictado",
+      textInput: "Texto",
+      switchToVoiceInput: "Cambiar a entrada de voz",
+      switchToTextInput: "Cambiar a entrada de texto",
+      tapToDictate: "Toca para dictar",
       addAttachment: "Agregar archivo adjunto",
       interruptAgent: "agente de interrupción",
       queueMessage: "mensaje de cola",
