@@ -9,11 +9,11 @@ const { theme, volumeMeterProps } = vi.hoisted(() => ({
   theme: {
     spacing: { 2: 8, 3: 12, 4: 16 },
     iconSize: { sm: 14, md: 18, lg: 24 },
+    controlHeight: { field: 44 },
     borderWidth: { 1: 1 },
     borderRadius: { "2xl": 16, full: 999 },
     fontSize: { xs: 11, sm: 13, xl: 20 },
     fontWeight: { normal: "400", semibold: "600" },
-    controlHeight: { field: 44 },
     colors: {
       surface0: "#000",
       foreground: "#fff",

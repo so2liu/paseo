@@ -151,7 +151,11 @@ export function DictationOverlay({
   onAcceptAndSend,
   onRetry,
   onDiscard,
-}: Omit<DictationControlsProps, "onStart" | "disabled"> & { errorText?: string }) {
+  expanded = false,
+}: Omit<DictationControlsProps, "onStart" | "disabled"> & {
+  errorText?: string;
+  expanded?: boolean;
+}) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isFailed = status === "failed";
@@ -160,8 +164,12 @@ export function DictationOverlay({
   const handleCancel = isFailed && onDiscard ? onDiscard : onCancel;
 
   const containerStyle = useMemo(
-    () => [overlayStyles.container, { backgroundColor: theme.colors.accent }],
-    [theme.colors.accent],
+    () => [
+      overlayStyles.container,
+      expanded && overlayStyles.containerExpanded,
+      { backgroundColor: theme.colors.accent },
+    ],
+    [expanded, theme.colors.accent],
   );
   const overlayCancelButtonStyle = useMemo(
     () => [
@@ -347,6 +355,10 @@ const overlayStyles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[2],
     minHeight: FOOTER_HEIGHT,
+  },
+  containerExpanded: {
+    height: "100%",
+    minHeight: theme.controlHeight.field * 3,
   },
   cancelButton: {
     width: theme.controlHeight.field,

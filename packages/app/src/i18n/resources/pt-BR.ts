@@ -83,6 +83,11 @@ export const ptBR: TranslationResources = {
     input: {
       accessibilityLabel: "Enviar mensagem ao agente...",
       focusHint: "{{shortcut}} para focar",
+      voiceInput: "Ditado",
+      textInput: "Texto",
+      switchToVoiceInput: "Mudar para entrada de voz",
+      switchToTextInput: "Mudar para entrada de texto",
+      tapToDictate: "Toque para ditar",
       addAttachment: "Adicionar anexo",
       interruptAgent: "Interromper agente",
       queueMessage: "Enfileirar mensagem",

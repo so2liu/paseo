@@ -81,6 +81,11 @@ export const en = {
     input: {
       accessibilityLabel: "Message agent...",
       focusHint: "{{shortcut}} to focus",
+      voiceInput: "Dictation",
+      textInput: "Text",
+      switchToVoiceInput: "Switch to voice input",
+      switchToTextInput: "Switch to text input",
+      tapToDictate: "Tap to dictate",
       addAttachment: "Add attachment",
       interruptAgent: "Interrupt agent",
       queueMessage: "Queue message",

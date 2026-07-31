@@ -34,6 +34,7 @@ import {
   type AppSettings,
   type DesktopSettingsBridge,
   type KeyValueStorage,
+  type MobileComposerInputMode,
   type ReleaseChannel,
   type SendBehavior,
   type ServiceUrlBehavior,
@@ -64,6 +65,7 @@ export type {
   AppLanguage,
   DesktopSettingsBridge,
   KeyValueStorage,
+  MobileComposerInputMode,
   ReleaseChannel,
   SendBehavior,
   ServiceUrlBehavior,
@@ -98,6 +100,15 @@ export interface UseSettingsReturn {
 }
 
 type SettingsSelector<TSelected> = (settings: Settings) => TSelected;
+
+function copyMobileComposerInputMode(
+  updates: Partial<Settings>,
+  appUpdates: Partial<AppSettings>,
+): void {
+  if (updates.mobileComposerInputMode !== undefined) {
+    appUpdates.mobileComposerInputMode = updates.mobileComposerInputMode;
+  }
+}
 
 export function useAppSettings(): UseAppSettingsReturn {
   const queryClient = useQueryClient();
@@ -194,6 +205,7 @@ export function useSettings<TSelected>(
       if (updates.vimKeybindings !== undefined) {
         appUpdates.vimKeybindings = updates.vimKeybindings;
       }
+      copyMobileComposerInputMode(updates, appUpdates);
       const promises: Promise<void>[] = [];
       if (Object.keys(appUpdates).length > 0) {
         promises.push(appSettings.updateSettings(appUpdates));

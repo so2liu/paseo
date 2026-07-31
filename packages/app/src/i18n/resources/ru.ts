@@ -83,6 +83,11 @@ export const ru: TranslationResources = {
     input: {
       accessibilityLabel: "Агент сообщений...",
       focusHint: "{{shortcut}}, чтобы сосредоточиться",
+      voiceInput: "Диктовка",
+      textInput: "Текст",
+      switchToVoiceInput: "Переключиться на голосовой ввод",
+      switchToTextInput: "Переключиться на текстовый ввод",
+      tapToDictate: "Нажмите, чтобы диктовать",
       addAttachment: "Добавить вложение",
       interruptAgent: "Агент прерываний",
       queueMessage: "Сообщение в очереди",

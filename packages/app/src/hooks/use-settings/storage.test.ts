@@ -36,6 +36,38 @@ function makeDeps(
 }
 
 describe("loadAppSettingsFromStorage", () => {
+  it("defaults the mobile composer to voice input", async () => {
+    const deps = makeDeps();
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.mobileComposerInputMode).toBe("voice");
+  });
+
+  it("restores a persisted mobile composer input mode", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ mobileComposerInputMode: "text" }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.mobileComposerInputMode).toBe("text");
+  });
+
+  it("ignores an unknown mobile composer input mode", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ mobileComposerInputMode: "unsupported" }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.mobileComposerInputMode).toBe("voice");
+  });
+
   it("defaults theme to auto when storage is empty", async () => {
     const deps = makeDeps();
 

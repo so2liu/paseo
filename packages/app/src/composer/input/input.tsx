@@ -24,7 +24,7 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
-import { ArrowUp, Mic, MicOff, CornerDownLeft, Plus, Square } from "lucide-react-native";
+import { ArrowUp, Keyboard, Mic, MicOff, CornerDownLeft, Plus, Square } from "lucide-react-native";
 import { useDictation } from "@/hooks/use-dictation";
 import { DictationOverlay } from "@/components/dictation-controls";
 import { RealtimeVoiceOverlay } from "@/components/realtime-voice-overlay";
@@ -56,7 +56,7 @@ import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
-import { isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerHeightMirror } from "./height-mirror";
 import {
@@ -147,6 +147,9 @@ export interface MessageInputProps {
   inputWrapperStyle?: import("react-native").ViewStyle;
   /** Content rendered inside the bordered input surface, above the text input (e.g. attachment pills). */
   attachmentSlot?: React.ReactNode;
+  /** Compact-phone composer mode. Non-compact layouts always render the text input. */
+  compactInputMode?: "voice" | "text";
+  onCompactInputModeChange?: (mode: "voice" | "text") => void;
 }
 
 export interface MessageInputRef {
@@ -613,6 +616,7 @@ function MessageInputOverlay({
   onRetryFailedRecording,
   onDiscardFailedRecording,
   onRealtimeVoiceStop,
+  expandedDictation,
 }: {
   showDictationOverlay: boolean;
   showRealtimeOverlay: boolean;
@@ -637,6 +641,7 @@ function MessageInputOverlay({
   onRetryFailedRecording: () => void;
   onDiscardFailedRecording: () => void;
   onRealtimeVoiceStop: () => void;
+  expandedDictation: boolean;
 }) {
   if (showDictationOverlay) {
     return (
@@ -653,6 +658,7 @@ function MessageInputOverlay({
         onAcceptAndSend={onAcceptAndSendRecording}
         onRetry={dictationStatus === "failed" ? onRetryFailedRecording : undefined}
         onDiscard={dictationStatus === "failed" ? onDiscardFailedRecording : undefined}
+        expanded={expandedDictation}
       />
     );
   }
@@ -689,6 +695,7 @@ function FocusHint({
 function VoiceButtonTooltip({
   onVoicePress,
   isDictationStartEnabled,
+  isCompact,
   voiceButtonAccessibilityLabel,
   voiceButtonStyle,
   renderVoiceButtonIcon,
@@ -699,6 +706,7 @@ function VoiceButtonTooltip({
 }: {
   onVoicePress: () => void;
   isDictationStartEnabled: boolean;
+  isCompact: boolean;
   voiceButtonAccessibilityLabel: string;
   voiceButtonStyle: React.ComponentProps<typeof TooltipTrigger>["style"];
   renderVoiceButtonIcon: (input: { hovered?: boolean }) => React.ReactElement;
@@ -717,7 +725,12 @@ function VoiceButtonTooltip({
         accessibilityLabel={voiceButtonAccessibilityLabel}
         style={voiceButtonStyle}
       >
-        {renderVoiceButtonIcon}
+        {(state) => (
+          <>
+            {renderVoiceButtonIcon(state)}
+            {isCompact ? <Text style={styles.voiceButtonLabel}>{voiceTooltipText}</Text> : null}
+          </>
+        )}
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
         <VoiceTooltipBody voiceTooltipText={voiceTooltipText} shortcut={shortcut} />
@@ -1089,6 +1102,8 @@ interface ResolvedMessageInputProps {
   onHeightChange: ((height: number) => void) | undefined;
   inputWrapperStyle: import("react-native").ViewStyle | undefined;
   attachmentSlot: React.ReactNode;
+  compactInputMode: "voice" | "text";
+  onCompactInputModeChange: ((mode: "voice" | "text") => void) | undefined;
 }
 
 function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInputProps {
@@ -1131,6 +1146,8 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onHeightChange: props.onHeightChange,
     inputWrapperStyle: props.inputWrapperStyle,
     attachmentSlot: props.attachmentSlot,
+    compactInputMode: props.compactInputMode ?? "text",
+    onCompactInputModeChange: props.onCompactInputModeChange,
   };
 }
 
@@ -1141,6 +1158,7 @@ function extractErrorMessage(error: unknown): string | null {
 }
 
 export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
+  // oxlint-disable-next-line complexity
   function MessageInput(props, ref) {
     const {
       value,
@@ -1181,6 +1199,8 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onHeightChange,
       inputWrapperStyle,
       attachmentSlot,
+      compactInputMode,
+      onCompactInputModeChange,
     } = resolveMessageInputProps(props);
     const { t } = useTranslation();
     const isCompact = useIsCompactFormFactor();
@@ -1337,6 +1357,17 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const showRealtimeOverlay = isRealtimeVoiceForCurrentAgent;
     const showOverlay = showDictationOverlay || showRealtimeOverlay;
     const surfacePresentation = resolveComposerSurfacePresentation(showOverlay);
+    // Voice-first is gated on native *and* compact, not compact alone. The form-factor
+    // hook only measures width, so a narrow desktop browser or Electron window counts as
+    // compact — and those have a keyboard, a Cmd/Ctrl+L focus shortcut, and a web textarea
+    // whose ref/paste hooks bind on mount. Rendering voice there both defeats the intent
+    // (the owner asked for phones) and strands those web-only affordances.
+    const isCompactVoiceInput = isNative && isCompact && compactInputMode === "voice";
+    // The toolbar button doubles as the voice/text switch only where the voice surface
+    // actually exists. Gating it on `isCompact` alone stranded dictation on narrow web
+    // windows: they render the text input but the mic still toggled a mobile-only
+    // preference, so dictation could not be started from the UI at all.
+    const isCompactModeSwitch = isNative && isCompact;
 
     useEffect(() => {
       if (isDictating || isDictationProcessing) {
@@ -1649,6 +1680,10 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onFocusChange?.(false);
     }, [onFocusChange]);
 
+    const handleCompactModeToggle = useCallback(() => {
+      onCompactInputModeChange?.(isCompactVoiceInput ? "text" : "voice");
+    }, [isCompactVoiceInput, onCompactInputModeChange]);
+
     const attachButtonStyle = useCallback(
       ({ hovered }: { hovered?: boolean }) => [
         styles.attachButton,
@@ -1661,12 +1696,20 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const voiceButtonStyle = useCallback(
       ({ hovered }: { hovered?: boolean }) => [
         styles.voiceButton,
+        isCompact && styles.voiceButtonCompact,
         Boolean(hovered) && !isDictating && styles.iconButtonHovered,
-        !isDictationStartEnabled && styles.buttonDisabled,
+        ((!isCompactModeSwitch && !isDictationStartEnabled) || (isCompactModeSwitch && disabled)) &&
+          styles.buttonDisabled,
         isDictating && styles.voiceButtonRecording,
       ],
-      [isDictating, isDictationStartEnabled],
+      [disabled, isCompact, isCompactModeSwitch, isDictating, isDictationStartEnabled],
     );
+    const modeSwitchLabel = isCompactVoiceInput
+      ? t("composer.input.textInput")
+      : t("composer.input.voiceInput");
+    const modeSwitchAccessibilityLabel = isCompactVoiceInput
+      ? t("composer.input.switchToTextInput")
+      : t("composer.input.switchToVoiceInput");
 
     const handleRealtimeVoiceStop = useCallback(() => {
       void handleStopRealtimeVoice();
@@ -1675,10 +1718,11 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const inputWrapperCombinedStyle = useMemo(
       () => [
         styles.inputWrapper,
+        isCompactVoiceInput && styles.inputWrapperVoice,
         inputWrapperStyle,
         { opacity: surfacePresentation.input.opacity },
       ],
-      [inputWrapperStyle, surfacePresentation.input.opacity],
+      [inputWrapperStyle, isCompactVoiceInput, surfacePresentation.input.opacity],
     );
     const textInputStyle = useMemo(
       () => [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
@@ -1701,14 +1745,19 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     );
 
     const renderVoiceButtonIcon = useCallback(
-      ({ hovered }: { hovered?: boolean }) => (
-        <VoiceButtonIcon
-          hovered={Boolean(hovered)}
-          isDictating={isDictating}
-          isMutedRealtime={Boolean(isRealtimeVoiceForCurrentAgent && voice?.isMuted)}
-        />
-      ),
-      [isDictating, isRealtimeVoiceForCurrentAgent, voice?.isMuted],
+      ({ hovered }: { hovered?: boolean }) =>
+        isCompactVoiceInput ? (
+          <ThemedKeyboard
+            uniProps={hovered ? composerIconForegroundMapping : composerIconForegroundMutedMapping}
+          />
+        ) : (
+          <VoiceButtonIcon
+            hovered={Boolean(hovered)}
+            isDictating={isDictating}
+            isMutedRealtime={Boolean(isRealtimeVoiceForCurrentAgent && voice?.isMuted)}
+          />
+        ),
+      [isCompactVoiceInput, isDictating, isRealtimeVoiceForCurrentAgent, voice?.isMuted],
     );
 
     return (
@@ -1720,35 +1769,55 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           pointerEvents={surfacePresentation.input.pointerEvents}
         >
           {attachmentSlot}
-          {/* Text input */}
-          <View style={styles.textInputScrollWrapper}>
-            <ThemedTextInput
-              ref={textInputRef}
-              dataSet={COMPOSER_INPUT_DATASET}
-              value={value}
-              onChangeText={handleInputChange}
-              placeholder={placeholder ?? t("composer.placeholders.fallback")}
-              uniProps={textInputPlaceholderColorMapping}
-              accessibilityLabel={t("composer.input.accessibilityLabel")}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
-              style={textInputStyle}
-              multiline
-              scrollEnabled={isWeb ? inputHeight >= maxInputHeight : true}
-              onContentSizeChange={handleContentSizeChange}
-              editable={!isDictating && !isRealtimeVoiceForCurrentAgent && !disabled}
-              onKeyPress={shouldHandleWebKeyPress ? handleDesktopKeyPress : undefined}
-              onSelectionChange={handleSelectionChange}
-              autoFocus={isWeb && autoFocus}
-            />
-            <FocusHint
-              visible={isWeb && isPaneFocused && !isInputFocused && !value}
-              focusInputKeys={focusInputKeys}
-              label={t("composer.input.focusHint", {
-                shortcut: focusInputKeys ? formatShortcut(focusInputKeys[0], getShortcutOs()) : "",
-              })}
-            />
-          </View>
+          {/* Text input or the compact voice-first entry. */}
+          {isCompactVoiceInput ? (
+            <Pressable
+              onPress={handleVoicePress}
+              disabled={!isDictationStartEnabled}
+              accessibilityRole="button"
+              accessibilityLabel={t("composer.input.tapToDictate")}
+              style={styles.voiceInputSurface}
+            >
+              <ThemedMic uniProps={composerVoiceEntryIconMapping} />
+              <Text
+                numberOfLines={value ? 3 : 1}
+                style={value ? styles.voiceInputDraftText : styles.voiceInputPrompt}
+              >
+                {value || t("composer.input.tapToDictate")}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.textInputScrollWrapper}>
+              <ThemedTextInput
+                ref={textInputRef}
+                dataSet={COMPOSER_INPUT_DATASET}
+                value={value}
+                onChangeText={handleInputChange}
+                placeholder={placeholder ?? t("composer.placeholders.fallback")}
+                uniProps={textInputPlaceholderColorMapping}
+                accessibilityLabel={t("composer.input.accessibilityLabel")}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
+                style={textInputStyle}
+                multiline
+                scrollEnabled={isWeb ? inputHeight >= maxInputHeight : true}
+                onContentSizeChange={handleContentSizeChange}
+                editable={!isDictating && !isRealtimeVoiceForCurrentAgent && !disabled}
+                onKeyPress={shouldHandleWebKeyPress ? handleDesktopKeyPress : undefined}
+                onSelectionChange={handleSelectionChange}
+                autoFocus={isWeb && autoFocus}
+              />
+              <FocusHint
+                visible={isWeb && isPaneFocused && !isInputFocused && !value}
+                focusInputKeys={focusInputKeys}
+                label={t("composer.input.focusHint", {
+                  shortcut: focusInputKeys
+                    ? formatShortcut(focusInputKeys[0], getShortcutOs())
+                    : "",
+                })}
+              />
+            </View>
+          )}
 
           {/* Button row */}
           <View style={styles.buttonRow}>
@@ -1769,12 +1838,15 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             <View style={styles.rightButtonGroup}>
               {beforeVoiceContent}
               <VoiceButtonTooltip
-                onVoicePress={handleVoicePress}
-                isDictationStartEnabled={isDictationStartEnabled}
-                voiceButtonAccessibilityLabel={voiceButtonAccessibilityLabel}
+                onVoicePress={isCompactModeSwitch ? handleCompactModeToggle : handleVoicePress}
+                isDictationStartEnabled={isCompactModeSwitch ? !disabled : isDictationStartEnabled}
+                isCompact={isCompact}
+                voiceButtonAccessibilityLabel={
+                  isCompactModeSwitch ? modeSwitchAccessibilityLabel : voiceButtonAccessibilityLabel
+                }
                 voiceButtonStyle={voiceButtonStyle}
                 renderVoiceButtonIcon={renderVoiceButtonIcon}
-                voiceTooltipText={voiceTooltipText}
+                voiceTooltipText={isCompactModeSwitch ? modeSwitchLabel : voiceTooltipText}
                 isRealtimeVoiceForCurrentAgent={isRealtimeVoiceForCurrentAgent}
                 voiceMuteToggleKeys={voiceMuteToggleKeys}
                 dictationToggleKeys={dictationToggleKeys}
@@ -1819,6 +1891,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             onRetryFailedRecording={handleRetryFailedRecording}
             onDiscardFailedRecording={handleDiscardFailedRecording}
             onRealtimeVoiceStop={handleRealtimeVoiceStop}
+            expandedDictation={isCompactVoiceInput}
           />
         </View>
       </View>
@@ -1852,6 +1925,31 @@ const styles = StyleSheet.create((theme: Theme) => ({
           transitionTimingFunction: "ease-in-out",
         }
       : {}),
+  },
+  inputWrapperVoice: {
+    minHeight: theme.controlHeight.field * 3,
+  },
+  voiceInputSurface: {
+    flex: 1,
+    minHeight: theme.controlHeight.field * 2,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface2,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+  },
+  voiceInputPrompt: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.normal,
+  },
+  voiceInputDraftText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.normal,
+    textAlign: "center",
   },
   textInputScrollWrapper: {
     position: "relative",
@@ -1917,6 +2015,18 @@ const styles = StyleSheet.create((theme: Theme) => ({
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
+  },
+  voiceButtonCompact: {
+    width: "auto",
+    minHeight: theme.controlHeight.tight,
+    flexDirection: "row",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+  },
+  voiceButtonLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
   },
   voiceButtonRecording: {
     backgroundColor: theme.colors.destructive,
@@ -1987,6 +2097,7 @@ const ThemedPlus = withUnistyles(Plus);
 const ThemedSquare = withUnistyles(Square);
 const ThemedMic = withUnistyles(Mic);
 const ThemedMicOff = withUnistyles(MicOff);
+const ThemedKeyboard = withUnistyles(Keyboard);
 const ThemedArrowUp = withUnistyles(ArrowUp);
 const ThemedCornerDownLeft = withUnistyles(CornerDownLeft);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
@@ -2007,6 +2118,10 @@ const composerIconForegroundMutedMapping = (theme: Theme) => ({
 const composerIconAccentForegroundMapping = (theme: Theme) => ({
   color: theme.colors.accentForeground,
   size: resolveComposerButtonIconSize(theme),
+});
+const composerVoiceEntryIconMapping = (theme: Theme) => ({
+  color: theme.colors.accent,
+  size: theme.iconSize.lg,
 });
 const textInputPlaceholderColorMapping = (theme: Theme) => ({
   placeholderTextColor: theme.colors.surface4,
