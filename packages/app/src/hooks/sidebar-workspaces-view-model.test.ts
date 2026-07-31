@@ -84,7 +84,9 @@ describe("createSidebarWorkspaceEntry creation time", () => {
 });
 
 describe("workspace attention unread state", () => {
-  it("shows an unread dot while the workspace requires explicit review", () => {
+  const attentionEnteredAt = new Date("2026-07-25T08:00:00.000Z");
+
+  it("shows an unread dot for an unseen attention generation", () => {
     const entry = createSidebarWorkspaceEntry({
       serverId: "srv",
       workspace: workspace({
@@ -93,7 +95,7 @@ describe("workspace attention unread state", () => {
         projectId: "proj",
         projectDisplayName: "repo",
         status: "attention",
-        statusEnteredAt: new Date("2026-07-25T08:00:00.000Z"),
+        statusEnteredAt: attentionEnteredAt,
       }),
     });
 
@@ -103,7 +105,7 @@ describe("workspace attention unread state", () => {
     });
   });
 
-  it("hides the dot only after the server status leaves attention", () => {
+  it("hides only the dot after viewing while keeping the ready-to-review status", () => {
     const entry = createSidebarWorkspaceEntry({
       serverId: "srv",
       workspace: workspace({
@@ -111,14 +113,67 @@ describe("workspace attention unread state", () => {
         name: "review",
         projectId: "proj",
         projectDisplayName: "repo",
-        status: "done",
-        statusEnteredAt: new Date("2026-07-25T08:00:00.000Z"),
+        status: "attention",
+        statusEnteredAt: attentionEnteredAt,
       }),
+      seenAttentionMarker: attentionEnteredAt.toISOString(),
     });
 
     expect(entry).toMatchObject({
-      statusBucket: "done",
+      statusBucket: "attention",
       hasUnreadAttention: false,
+    });
+  });
+
+  it("shows the dot again for a newer attention generation", () => {
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: workspace({
+        id: "review",
+        name: "review",
+        projectId: "proj",
+        projectDisplayName: "repo",
+        status: "attention",
+        statusEnteredAt: new Date("2026-07-25T09:00:00.000Z"),
+      }),
+      seenAttentionMarker: attentionEnteredAt.toISOString(),
+    });
+
+    expect(entry).toMatchObject({
+      statusBucket: "attention",
+      hasUnreadAttention: true,
+    });
+  });
+
+  it("uses the newest agent attention when the workspace status timestamp stays unchanged", () => {
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: workspace({
+        id: "review",
+        name: "review",
+        projectId: "proj",
+        projectDisplayName: "repo",
+        status: "attention",
+        statusEnteredAt: attentionEnteredAt,
+      }),
+      workspaceAgentActivity: new Map([
+        [
+          "review",
+          {
+            agentId: "agent",
+            status: "attention",
+            enteredAt: attentionEnteredAt,
+            attentionEnteredAt: new Date("2026-07-25T09:00:00.000Z"),
+          },
+        ],
+      ]),
+      seenAttentionMarker: attentionEnteredAt.toISOString(),
+    });
+
+    expect(entry).toMatchObject({
+      statusBucket: "attention",
+      statusEnteredAt: attentionEnteredAt,
+      hasUnreadAttention: true,
     });
   });
 });

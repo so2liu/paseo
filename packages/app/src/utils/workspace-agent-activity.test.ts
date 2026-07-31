@@ -98,6 +98,7 @@ describe("workspace agent activity index", () => {
             agentId: "permission",
             status: "needs_input",
             enteredAt: new Date("2026-06-01T10:01:00.000Z"),
+            attentionEnteredAt: null,
           },
         ],
         [
@@ -106,6 +107,7 @@ describe("workspace agent activity index", () => {
             agentId: "attention",
             status: "attention",
             enteredAt: new Date("2026-06-01T10:02:00.000Z"),
+            attentionEnteredAt: new Date("2026-06-01T10:02:00.000Z"),
           },
         ],
       ]),
@@ -152,6 +154,7 @@ describe("workspace agent activity index", () => {
       agentId: "root",
       status: "running",
       enteredAt: new Date("2026-06-01T10:00:00.000Z"),
+      attentionEnteredAt: null,
     });
   });
 
@@ -187,6 +190,7 @@ describe("workspace agent activity index", () => {
             agentId: "parent",
             status: "done",
             enteredAt: new Date("2026-06-01T10:00:00.000Z"),
+            attentionEnteredAt: null,
           },
         ],
         [
@@ -195,6 +199,7 @@ describe("workspace agent activity index", () => {
             agentId: "child",
             status: "running",
             enteredAt: new Date("2026-06-01T10:03:00.000Z"),
+            attentionEnteredAt: null,
           },
         ],
       ]),
@@ -271,6 +276,50 @@ describe("workspace agent activity index", () => {
       agentId: "root",
       status: "needs_input",
       enteredAt: new Date("2026-06-01T10:05:00.000Z"),
+      attentionEnteredAt: null,
+    });
+  });
+
+  it("advances the attention generation while the workspace stays in attention", () => {
+    const previous = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+            attentionTimestamp: "2026-06-01T10:01:00.000Z",
+            requiresAttention: true,
+            attentionReason: "finished",
+          }),
+        ],
+      ]),
+    );
+
+    const next = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "root",
+          agent({
+            id: "root",
+            workspaceId: "workspace-a",
+            updatedAt: "2026-06-01T10:00:00.000Z",
+            attentionTimestamp: "2026-06-01T10:02:00.000Z",
+            requiresAttention: true,
+            attentionReason: "finished",
+          }),
+        ],
+      ]),
+      previous,
+    );
+
+    expect(next).not.toBe(previous);
+    expect(next.get("workspace-a")).toEqual({
+      agentId: "root",
+      status: "attention",
+      enteredAt: new Date("2026-06-01T10:01:00.000Z"),
+      attentionEnteredAt: new Date("2026-06-01T10:02:00.000Z"),
     });
   });
 });

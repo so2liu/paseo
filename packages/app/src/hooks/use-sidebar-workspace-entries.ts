@@ -1,7 +1,8 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore } from "@/stores/session-store";
+import { useWorkspaceAttentionViewStore } from "@/stores/workspace-attention-view-store";
 import {
   areSidebarWorkspaceSessionsEqual,
   buildSidebarWorkspaceEntries,
@@ -14,6 +15,7 @@ import {
 const EMPTY_ENTRIES = new Map<string, SidebarWorkspaceEntry>();
 const EMPTY_SESSIONS: SidebarWorkspaceSession[] = [];
 const EMPTY_PENDING_CREATE_ATTEMPTS: Record<string, never> = {};
+const EMPTY_SEEN_ATTENTION_MARKERS: Record<string, never> = {};
 
 export function useSidebarWorkspaceEntries(
   placements: readonly SidebarWorkspacePlacement[],
@@ -32,6 +34,11 @@ export function useSidebarWorkspaceEntries(
   const pendingCreateAttempts = useCreateFlowStore((state) =>
     enabled ? state.pendingByDraftId : EMPTY_PENDING_CREATE_ATTEMPTS,
   );
+  const attentionViewStoreHydrated = useWorkspaceAttentionViewStore((state) => state.hasHydrated);
+  const seenAttentionMarkerByWorkspaceKey = useWorkspaceAttentionViewStore((state) =>
+    enabled && state.hasHydrated ? state.seenMarkerByWorkspaceKey : EMPTY_SEEN_ATTENTION_MARKERS,
+  );
+  const clearAttentionSeen = useWorkspaceAttentionViewStore((state) => state.clearAttentionSeen);
   const previousEntriesRef = useRef<ReadonlyMap<string, SidebarWorkspaceEntry>>(EMPTY_ENTRIES);
 
   // Collection ownership is intentional: retained sidebars have one cheap
@@ -49,11 +56,22 @@ export function useSidebarWorkspaceEntries(
       placements,
       sessions,
       pendingCreateAttempts,
+      seenAttentionMarkerByWorkspaceKey,
       previousEntries: previousEntriesRef.current,
     });
     previousEntriesRef.current = nextEntries;
     return nextEntries;
-  }, [enabled, pendingCreateAttempts, placements, sessions]);
+  }, [enabled, pendingCreateAttempts, placements, seenAttentionMarkerByWorkspaceKey, sessions]);
+
+  useEffect(() => {
+    if (!enabled || !attentionViewStoreHydrated) {
+      return;
+    }
+    const inactiveWorkspaceKeys = Array.from(entries.values())
+      .filter((entry) => entry.statusBucket !== "attention")
+      .map((entry) => entry.workspaceKey);
+    clearAttentionSeen(inactiveWorkspaceKeys);
+  }, [attentionViewStoreHydrated, clearAttentionSeen, enabled, entries]);
 
   return entries;
 }

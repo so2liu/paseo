@@ -10,6 +10,7 @@ import type {
 import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
 import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
+import { hasUnreadWorkspaceAttention } from "@/stores/workspace-attention-view-store";
 
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
 
@@ -145,9 +146,13 @@ export function createSidebarWorkspaceEntry(input: {
   workspace: WorkspaceDescriptor;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
   workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
+  seenAttentionMarker?: string;
 }): SidebarWorkspaceEntry {
   const projectKey = input.workspace.project?.projectKey ?? input.workspace.projectId;
   const effectiveStatus = deriveEffectiveWorkspaceStatus(input);
+  const attentionEnteredAt =
+    input.workspaceAgentActivity?.get(input.workspace.id)?.attentionEnteredAt ??
+    effectiveStatus.enteredAt;
   return {
     workspaceKey: `${input.serverId}:${input.workspace.id}`,
     serverId: input.serverId,
@@ -165,8 +170,11 @@ export function createSidebarWorkspaceEntry(input: {
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
-    // Opening a workspace is not acknowledgement; only the explicit review action may clear it.
-    hasUnreadAttention: effectiveStatus.status === "attention",
+    hasUnreadAttention: hasUnreadWorkspaceAttention({
+      status: effectiveStatus.status,
+      statusEnteredAt: attentionEnteredAt,
+      seenMarker: input.seenAttentionMarker,
+    }),
     archivingAt: input.workspace.archivingAt,
     diffStat: input.workspace.diffStat,
     prHint: selectPrHintFromStatus(
@@ -308,6 +316,7 @@ export function buildSidebarWorkspaceEntries(input: {
   sessions: SidebarWorkspaceSession[];
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
   previousEntries?: ReadonlyMap<string, SidebarWorkspaceEntry>;
+  seenAttentionMarkerByWorkspaceKey?: Readonly<Record<string, string>>;
 }): Map<string, SidebarWorkspaceEntry> {
   if (input.placements.length === 0 || input.sessions.length === 0) {
     return new Map();
@@ -331,6 +340,7 @@ export function buildSidebarWorkspaceEntries(input: {
       workspace,
       pendingCreateAttempts: input.pendingCreateAttempts,
       workspaceAgentActivity: session.workspaceAgentActivity,
+      seenAttentionMarker: input.seenAttentionMarkerByWorkspaceKey?.[placement.workspaceKey],
     });
     const previousEntry = input.previousEntries?.get(placement.workspaceKey);
     entries.set(
