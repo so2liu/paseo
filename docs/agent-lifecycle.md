@@ -125,9 +125,11 @@ another prompt, switching tabs, or leaving the workspace must not clear the daem
 
 Attention is an edge-triggered unread signal. Repeated state broadcasts preserve its original
 timestamp and do not send duplicate notifications. The one automatic replacement is recovery from
-an unread error: if the agent runs again and completes successfully, the stale error attention
-becomes fresh finished attention and emits one finished notification. While that recovery turn is
-running, its live running state takes precedence over the stale error marker in status buckets.
+an unread error: if the agent runs again and emits `turn_completed`, the stale error attention
+becomes fresh finished attention and emits one finished notification. Cancellation still returns
+the agent to idle, but preserves the unread error and emits no finished notification. While that
+recovery turn is running, its live running state takes precedence over the stale error marker in
+status buckets.
 
 The workspace moves to **Done** only after an explicit user gesture sends
 `workspace.clear_attention.request`; this clears all non-permission attention owned by that

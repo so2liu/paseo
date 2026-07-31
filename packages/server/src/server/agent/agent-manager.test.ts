@@ -5927,6 +5927,84 @@ test("successful turn replaces unread error attention with finished attention on
   expect(persisted?.attentionReason).toBe("finished");
 });
 
+test("canceled recovery preserves unread error attention without a finished notification", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-attention-cancel-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+
+  class CanceledRecoverySession extends TestAgentSession {
+    private attempt = 0;
+
+    override async startTurn(): Promise<{ turnId: string }> {
+      this.attempt += 1;
+      const attempt = this.attempt;
+      const turnId = `turn-${attempt}`;
+      setTimeout(() => {
+        this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
+        if (attempt === 1) {
+          this.pushEvent({
+            type: "turn_failed",
+            provider: this.provider,
+            error: "temporary failure",
+            turnId,
+          });
+          return;
+        }
+        this.pushEvent({ type: "turn_canceled", provider: this.provider, turnId });
+      }, 0);
+      return { turnId };
+    }
+  }
+
+  class CanceledRecoveryClient extends TestAgentClient {
+    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      return new CanceledRecoverySession(config);
+    }
+  }
+
+  const attentionReasons: Array<"finished" | "error" | "permission"> = [];
+  const manager = new AgentManager({
+    clients: { codex: new CanceledRecoveryClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000132",
+    onAgentAttention: ({ reason }) => attentionReasons.push(reason),
+  });
+  const agent = await manager.createAgent(
+    { provider: "codex", cwd: workdir, title: "Canceled recovery attention test" },
+    undefined,
+    { workspaceId: undefined },
+  );
+
+  await expect(manager.runAgent(agent.id, "fail")).rejects.toThrow("temporary failure");
+  const failed = manager.getAgent(agent.id);
+  const errorTimestamp =
+    failed?.attention.requiresAttention === true
+      ? failed.attention.attentionTimestamp.toISOString()
+      : null;
+
+  const canceled = await manager.runAgent(agent.id, "cancel");
+  await manager.flush();
+
+  expect(canceled.canceled).toBe(true);
+  const afterCancel = manager.getAgent(agent.id);
+  expect(afterCancel?.lifecycle).toBe("idle");
+  expect(afterCancel?.attention).toMatchObject({
+    requiresAttention: true,
+    attentionReason: "error",
+  });
+  expect(
+    afterCancel?.attention.requiresAttention === true
+      ? afterCancel.attention.attentionTimestamp.toISOString()
+      : null,
+  ).toBe(errorTimestamp);
+  expect(attentionReasons).toEqual(["error"]);
+
+  const persisted = await storage.get(agent.id);
+  expect(persisted?.lastStatus).toBe("idle");
+  expect(persisted?.requiresAttention).toBe(true);
+  expect(persisted?.attentionReason).toBe("error");
+});
+
 test("streamAgent clears pending run when startTurn fails before a turn id exists", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-start-turn-failure-"));
   const storagePath = join(workdir, "agents");
