@@ -1346,6 +1346,14 @@ export class PiRpcAgentSession implements AgentSession {
     return { turnId };
   }
 
+  async steer(prompt: AgentPromptInput): Promise<void> {
+    if (!this.activeTurnId) {
+      throw new Error("Pi has no active turn to steer");
+    }
+    const payload = convertPromptInput(prompt, { model: this.state.model });
+    await this.runtimeSession.steer(payload.text, payload.images);
+  }
+
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
     this.subscribers.add(callback);
     return () => {

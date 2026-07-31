@@ -766,15 +766,28 @@ export class AgentManager {
     );
   }
 
-  async steerAgent(agentId: string, prompt: AgentPromptInput): Promise<void> {
+  async steerAgent(agentId: string, prompt: AgentPromptInput): Promise<boolean> {
+    // Provider events are serialized asynchronously. Drain them before deciding
+    // whether the turn is still steerable so a just-finished provider does not
+    // race a stale manager/UI "running" snapshot.
+    await this.drainSessionEvents(agentId);
     const agent = this.requireSessionAgent(agentId);
     if (!this.hasInFlightRun(agentId)) {
-      throw new Error(`Agent ${agentId} has no active run to steer`);
+      return false;
     }
     if (!agent.session.steer) {
       throw new Error(`Provider ${agent.provider} does not support steering`);
     }
-    await agent.session.steer(prompt);
+    try {
+      await agent.session.steer(prompt);
+      return true;
+    } catch (error) {
+      await this.drainSessionEvents(agentId);
+      if (!this.hasInFlightRun(agentId)) {
+        return false;
+      }
+      throw error;
+    }
   }
 
   subscribe(callback: AgentSubscriber, options?: SubscribeOptions): () => void {

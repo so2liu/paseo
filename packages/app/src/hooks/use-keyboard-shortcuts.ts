@@ -36,6 +36,7 @@ import {
   navigateToLastWorkspace,
   useActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
+import { installModifierResetListeners } from "@/keyboard/modifier-reset-listeners";
 
 export function useKeyboardShortcuts({
   enabled,
@@ -325,14 +326,12 @@ export function useKeyboardShortcuts({
       }
     };
 
-    const handleBlurOrHide = () => {
-      resetModifiers();
-    };
-
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
-    window.addEventListener("blur", handleBlurOrHide);
-    document.addEventListener("visibilitychange", handleBlurOrHide);
+    const removeModifierResetListeners = installModifierResetListeners(
+      { windowTarget: window, documentTarget: document },
+      resetModifiers,
+    );
 
     const browserShortcutSubscription = isElectronRuntime()
       ? getDesktopHost()?.events?.on?.("browser-shortcut-input", (payload) => {
@@ -359,8 +358,7 @@ export function useKeyboardShortcuts({
       }
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
-      window.removeEventListener("blur", handleBlurOrHide);
-      document.removeEventListener("visibilitychange", handleBlurOrHide);
+      removeModifierResetListeners();
       if (typeof browserShortcutSubscription === "function") {
         browserShortcutSubscription();
       } else {
