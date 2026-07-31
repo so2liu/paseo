@@ -141,6 +141,7 @@ export function DictationControls({
 export function DictationOverlay({
   volume,
   duration,
+  transcript,
   isRecording,
   isProcessing,
   status,
@@ -150,7 +151,7 @@ export function DictationOverlay({
   onAcceptAndSend,
   onRetry,
   onDiscard,
-}: Omit<DictationControlsProps, "onStart" | "disabled" | "transcript"> & { errorText?: string }) {
+}: Omit<DictationControlsProps, "onStart" | "disabled"> & { errorText?: string }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isFailed = status === "failed";
@@ -182,6 +183,12 @@ export function DictationOverlay({
     [theme.colors.accentForeground],
   );
   const overlayConfirmButtonStyle = overlayRetryButtonStyle;
+  let transcriptText = transcript;
+  if (isFailed) {
+    transcriptText = errorText
+      ? t("message.dictation.failed", { error: errorText })
+      : t("message.dictation.failedRetry");
+  }
 
   if (!showActiveState) {
     return null;
@@ -206,15 +213,14 @@ export function DictationOverlay({
             isMuted={false}
             isSpeaking={false}
             orientation="horizontal"
+            variant={transcriptText ? "compact" : "default"}
             color={theme.colors.accentForeground}
           />
           <Text style={overlayTimerTextStyle}>{formatDuration(duration)}</Text>
         </View>
-        {isFailed ? (
+        {transcriptText ? (
           <Text numberOfLines={2} style={overlayTranscriptTextStyle}>
-            {errorText
-              ? t("message.dictation.failed", { error: errorText })
-              : t("message.dictation.failedRetry")}
+            {transcriptText}
           </Text>
         ) : null}
       </View>
@@ -331,9 +337,6 @@ const styles = StyleSheet.create((theme) => ({
   },
 }));
 
-const OVERLAY_BUTTON_SIZE = 44;
-const OVERLAY_VERTICAL_PADDING = (FOOTER_HEIGHT - OVERLAY_BUTTON_SIZE) / 2;
-
 const overlayStyles = StyleSheet.create((theme) => ({
   container: {
     flexDirection: "row",
@@ -342,12 +345,12 @@ const overlayStyles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius["2xl"],
     justifyContent: "space-between",
     paddingHorizontal: theme.spacing[4],
-    paddingVertical: OVERLAY_VERTICAL_PADDING,
-    height: FOOTER_HEIGHT,
+    paddingVertical: theme.spacing[2],
+    minHeight: FOOTER_HEIGHT,
   },
   cancelButton: {
-    width: OVERLAY_BUTTON_SIZE,
-    height: OVERLAY_BUTTON_SIZE,
+    width: theme.controlHeight.field,
+    height: theme.controlHeight.field,
     borderRadius: theme.borderRadius.full,
     backgroundColor: "rgba(0, 0, 0, 0.15)",
     alignItems: "center",
@@ -373,6 +376,7 @@ const overlayStyles = StyleSheet.create((theme) => ({
   },
   transcriptText: {
     fontSize: theme.fontSize.sm,
+    lineHeight: Math.ceil(theme.fontSize.sm * 1.25),
     fontWeight: theme.fontWeight.normal,
     textAlign: "center",
     paddingHorizontal: theme.spacing[2],
@@ -384,8 +388,8 @@ const overlayStyles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   actionButton: {
-    width: OVERLAY_BUTTON_SIZE,
-    height: OVERLAY_BUTTON_SIZE,
+    width: theme.controlHeight.field,
+    height: theme.controlHeight.field,
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
@@ -394,8 +398,8 @@ const overlayStyles = StyleSheet.create((theme) => ({
     opacity: 0.5,
   },
   loadingContainer: {
-    width: OVERLAY_BUTTON_SIZE,
-    height: OVERLAY_BUTTON_SIZE,
+    width: theme.controlHeight.field,
+    height: theme.controlHeight.field,
     alignItems: "center",
     justifyContent: "center",
   },

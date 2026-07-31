@@ -602,6 +602,7 @@ function MessageInputOverlay({
   voice,
   dictationVolume,
   dictationDuration,
+  dictationPartialTranscript,
   isDictating,
   isDictationProcessing,
   dictationStatus,
@@ -625,6 +626,7 @@ function MessageInputOverlay({
     | undefined;
   dictationVolume: number;
   dictationDuration: number;
+  dictationPartialTranscript: string;
   isDictating: boolean;
   isDictationProcessing: boolean;
   dictationStatus: React.ComponentProps<typeof DictationOverlay>["status"];
@@ -641,6 +643,7 @@ function MessageInputOverlay({
       <DictationOverlay
         volume={dictationVolume}
         duration={dictationDuration}
+        transcript={dictationPartialTranscript}
         isRecording={isDictating}
         isProcessing={isDictationProcessing}
         status={dictationStatus}
@@ -1302,7 +1305,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       isRecording: isDictating,
       isRecordingActive: isDictationActive,
       isProcessing: isDictationProcessing,
-      partialTranscript: _dictationPartialTranscript,
+      partialTranscript: dictationPartialTranscript,
       volume: dictationVolume,
       duration: dictationDuration,
       error: dictationError,
@@ -1805,6 +1808,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             voice={voice}
             dictationVolume={dictationVolume}
             dictationDuration={dictationDuration}
+            dictationPartialTranscript={dictationPartialTranscript}
             isDictating={isDictating}
             isDictationProcessing={isDictationProcessing}
             dictationStatus={dictationStatus}

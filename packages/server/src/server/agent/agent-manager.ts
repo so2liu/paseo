@@ -2132,7 +2132,11 @@ export class AgentManager {
     return streamForwarder;
   }
 
-  private finalizeForegroundTurn(agent: ActiveManagedAgent, turnId?: string): void {
+  private finalizeForegroundTurn(
+    agent: ActiveManagedAgent,
+    turnId?: string,
+    options?: { completed?: boolean },
+  ): void {
     const mutableAgent = agent;
     if (turnId) {
       this.runs.rememberFinalizedTurn(mutableAgent, turnId);
@@ -2171,7 +2175,7 @@ export class AgentManager {
     );
     if (!shouldHoldBusyForReplacement) {
       this.touchUpdatedAt(mutableAgent);
-      this.emitState(mutableAgent);
+      this.emitState(mutableAgent, { completedTurn: options?.completed });
     }
   }
 
@@ -3530,7 +3534,9 @@ export class AgentManager {
     if (!options?.fromHistory && isTurnTerminalEvent(event)) {
       this.runs.settleTerminalRun(agent.id, eventTurnId);
       if (isForegroundEvent) {
-        this.finalizeForegroundTurn(agent, eventTurnId);
+        this.finalizeForegroundTurn(agent, eventTurnId, {
+          completed: event.type === "turn_completed",
+        });
       }
     }
 
@@ -3751,7 +3757,7 @@ export class AgentManager {
     agent.lastError = undefined;
     if (!isForegroundEvent && agent.lifecycle !== "idle" && !agent.pendingReplacement) {
       (agent as ActiveManagedAgent).lifecycle = "idle";
-      this.emitState(agent);
+      this.emitState(agent, { completedTurn: true });
     }
     void this.refreshRuntimeInfo(agent);
   }
@@ -3999,9 +4005,12 @@ export class AgentManager {
     return row;
   }
 
-  private emitState(agent: ManagedAgent, options?: { persist?: boolean }): void {
+  private emitState(
+    agent: ManagedAgent,
+    options?: { persist?: boolean; completedTurn?: boolean },
+  ): void {
     // Keep attention as an edge-triggered unread signal, not a level signal.
-    this.checkAndSetAttention(agent);
+    this.checkAndSetAttention(agent, options?.completedTurn === true);
     if (options?.persist !== false) {
       this.enqueueBackgroundPersist(agent);
     }
@@ -4034,7 +4043,7 @@ export class AgentManager {
     }
   }
 
-  private checkAndSetAttention(agent: ManagedAgent): void {
+  private checkAndSetAttention(agent: ManagedAgent, completedTurn: boolean): void {
     const previousStatus = this.previousStatuses.get(agent.id);
     const currentStatus = agent.lifecycle;
 
@@ -4046,13 +4055,21 @@ export class AgentManager {
       return;
     }
 
-    // Skip if already requires attention
-    if (agent.attention.requiresAttention) {
+    const completedAfterError =
+      completedTurn &&
+      currentStatus === "idle" &&
+      agent.attention.requiresAttention &&
+      agent.attention.attentionReason === "error";
+
+    // Preserve unread attention (and its timestamp/notification), except when a
+    // successful recovery makes a previously reported error obsolete.
+    if (agent.attention.requiresAttention && !completedAfterError) {
       return;
     }
 
-    // Check if agent transitioned from running to idle (finished)
-    if (previousStatus === "running" && currentStatus === "idle") {
+    // A finished attention edge comes from the provider's turn_completed event,
+    // not from a generic running -> idle transition (which cancellation also uses).
+    if (completedTurn && currentStatus === "idle") {
       agent.attention = {
         requiresAttention: true,
         attentionReason: "finished",

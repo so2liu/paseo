@@ -23,11 +23,11 @@ export function deriveAgentStateBucket(input: AgentStateBucketInput): WorkspaceS
   if ((input.pendingPermissionCount ?? 0) > 0 || input.attentionReason === "permission") {
     return "needs_input";
   }
-  if (input.status === "error" || input.attentionReason === "error") {
-    return "failed";
-  }
   if (input.status === "running") {
     return "running";
+  }
+  if (input.status === "error" || input.attentionReason === "error") {
+    return "failed";
   }
   if (input.requiresAttention) {
     return "attention";
@@ -43,11 +43,11 @@ export function getAgentStatusPriority(input: AgentStateBucketInput): number {
   if ((input.pendingPermissionCount ?? 0) > 0 || input.attentionReason === "permission") {
     return 0;
   }
-  if (input.status === "error" || input.attentionReason === "error") {
-    return 1;
-  }
   if (input.status === "running") {
     return 2;
+  }
+  if (input.status === "error" || input.attentionReason === "error") {
+    return 1;
   }
   if (input.status === "initializing") {
     return 3;

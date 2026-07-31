@@ -446,7 +446,9 @@ export class WorkspaceDirectory {
 
   // Best-effort newest timestamp across contributing agents and terminal entries
   // whose bucket matches `winningBucket`. For agents, uses:
-  //   - `attentionTimestamp` when attention is set (covers attention/failed)
+  //   - `attentionTimestamp` when attention is set, except for the `running`
+  //     bucket, where it would report the time of an earlier error rather than
+  //     the current run
   //   - `updatedAt` as a general fallback for any bucket
   // Returns `null` if no matching contributor has a parseable timestamp.
   private findNewestTimestampInBucket(
@@ -465,9 +467,14 @@ export class WorkspaceDirectory {
         return derived === winningBucket;
       })
       .map((agent) => {
-        // Prefer attentionTimestamp when the agent has attention set — this is
-        // the most accurate "entered current status" signal.
-        if (agent.attentionTimestamp) {
+        // A running agent can now carry unread attention from an earlier error:
+        // `running` outranks a stale `attentionReason: "error"` so a retry stops
+        // displaying as failed. That makes the attention timestamp the wrong
+        // signal here — it records the old failure, so a freshly restarted agent
+        // would sort as if it had not moved since. Use the live update time for
+        // `running`, and keep the attention timestamp for the buckets it
+        // actually describes.
+        if (winningBucket !== "running" && agent.attentionTimestamp) {
           return agent.attentionTimestamp;
         }
         // Fall back to updatedAt as a general proxy for recent activity.
