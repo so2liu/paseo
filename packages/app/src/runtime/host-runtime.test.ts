@@ -1008,6 +1008,46 @@ describe("HostRuntimeController", () => {
     unsubscribe();
   });
 
+  it("adopts a healthy probe when the selected connection client is disconnected", async () => {
+    useHostRuntimeClock();
+    const relay: HostConnection = {
+      id: "relay:relay.paseo.sh:443",
+      type: "relay",
+      relayEndpoint: "relay.paseo.sh:443",
+      daemonPublicKeyB64: "pk_test",
+    };
+    const host = makeHost({
+      connections: [relay],
+      preferredConnectionId: relay.id,
+    });
+    const clients: FakeDaemonClient[] = [];
+    const controller = new HostRuntimeController({
+      host,
+      deps: makeDeps({ [relay.id]: 12 }, clients),
+    });
+
+    await controller.start({ autoProbe: false });
+    const disconnectedClient = controller.getSnapshot().client as unknown as FakeDaemonClient;
+    disconnectedClient.setConnectionState({
+      status: "disconnected",
+      reason: "transport closed",
+    });
+    expect(controller.getSnapshot()).toMatchObject({
+      activeConnectionId: relay.id,
+      connectionStatus: "error",
+    });
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await controller.runProbeCycleNow();
+
+    expect(controller.getSnapshot()).toMatchObject({
+      activeConnectionId: relay.id,
+      connectionStatus: "online",
+    });
+    expect(controller.getSnapshot().client).toBe(clients[1] as unknown as DaemonClient);
+    expect(disconnectedClient.isDisposed()).toBe(true);
+  });
+
   it("preserves transport disconnect reasons on the runtime snapshot", async () => {
     const host = makeHost({
       connections: [

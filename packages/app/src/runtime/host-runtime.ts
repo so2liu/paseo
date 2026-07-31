@@ -805,7 +805,7 @@ export class HostRuntimeController {
       connectionId: string,
       client: DaemonClient,
     ): Promise<boolean> => {
-      while (!this.snapshot.activeConnectionId) {
+      while (this.snapshot.connectionStatus !== "online") {
         if (!activationLock) {
           activationLock = this.switchToConnection({
             connectionId,
@@ -815,7 +815,9 @@ export class HostRuntimeController {
             activationLock = null;
           });
           await activationLock;
-          return this.snapshot.activeConnectionId === connectionId;
+          return (
+            this.snapshot.activeConnectionId === connectionId && this.snapshot.client === client
+          );
         }
         await activationLock;
       }
