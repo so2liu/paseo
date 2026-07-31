@@ -5,7 +5,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { theme } = vi.hoisted(() => ({
+const { theme, volumeMeterProps } = vi.hoisted(() => ({
   theme: {
     spacing: { 2: 8, 3: 12, 4: 16 },
     iconSize: { sm: 14, md: 18, lg: 24 },
@@ -13,6 +13,7 @@ const { theme } = vi.hoisted(() => ({
     borderRadius: { "2xl": 16, full: 999 },
     fontSize: { xs: 11, sm: 13, xl: 20 },
     fontWeight: { normal: "400", semibold: "600" },
+    controlHeight: { field: 44 },
     colors: {
       surface0: "#000",
       foreground: "#fff",
@@ -21,6 +22,7 @@ const { theme } = vi.hoisted(() => ({
       accentForeground: "#fff",
     },
   },
+  volumeMeterProps: [] as Array<{ variant?: "default" | "compact" }>,
 }));
 
 vi.mock("react-native", () => ({
@@ -60,7 +62,10 @@ vi.mock("@/components/ui/loading-spinner", () => ({
 }));
 
 vi.mock("./volume-meter", () => ({
-  VolumeMeter: () => React.createElement("i"),
+  VolumeMeter: (props: { variant?: "default" | "compact" }) => {
+    volumeMeterProps.push(props);
+    return React.createElement("i");
+  },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -86,6 +91,7 @@ describe("DictationOverlay", () => {
   let container: HTMLElement | null = null;
 
   beforeEach(() => {
+    volumeMeterProps.length = 0;
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -129,6 +135,7 @@ describe("DictationOverlay", () => {
     });
     expect(container?.textContent).not.toContain("first partial");
     expect(container?.textContent).toContain("updated partial");
+    expect(volumeMeterProps.at(-1)?.variant).toBe("compact");
   });
 
   it("does not render a cleared partial after dictation finishes", () => {
@@ -146,5 +153,23 @@ describe("DictationOverlay", () => {
       );
     });
     expect(container?.textContent).toBe("");
+  });
+
+  it("keeps the full meter when the active overlay has no transcript preview", () => {
+    act(() => {
+      root?.render(
+        <DictationOverlay
+          {...callbacks}
+          volume={0.5}
+          duration={1}
+          transcript=""
+          isRecording
+          isProcessing={false}
+          status="recording"
+        />,
+      );
+    });
+
+    expect(volumeMeterProps.at(-1)?.variant).toBe("default");
   });
 });
