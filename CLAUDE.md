@@ -142,7 +142,8 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
 ## Critical rules
 
 - **When the owner reports a problem, fix it — do not stop at diagnosis.** Locating the cause and then asking "要我修吗?" is not an answer; it hands the work back. Once you can point at the defect, write the fix, verify it, and open the PR in the same pass. This applies to every problem in a report, not just the first: a message listing three issues is three fixes, not one fix and two questions.
-  - **Only stop and discuss when you genuinely cannot pin the cause**, or when the fix requires a product decision the code cannot settle — a default the owner has to choose, a tradeoff between two behaviors both defensible, something that changes what other people see. Then ask one specific question, not a menu.
+  - **Only stop and discuss when you genuinely cannot pin the cause.** Almost nothing else qualifies. This fork has exactly one reader and one user — the owner. There is no other audience whose expectations a taste call could violate, no team to align, no migration to coordinate. So questions of preference are not blockers: pick the option you would defend, ship it, and say in one line what you picked and why. The owner corrects it in the next message if it is wrong, which costs far less than a round trip for every judgment call.
+  - Reserve a real question for the case where proceeding either way would be unsafe or would waste substantial work if wrong — not for "which default do you want".
   - "This is a design change, not a bug" is not grounds to stop. Design changes the owner asked for are still the work.
   - Batch the questions you truly need to the end, after the fixes that need no input are already done.
 - **NEVER restart the main Paseo daemon on port 6767 without permission** — it manages all running agents. If you're an agent, restarting it kills your own process.
