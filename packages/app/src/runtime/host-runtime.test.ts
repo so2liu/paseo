@@ -1048,6 +1048,51 @@ describe("HostRuntimeController", () => {
     expect(disconnectedClient.isDisposed()).toBe(true);
   });
 
+  it("does not replace a live client when it disconnects during an online probe cycle", async () => {
+    const host = makeHost();
+    const activeClient = new FakeDaemonClient();
+    const relayProbeStarted = createDeferred<void>();
+    const finishRelayProbe = createDeferred<void>();
+    const relayProbeClient = makeConnectedProbeClient(12);
+    const controller = new HostRuntimeController({
+      host,
+      deps: {
+        createClient: () => activeClient as unknown as DaemonClient,
+        connectToDaemon: async ({ host: probedHost, connection }) => {
+          if (connection.id !== "relay:relay.paseo.sh:443") {
+            throw new Error(`unexpected probe for ${connection.id}`);
+          }
+          relayProbeStarted.resolve(undefined);
+          await finishRelayProbe.promise;
+          return {
+            client: relayProbeClient as unknown as DaemonClient,
+            serverId: probedHost.serverId,
+            hostname: probedHost.label ?? null,
+          };
+        },
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    await controller.activateConnection({ connectionId: "direct:lan:6767" });
+    const probeCycle = controller.runProbeCycleNow();
+    await relayProbeStarted.promise;
+
+    activeClient.setConnectionState({
+      status: "disconnected",
+      reason: "transport closed",
+    });
+    finishRelayProbe.resolve(undefined);
+    await probeCycle;
+
+    expect(controller.getSnapshot()).toMatchObject({
+      activeConnectionId: "direct:lan:6767",
+      connectionStatus: "error",
+      client: activeClient,
+    });
+    expect(relayProbeClient?.isDisposed()).toBe(true);
+  });
+
   it("preserves transport disconnect reasons on the runtime snapshot", async () => {
     const host = makeHost({
       connections: [

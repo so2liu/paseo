@@ -805,7 +805,11 @@ export class HostRuntimeController {
       connectionId: string,
       client: DaemonClient,
     ): Promise<boolean> => {
-      while (this.snapshot.connectionStatus !== "online") {
+      const canActivateSuccessfulProbe = (): boolean =>
+        !this.snapshot.activeConnectionId ||
+        (!hasActiveOnlineConnection && this.snapshot.connectionStatus !== "online");
+
+      while (canActivateSuccessfulProbe()) {
         if (!activationLock) {
           activationLock = this.switchToConnection({
             connectionId,
