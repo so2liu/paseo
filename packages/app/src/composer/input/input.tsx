@@ -1363,6 +1363,11 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     // whose ref/paste hooks bind on mount. Rendering voice there both defeats the intent
     // (the owner asked for phones) and strands those web-only affordances.
     const isCompactVoiceInput = isNative && isCompact && compactInputMode === "voice";
+    // The toolbar button doubles as the voice/text switch only where the voice surface
+    // actually exists. Gating it on `isCompact` alone stranded dictation on narrow web
+    // windows: they render the text input but the mic still toggled a mobile-only
+    // preference, so dictation could not be started from the UI at all.
+    const isCompactModeSwitch = isNative && isCompact;
 
     useEffect(() => {
       if (isDictating || isDictationProcessing) {
@@ -1693,11 +1698,11 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         styles.voiceButton,
         isCompact && styles.voiceButtonCompact,
         Boolean(hovered) && !isDictating && styles.iconButtonHovered,
-        ((!isCompact && !isDictationStartEnabled) || (isCompact && disabled)) &&
+        ((!isCompactModeSwitch && !isDictationStartEnabled) || (isCompactModeSwitch && disabled)) &&
           styles.buttonDisabled,
         isDictating && styles.voiceButtonRecording,
       ],
-      [disabled, isCompact, isDictating, isDictationStartEnabled],
+      [disabled, isCompact, isCompactModeSwitch, isDictating, isDictationStartEnabled],
     );
     const modeSwitchLabel = isCompactVoiceInput
       ? t("composer.input.textInput")
@@ -1833,15 +1838,15 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             <View style={styles.rightButtonGroup}>
               {beforeVoiceContent}
               <VoiceButtonTooltip
-                onVoicePress={isCompact ? handleCompactModeToggle : handleVoicePress}
-                isDictationStartEnabled={isCompact ? !disabled : isDictationStartEnabled}
+                onVoicePress={isCompactModeSwitch ? handleCompactModeToggle : handleVoicePress}
+                isDictationStartEnabled={isCompactModeSwitch ? !disabled : isDictationStartEnabled}
                 isCompact={isCompact}
                 voiceButtonAccessibilityLabel={
-                  isCompact ? modeSwitchAccessibilityLabel : voiceButtonAccessibilityLabel
+                  isCompactModeSwitch ? modeSwitchAccessibilityLabel : voiceButtonAccessibilityLabel
                 }
                 voiceButtonStyle={voiceButtonStyle}
                 renderVoiceButtonIcon={renderVoiceButtonIcon}
-                voiceTooltipText={isCompact ? modeSwitchLabel : voiceTooltipText}
+                voiceTooltipText={isCompactModeSwitch ? modeSwitchLabel : voiceTooltipText}
                 isRealtimeVoiceForCurrentAgent={isRealtimeVoiceForCurrentAgent}
                 voiceMuteToggleKeys={voiceMuteToggleKeys}
                 dictationToggleKeys={dictationToggleKeys}
