@@ -42,6 +42,7 @@ import {
 } from "../settings/desktop-settings-commands.js";
 import type { DesktopSettings } from "../settings/desktop-settings.js";
 import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
+import { getHostRegistryBackupStore } from "../settings/host-registry-backup-electron.js";
 import { isRunningUnderARM64Translation } from "../system/arm64-translation.js";
 import { getDesktopAppLogs } from "../diagnostics/app-logs.js";
 import { tailFile } from "../diagnostics/tail-file.js";
@@ -568,6 +569,14 @@ async function resolveRequestedReleaseChannel(
 export function createDaemonCommandHandlers(): Record<string, DesktopCommandHandler> {
   return {
     ...createDesktopSettingsCommandHandlers({ settingsStore: getDesktopSettingsStore() }),
+    read_host_registry_backup: () => getHostRegistryBackupStore().read(),
+    write_host_registry_backup: (args) => {
+      const value = args?.value;
+      if (typeof value !== "string") {
+        throw new Error("Host registry backup value must be a string.");
+      }
+      return getHostRegistryBackupStore().write(value);
+    },
     desktop_get_runtime_info: () => ({
       appVersion: resolveDesktopAppVersion(),
       runningUnderARM64Translation: isRunningUnderARM64Translation(),

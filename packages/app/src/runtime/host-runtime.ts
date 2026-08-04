@@ -163,6 +163,11 @@ export interface HostRuntimeStorage {
   setItem: (key: string, value: string) => Promise<void>;
 }
 
+export interface HostRegistryBackup {
+  read: () => Promise<string | null>;
+  write: (value: string) => Promise<void>;
+}
+
 export interface HostRuntimeStartOptions {
   autoProbe?: boolean;
   initialConnection?: {
@@ -1282,6 +1287,22 @@ const DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS = 2500;
 const E2E_STORAGE_KEY = "@paseo:e2e";
 const INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY = "__PASEO_INITIAL_DAEMON_CONNECTION__";
 
+function createDesktopHostRegistryBackup(): HostRegistryBackup | null {
+  const invoke = getDesktopHost()?.invoke;
+  if (!invoke) {
+    return null;
+  }
+  return {
+    async read(): Promise<string | null> {
+      const value = await invoke("read_host_registry_backup");
+      return typeof value === "string" ? value : null;
+    },
+    async write(value: string): Promise<void> {
+      await invoke("write_host_registry_backup", { value });
+    },
+  };
+}
+
 export interface InitialDaemonConnectionHint {
   listen: string;
   useTls?: boolean;
@@ -1363,11 +1384,20 @@ export class HostRuntimeStore {
   private configuredOverrideBootstrapInFlight: Promise<void> | null = null;
   private bootStarted = false;
   private storage: HostRuntimeStorage;
+  private hostRegistryBackup: HostRegistryBackup | null;
   private replicaCache: ReplicaCache;
 
-  constructor(input?: { deps?: HostRuntimeControllerDeps; storage?: HostRuntimeStorage }) {
+  constructor(input?: {
+    deps?: HostRuntimeControllerDeps;
+    storage?: HostRuntimeStorage;
+    hostRegistryBackup?: HostRegistryBackup | null;
+  }) {
     this.deps = input?.deps ?? createDefaultDeps();
     this.storage = input?.storage ?? AsyncStorage;
+    this.hostRegistryBackup =
+      input && "hostRegistryBackup" in input
+        ? (input.hostRegistryBackup ?? null)
+        : createDesktopHostRegistryBackup();
     this.replicaCache = new ReplicaCache(this.storage);
   }
 
@@ -1444,7 +1474,15 @@ export class HostRuntimeStore {
     let shouldPersistHosts = false;
     let profiles: HostProfile[] = [];
     try {
-      const stored = await this.storage.getItem(REGISTRY_STORAGE_KEY);
+      let stored = await this.storage.getItem(REGISTRY_STORAGE_KEY);
+      if (!stored && this.hostRegistryBackup) {
+        try {
+          stored = await this.hostRegistryBackup.read();
+          shouldPersistHosts = stored !== null;
+        } catch (error) {
+          console.error("[HostRuntime] Failed to read desktop host registry backup", error);
+        }
+      }
       if (stored) {
         const parsed = JSON.parse(stored) as unknown;
         if (Array.isArray(parsed)) {
@@ -1461,6 +1499,9 @@ export class HostRuntimeStore {
       this.replicaCache.setHosts(profiles.map((profile) => profile.serverId));
       await this.replicaCache.restore();
       this.syncHosts(profiles);
+      if (profiles.length > 0) {
+        await this.persistHostRegistryBackup(JSON.stringify(profiles));
+      }
     } catch (error) {
       console.error("[HostRuntime] Failed to load host registry from storage", error);
     } finally {
@@ -1889,10 +1930,23 @@ export class HostRuntimeStore {
   }
 
   private async persistHosts(): Promise<void> {
+    const serialized = JSON.stringify(this.hosts);
     try {
-      await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(this.hosts));
+      await this.storage.setItem(REGISTRY_STORAGE_KEY, serialized);
     } catch (error) {
       console.error("[HostRuntime] Failed to persist host registry", error);
+    }
+    await this.persistHostRegistryBackup(serialized);
+  }
+
+  private async persistHostRegistryBackup(serialized: string): Promise<void> {
+    if (!this.hostRegistryBackup) {
+      return;
+    }
+    try {
+      await this.hostRegistryBackup.write(serialized);
+    } catch (error) {
+      console.error("[HostRuntime] Failed to persist desktop host registry backup", error);
     }
   }
 
