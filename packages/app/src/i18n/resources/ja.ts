@@ -988,6 +988,11 @@ export const ja: TranslationResources = {
         hiding: "非表示にしています...",
       },
       confirmations: {
+        archiveReadyTitle: "レビュー待ちのワークスペースをアーカイブしますか？",
+        archiveReadyMessage:
+          "このワークスペースを開いても完了にはなりません。レビュー待ちから意図的に削除する場合にのみアーカイブしてください。",
+        archiveReadyConfirm: "アーカイブ",
+        archiveReadyCancel: "レビュー待ちのままにする",
         hideTitle: "ワークスペースを非表示にしますか？",
         hideMessage:
           '"{{workspaceName}}"をサイドバーから非表示にしますか？\n\nディスク上のファイルは変更されません。',

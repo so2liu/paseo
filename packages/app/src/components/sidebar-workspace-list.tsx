@@ -122,7 +122,10 @@ import {
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
-import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
+import {
+  shouldEnableWorkspaceArchiveShortcut,
+  useWorkspaceArchive,
+} from "@/workspace/use-workspace-archive";
 import {
   getCurrentProjectRemoveReadiness,
   removeProjectFromHosts,
@@ -1294,6 +1297,7 @@ function WorkspaceRowWithMenu({
   const archiveController = useWorkspaceArchive({
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
+    status: workspace.statusBucket,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
     ...toWorktreeArchiveRisk(workspace),
@@ -1380,7 +1384,11 @@ function WorkspaceRowWithMenu({
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
     actions: ["workspace.archive"],
-    enabled: selected && !isArchiving,
+    enabled: shouldEnableWorkspaceArchiveShortcut({
+      selected,
+      isArchiving,
+      status: workspace.statusBucket,
+    }),
     priority: 0,
     handle: () => {
       handleArchive();

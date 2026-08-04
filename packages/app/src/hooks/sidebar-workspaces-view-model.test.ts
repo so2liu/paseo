@@ -9,6 +9,7 @@ import {
   buildSidebarProjectsFromStructure,
   computeSidebarOrderUpdates,
   createSidebarWorkspaceEntry,
+  deriveEffectiveWorkspaceStatus,
   deriveSidebarLoadingState,
   shouldShowSidebarHostLabels,
   type SidebarProjectEntry,
@@ -174,6 +175,37 @@ describe("workspace attention unread state", () => {
       statusBucket: "attention",
       statusEnteredAt: attentionEnteredAt,
       hasUnreadAttention: true,
+    });
+  });
+
+  it("derives attention from root-agent activity while the descriptor still says done", () => {
+    const effectiveStatus = deriveEffectiveWorkspaceStatus({
+      serverId: "srv",
+      workspace: workspace({
+        id: "review",
+        name: "review",
+        projectId: "proj",
+        projectDisplayName: "repo",
+        status: "done",
+      }),
+      workspaceAgentActivity: new Map([
+        [
+          "review",
+          {
+            agentId: "agent",
+            status: "attention",
+            enteredAt: attentionEnteredAt,
+            attentionEnteredAt,
+          },
+        ],
+      ]),
+    });
+
+    expect(effectiveStatus).toEqual({
+      status: "attention",
+      enteredAt: attentionEnteredAt,
+      attentionEnteredAt,
+      agentId: "agent",
     });
   });
 });

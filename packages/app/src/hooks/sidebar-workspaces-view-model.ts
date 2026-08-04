@@ -189,7 +189,7 @@ export function createSidebarWorkspaceEntry(input: {
   };
 }
 
-function deriveEffectiveWorkspaceStatus(input: {
+export function deriveEffectiveWorkspaceStatus(input: {
   serverId: string;
   workspace: WorkspaceDescriptor;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;

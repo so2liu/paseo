@@ -987,6 +987,11 @@ export const en = {
         hiding: "Hiding...",
       },
       confirmations: {
+        archiveReadyTitle: "Archive workspace that is ready to review?",
+        archiveReadyMessage:
+          "Opening this workspace does not mark it done. Archive it only if you intentionally want to remove it from Ready to review.",
+        archiveReadyConfirm: "Archive",
+        archiveReadyCancel: "Keep ready to review",
         hideTitle: "Hide workspace?",
         hideMessage:
           'Hide "{{workspaceName}}" from the sidebar?\n\nFiles on disk will not be changed.',

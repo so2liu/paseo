@@ -999,6 +999,11 @@ export const ru: TranslationResources = {
         hiding: "Скрытие...",
       },
       confirmations: {
+        archiveReadyTitle: "Архивировать рабочую область, готовую к проверке?",
+        archiveReadyMessage:
+          "Открытие этой рабочей области не помечает её завершённой. Архивируйте её только если действительно хотите убрать её из готовых к проверке.",
+        archiveReadyConfirm: "Архивировать",
+        archiveReadyCancel: "Оставить для проверки",
         hideTitle: "Скрыть рабочее пространство?",
         hideMessage:
           "Скрыть «{{workspaceName}}» на боковой панели?\n\n Файлы на диске не будут изменены.",

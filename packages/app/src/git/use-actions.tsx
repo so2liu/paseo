@@ -27,6 +27,8 @@ import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-ar
 import { type WorktreeArchiveWarningLabels } from "@/git/worktree-archive-warning";
 import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
+import { useCreateFlowStore } from "@/stores/create-flow-store";
+import { deriveEffectiveWorkspaceStatus } from "@/hooks/sidebar-workspaces-view-model";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -247,6 +249,10 @@ function useWorkspaceScreenArchiveController({
   t,
 }: UseWorkspaceScreenArchiveControllerInput) {
   const sessionWorkspaces = useSessionStore((state) => state.sessions[serverId]?.workspaces);
+  const workspaceAgentActivity = useSessionStore(
+    (state) => state.sessions[serverId]?.workspaceAgentActivity,
+  );
+  const pendingCreateAttempts = useCreateFlowStore((state) => state.pendingByDraftId);
   const [isHidingWorkspace, setIsHidingWorkspace] = useState(false);
   const workspaceDescriptor = useMemo(
     () =>
@@ -258,10 +264,19 @@ function useWorkspaceScreenArchiveController({
     [activeWorkspaceSelection, sessionWorkspaces, workspaceDirectory],
   );
   const archiveRisk = resolveWorkspaceArchiveRisk(workspaceDescriptor, gitStatus);
+  const effectiveWorkspaceStatus = workspaceDescriptor
+    ? deriveEffectiveWorkspaceStatus({
+        serverId,
+        workspace: workspaceDescriptor,
+        pendingCreateAttempts,
+        workspaceAgentActivity,
+      }).status
+    : "done";
 
   const controller = useWorkspaceArchive({
     serverId,
     workspaceId: workspaceDescriptor?.id ?? "",
+    status: effectiveWorkspaceStatus,
     workspaceKind: workspaceDescriptor?.workspaceKind ?? "directory",
     name: workspaceDescriptor?.name ?? branchLabel,
     isDirty: archiveRisk.isDirty,

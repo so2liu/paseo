@@ -12,7 +12,10 @@ import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { useToast } from "@/contexts/toast-context";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { toWorktreeArchiveRisk } from "@/git/worktree-archive-warning";
-import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
+import {
+  shouldEnableWorkspaceArchiveShortcut,
+  useWorkspaceArchive,
+} from "@/workspace/use-workspace-archive";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
@@ -81,6 +84,7 @@ export function SidebarWorkspaceRow({
   const archiveController = useWorkspaceArchive({
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
+    status: workspace.statusBucket,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
     ...toWorktreeArchiveRisk(workspace),
@@ -161,7 +165,11 @@ export function SidebarWorkspaceRow({
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
     actions: ["workspace.archive"],
-    enabled: selected && !isArchiving,
+    enabled: shouldEnableWorkspaceArchiveShortcut({
+      selected,
+      isArchiving,
+      status: workspace.statusBucket,
+    }),
     priority: 0,
     handle: () => {
       handleArchive();

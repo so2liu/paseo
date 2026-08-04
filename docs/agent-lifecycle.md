@@ -130,6 +130,9 @@ The workspace moves to **Done** only after an explicit user gesture sends
 `workspaceId`. The legacy `clear_agent_attention` RPC remains parseable for protocol compatibility,
 but the daemon only honors it when an updated client marks the request `explicit: true`. Older
 clients that used the same RPC for focus-driven auto-clear receive a successful no-op response.
+Archiving a workspace that is still **Ready to review** requires a separate destructive
+confirmation, and the archive keyboard shortcut is disabled for that status. This prevents a
+delayed or synthesized shortcut from turning the navigation click into an archive operation.
 
 ## The subagents track
 

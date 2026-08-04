@@ -1007,6 +1007,11 @@ export const fr: TranslationResources = {
         hiding: "Dissimulation...",
       },
       confirmations: {
+        archiveReadyTitle: "Archiver l’espace de travail prêt à être révisé ?",
+        archiveReadyMessage:
+          "Ouvrir cet espace de travail ne le marque pas comme terminé. Archivez-le uniquement si vous souhaitez réellement le retirer des éléments prêts à être révisés.",
+        archiveReadyConfirm: "Archiver",
+        archiveReadyCancel: "Conserver pour révision",
         hideTitle: "Masquer l'espace de travail?",
         hideMessage:
           "Masquer «{{workspaceName}}» dans la barre latérale?\n\nLes fichiers sur le disque ne seront pas modifiés.",

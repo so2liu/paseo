@@ -11,6 +11,10 @@ import type { WorkspaceDescriptor } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { archiveWorkspaceOptimistically } from "@/workspace/workspace-archive";
+import { confirmDialog } from "@/utils/confirm-dialog";
+import { confirmReadyToReviewWorkspaceArchive } from "@/workspace/archive-review-guard";
+
+export { shouldEnableWorkspaceArchiveShortcut } from "@/workspace/archive-review-guard";
 
 function purgeArchivedWorkspaceState(input: { serverId: string; workspaceId: string }): void {
   const workspaceKey = buildWorkspaceTabPersistenceKey(input);
@@ -22,6 +26,7 @@ function purgeArchivedWorkspaceState(input: { serverId: string; workspaceId: str
 export interface ArchiveWorkspaceInput {
   serverId: string;
   workspaceId: string;
+  status: WorkspaceDescriptor["status"];
   workspaceKind: WorkspaceDescriptor["workspaceKind"];
   name: string;
   isDirty?: boolean | null;
@@ -40,6 +45,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
   const {
     serverId,
     workspaceId,
+    status,
     workspaceKind,
     name,
     isDirty,
@@ -80,6 +86,20 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
 
   const archive = useCallback(() => {
     void (async () => {
+      const confirmedReadyToReviewArchive = await confirmReadyToReviewWorkspaceArchive(
+        status,
+        confirmDialog,
+        {
+          title: t("sidebar.workspace.confirmations.archiveReadyTitle"),
+          message: t("sidebar.workspace.confirmations.archiveReadyMessage"),
+          confirmLabel: t("sidebar.workspace.confirmations.archiveReadyConfirm"),
+          cancelLabel: t("sidebar.workspace.confirmations.archiveReadyCancel"),
+          destructive: true,
+        },
+      );
+      if (!confirmedReadyToReviewArchive) {
+        return;
+      }
       if (workspaceKind === "worktree") {
         const confirmed = await confirmRiskyWorktreeArchive(
           {
@@ -102,6 +122,8 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     diffStat,
     isDirty,
     name,
+    status,
+    t,
     warningLabels,
     workspaceKind,
   ]);

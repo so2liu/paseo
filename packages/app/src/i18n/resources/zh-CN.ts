@@ -967,6 +967,11 @@ export const zhCN: TranslationResources = {
         hiding: "正在隐藏...",
       },
       confirmations: {
+        archiveReadyTitle: "归档待审阅的 workspace？",
+        archiveReadyMessage:
+          "打开这个 workspace 不会将其标记为完成。只有在你确实想把它从「待审阅」中移除时才归档。",
+        archiveReadyConfirm: "归档",
+        archiveReadyCancel: "继续待审阅",
         hideTitle: "隐藏 workspace？",
         hideMessage: "从侧边栏隐藏「{{workspaceName}}」？\n\n磁盘上的文件不会被更改。",
         hideConfirm: "隐藏",
