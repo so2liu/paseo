@@ -127,14 +127,14 @@ test.describe("New workspace composer draft", () => {
       });
       await waitForSidebarHydration(page);
       await openNewWorkspaceComposer(page, {
-        projectKey: firstProject.projectId,
+        projectKey: firstProject.projectKey,
         projectDisplayName: firstProject.projectDisplayName,
       });
 
       await selectNewWorkspaceHost(page, "Secondary host");
       await selectNewWorkspaceHost(page, "Primary host");
       await selectNewWorkspaceProject(page, {
-        projectKey: targetProject.projectId,
+        projectKey: targetProject.projectKey,
         projectDisplayName: targetProject.projectDisplayName,
       });
 
