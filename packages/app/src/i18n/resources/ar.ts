@@ -977,6 +977,11 @@ export const ar: TranslationResources = {
         hiding: "إخفاء...",
       },
       confirmations: {
+        archiveReadyTitle: "هل تريد أرشفة مساحة العمل الجاهزة للمراجعة؟",
+        archiveReadyMessage:
+          "فتح مساحة العمل هذه لا يضع علامة مكتمل عليها. قم بأرشفتها فقط إذا كنت تريد إزالتها عمدًا من العناصر الجاهزة للمراجعة.",
+        archiveReadyConfirm: "أرشفة",
+        archiveReadyCancel: "إبقاؤها جاهزة للمراجعة",
         hideTitle: "إخفاء مساحة العمل؟",
         hideMessage:
           'إخفاء "{{workspaceName}}" من الشريط الجانبي؟\n\n لن يتم تغيير الملفات الموجودة على القرص.',

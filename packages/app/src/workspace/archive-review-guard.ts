@@ -6,19 +6,13 @@ type ConfirmArchive = (input: ConfirmDialogInput) => Promise<boolean>;
 export async function confirmReadyToReviewWorkspaceArchive(
   status: WorkspaceDescriptor["status"],
   confirm: ConfirmArchive,
+  dialog: ConfirmDialogInput,
 ): Promise<boolean> {
   if (status !== "attention") {
     return true;
   }
 
-  return await confirm({
-    title: "Archive workspace that is ready to review?",
-    message:
-      "Opening this workspace does not mark it done. Archive it only if you intentionally want to remove it from Ready to review.",
-    confirmLabel: "Archive",
-    cancelLabel: "Keep ready to review",
-    destructive: true,
-  });
+  return await confirm(dialog);
 }
 
 export function shouldEnableWorkspaceArchiveShortcut(input: {

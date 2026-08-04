@@ -7,21 +7,32 @@ import {
 describe("ready-to-review workspace archive guard", () => {
   it("requires a separate explicit confirmation before archiving", async () => {
     const confirm = vi.fn(async () => false);
+    const dialog = {
+      title: "Localized archive title",
+      message: "Localized archive message",
+      confirmLabel: "Localized archive action",
+      cancelLabel: "Localized cancel action",
+      destructive: true,
+    };
 
-    await expect(confirmReadyToReviewWorkspaceArchive("attention", confirm)).resolves.toBe(false);
-    expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        confirmLabel: "Archive",
-        cancelLabel: "Keep ready to review",
-        destructive: true,
-      }),
+    await expect(confirmReadyToReviewWorkspaceArchive("attention", confirm, dialog)).resolves.toBe(
+      false,
     );
+    expect(confirm).toHaveBeenCalledWith(dialog);
   });
 
   it("does not prompt for a workspace that is already done", async () => {
     const confirm = vi.fn(async () => false);
 
-    await expect(confirmReadyToReviewWorkspaceArchive("done", confirm)).resolves.toBe(true);
+    await expect(
+      confirmReadyToReviewWorkspaceArchive("done", confirm, {
+        title: "unused",
+        message: "unused",
+        confirmLabel: "unused",
+        cancelLabel: "unused",
+        destructive: true,
+      }),
+    ).resolves.toBe(true);
     expect(confirm).not.toHaveBeenCalled();
   });
 

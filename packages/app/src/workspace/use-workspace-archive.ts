@@ -89,6 +89,13 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
       const confirmedReadyToReviewArchive = await confirmReadyToReviewWorkspaceArchive(
         status,
         confirmDialog,
+        {
+          title: t("sidebar.workspace.confirmations.archiveReadyTitle"),
+          message: t("sidebar.workspace.confirmations.archiveReadyMessage"),
+          confirmLabel: t("sidebar.workspace.confirmations.archiveReadyConfirm"),
+          cancelLabel: t("sidebar.workspace.confirmations.archiveReadyCancel"),
+          destructive: true,
+        },
       );
       if (!confirmedReadyToReviewArchive) {
         return;
@@ -116,6 +123,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     isDirty,
     name,
     status,
+    t,
     warningLabels,
     workspaceKind,
   ]);

@@ -999,6 +999,11 @@ export const ptBR: TranslationResources = {
         hiding: "Ocultando...",
       },
       confirmations: {
+        archiveReadyTitle: "Arquivar o workspace pronto para revisão?",
+        archiveReadyMessage:
+          "Abrir este workspace não o marca como concluído. Arquive-o apenas se realmente quiser removê-lo dos itens prontos para revisão.",
+        archiveReadyConfirm: "Arquivar",
+        archiveReadyCancel: "Manter pronto para revisão",
         hideTitle: "Ocultar workspace?",
         hideMessage:
           'Ocultar "{{workspaceName}}" da barra lateral?\n\nOs arquivos no disco não serão alterados.',

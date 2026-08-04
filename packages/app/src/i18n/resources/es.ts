@@ -1008,6 +1008,11 @@ export const es: TranslationResources = {
         hiding: "Ocultación...",
       },
       confirmations: {
+        archiveReadyTitle: "¿Archivar el espacio de trabajo listo para revisar?",
+        archiveReadyMessage:
+          "Abrir este espacio de trabajo no lo marca como terminado. Archívalo solo si realmente quieres quitarlo de los elementos listos para revisar.",
+        archiveReadyConfirm: "Archivar",
+        archiveReadyCancel: "Mantener listo para revisar",
         hideTitle: "¿Ocultar espacio de trabajo?",
         hideMessage:
           '¿Ocultar "{{workspaceName}}" de la barra lateral?\n\nLos archivos en el disco no se cambiarán.',
