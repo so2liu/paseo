@@ -175,7 +175,8 @@ git log --oneline <上次基线>..<同步前的 main> --full-history -- $(cat /t
 - `mermaid` 依赖（`packages/app/package.json`）—— `v0.2.3` 那次就是从这里丢的
 - `so2liu` 更新源（`packages/desktop/electron-builder.yml`）
 - fork 的 Expo 项目 ID（`packages/app/app.config.js`）
-- idle TTL 一小时（`packages/server/src/server/bootstrap.ts`）
+- idle agent 必须常驻：从 `v0.2.5` 起，上游的无限期常驻已经完整覆盖并取代 fork
+  原先的一小时 TTL；后续同步不得重新引入更短的自动回收（`docs/agent-lifecycle.md`）
 - 默认排队消息（`cd38ba86b`）、native mobile lite 模式（`d137fe81e`）、
   混合项目 push token 重试（`0fe522848`）
 

@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures";
-import { waitForConnectedHost } from "./helpers/add-project-flow";
 import { gotoAppShell } from "./helpers/app";
 import { getE2EDaemonPort } from "./helpers/daemon-port";
+import { waitForConnectedHost } from "./helpers/hosts";
 import { startIsolatedHostDaemon } from "./helpers/isolated-host-daemon";
 import {
   expectNewWorkspaceDraft,
@@ -36,7 +36,7 @@ test.describe("New workspace composer draft", () => {
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
       await openNewWorkspaceComposer(page, {
-        projectKey: firstProject.projectId,
+        projectKey: firstProject.projectKey,
         projectDisplayName: firstProject.projectDisplayName,
       });
       await expectNewWorkspaceProjectSelected(page, firstProject.projectDisplayName);
@@ -44,7 +44,7 @@ test.describe("New workspace composer draft", () => {
       await fillNewWorkspaceDraft(page, DRAFT);
 
       await selectNewWorkspaceProject(page, {
-        projectKey: secondProject.projectId,
+        projectKey: secondProject.projectKey,
         projectDisplayName: secondProject.projectDisplayName,
       });
 
@@ -127,14 +127,14 @@ test.describe("New workspace composer draft", () => {
       });
       await waitForSidebarHydration(page);
       await openNewWorkspaceComposer(page, {
-        projectKey: firstProject.projectId,
+        projectKey: firstProject.projectKey,
         projectDisplayName: firstProject.projectDisplayName,
       });
 
       await selectNewWorkspaceHost(page, "Secondary host");
       await selectNewWorkspaceHost(page, "Primary host");
       await selectNewWorkspaceProject(page, {
-        projectKey: targetProject.projectId,
+        projectKey: targetProject.projectKey,
         projectDisplayName: targetProject.projectDisplayName,
       });
 
