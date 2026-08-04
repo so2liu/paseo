@@ -54,6 +54,7 @@ function project(projectKey: string, workspaces: SidebarWorkspaceEntry[]): Sideb
     hosts: [
       {
         serverId: workspaces[0]?.serverId ?? "s1",
+        projectId: projectKey,
         iconWorkingDir: workspaces[0]?.workspaceDirectory ?? "",
         canCreateWorktree: true,
       },

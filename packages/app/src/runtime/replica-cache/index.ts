@@ -9,12 +9,13 @@ import {
   type WorkspaceDescriptorPayload,
 } from "@getpaseo/protocol/messages";
 import {
-  normalizeEmptyProjectDescriptor,
+  normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
   useSessionStore,
   type Agent,
   type SessionReplica,
   type SessionState,
+  type ProjectDescriptor,
   type WorkspaceDescriptor,
 } from "@/stores/session-store";
 import type { StreamItem } from "@/types/stream";
@@ -58,6 +59,7 @@ const StoredHostSchema = z.object({
   serverId: z.string(),
   agents: z.array(StoredAgentSchema),
   workspaces: z.array(WorkspaceDescriptorPayloadSchema),
+  projects: z.array(WorkspaceProjectDescriptorPayloadSchema).optional().default([]),
   emptyProjects: z.array(WorkspaceProjectDescriptorPayloadSchema),
   /** Most recently viewed first; agent eviction drops from the end. */
   timelines: z.array(StoredTimelineSchema),
@@ -223,17 +225,46 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): WorkspaceDescriptor
   };
 }
 
+function serializeProject(project: ProjectDescriptor) {
+  return {
+    projectId: project.projectId,
+    ...(project.projectKey ? { projectKey: project.projectKey } : {}),
+    projectDisplayName: project.projectDisplayName,
+    projectCustomName: project.projectCustomName,
+    projectRootPath: project.projectRootPath,
+    projectKind: project.projectKind,
+  };
+}
+
 function deserializeHost(stored: StoredHost): SessionReplica {
   const agents = stored.agents.map((entry) => deserializeAgent(stored.serverId, entry));
   const workspaces = stored.workspaces.map(normalizeWorkspaceDescriptor);
-  const emptyProjects = stored.emptyProjects.map(normalizeEmptyProjectDescriptor);
+  const listedProjects = stored.projects.map(normalizeProjectDescriptor);
+  const legacyProjects = [
+    ...stored.emptyProjects.map(normalizeProjectDescriptor),
+    ...workspaces.map(legacyProjectDescriptorFromWorkspace),
+  ];
+  const projects = new Map(
+    [...legacyProjects, ...listedProjects].map((project) => [project.projectId, project]),
+  );
   return {
     agents: new Map(agents.map((agent) => [agent.id, agent])),
     workspaces: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
-    emptyProjects: new Map(emptyProjects.map((project) => [project.projectId, project])),
+    projects,
     timelines: stored.timelines
       .map(deserializeTimeline)
       .filter((timeline): timeline is SessionReplica["timelines"][number] => timeline !== null),
+  };
+}
+
+function legacyProjectDescriptorFromWorkspace(workspace: WorkspaceDescriptor): ProjectDescriptor {
+  return {
+    projectId: workspace.projectId,
+    projectKey: null,
+    projectDisplayName: workspace.projectDisplayName,
+    projectCustomName: workspace.projectCustomName ?? null,
+    projectRootPath: workspace.projectRootPath,
+    projectKind: workspace.projectKind,
   };
 }
 
@@ -397,6 +428,7 @@ export class ReplicaCache {
 
       const agents: StoredAgent[] = [];
       const workspaces = new Map<string, WorkspaceDescriptorPayload>();
+      const projects = new Map<string, ReturnType<typeof serializeProject>>();
       const timelines: StoredHost["timelines"] = [];
       const stillPresent: string[] = [];
 
@@ -421,6 +453,8 @@ export class ReplicaCache {
           );
         if (workspace && !workspaces.has(workspace.id)) {
           workspaces.set(workspace.id, serializeWorkspace(workspace));
+          const project = session.projects.get(workspace.projectId);
+          if (project) projects.set(project.projectId, serializeProject(project));
         }
       }
       this.recentAgentIds.set(serverId, stillPresent);
@@ -429,6 +463,7 @@ export class ReplicaCache {
         serverId,
         agents,
         workspaces: Array.from(workspaces.values()),
+        projects: Array.from(projects.values()),
         emptyProjects: [],
         timelines,
       };
