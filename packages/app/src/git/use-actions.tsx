@@ -262,6 +262,7 @@ function useWorkspaceScreenArchiveController({
   const controller = useWorkspaceArchive({
     serverId,
     workspaceId: workspaceDescriptor?.id ?? "",
+    status: workspaceDescriptor?.status ?? "done",
     workspaceKind: workspaceDescriptor?.workspaceKind ?? "directory",
     name: workspaceDescriptor?.name ?? branchLabel,
     isDirty: archiveRisk.isDirty,
