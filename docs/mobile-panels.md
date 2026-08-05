@@ -78,11 +78,13 @@ definition, no longer eligible to begin.
 - The desktop left sidebar is retained too. App chrome owns separate mounted and visible decisions:
   closing it or yielding its width marks it inactive and applies `display: none` without conditionally
   removing the sidebar tree.
-- After a native agent-stream viewport resize settles, it passes the final width through
+- After a native agent-stream viewport resize settles, it increments the revision passed through
   `FlatList.extraData`. Historical rows intentionally retain stable item identities, so a
   desktop-sidebar width change must explicitly invalidate their cross-axis layout; otherwise mounted
   iOS rows can keep their old text wrapping until rotation while newly virtualized rows use the new
-  width. Do not invalidate on every resize frame: sidebar drag must coalesce into one settled update.
+  width. A retained panel becoming visible after reporting zero width must also increment the revision,
+  even when it returns to its previous width. Do not invalidate on every resize frame: sidebar drag must
+  coalesce into one settled update.
 - Animated panel nodes use React Native static styles plus inline theme values. Do not attach
   Unistyles-generated styles to those nodes; Unistyles and Reanimated patching the same Fabric node
   has caused native crashes.
