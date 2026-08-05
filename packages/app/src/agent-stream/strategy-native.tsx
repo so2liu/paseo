@@ -36,6 +36,7 @@ import {
   evaluateHistoryStartPagination,
   rearmHistoryStartPagination,
 } from "./history-start-pagination";
+import { createNativeHistoryLayoutInvalidationController } from "./native-history-layout-invalidation";
 
 const DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION = Object.freeze({
   minIndexForVisible: 0,
@@ -114,6 +115,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const userScrollEndFrameIdRef = useRef<number | null>(null);
   const programmaticScrollEventBudgetRef = useRef(0);
   const [historyLayoutWidth, setHistoryLayoutWidth] = useState(0);
+  const historyLayoutInvalidationRef = useRef(createNativeHistoryLayoutInvalidationController());
   const [isNativeViewportSettling, setIsNativeViewportSettling] = useState(false);
   const nativeViewportSettlingFrameIdRef = useRef<number | null>(null);
   const historyStartReadyRef = useRef(false);
@@ -186,6 +188,10 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       if (remainingFrames <= 0) {
         nativeViewportSettlingFrameIdRef.current = null;
         setIsNativeViewportSettling(false);
+        const settledHistoryLayoutWidth = historyLayoutInvalidationRef.current.settle();
+        if (settledHistoryLayoutWidth !== null) {
+          setHistoryLayoutWidth(settledHistoryLayoutWidth);
+        }
         return;
       }
       remainingFrames -= 1;
@@ -444,9 +450,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     const viewportChanged =
       (previousViewportWidth > 0 && previousViewportWidth !== viewportWidth) ||
       (previousViewportHeight > 0 && previousViewportHeight !== viewportHeight);
-    setHistoryLayoutWidth((previousWidth) =>
-      previousWidth === viewportWidth ? previousWidth : viewportWidth,
-    );
+    historyLayoutInvalidationRef.current.observeViewportWidth(previousViewportWidth, viewportWidth);
     streamViewportMetricsRef.current = {
       ...streamViewportMetricsRef.current,
       containerKey: "native-virtualized",
@@ -556,10 +560,10 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       data={historyRows}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
-      // Historical rows deliberately retain their item identities. Tell
-      // FlatList when its cross-axis constraint changes so already-mounted
-      // iOS cells are laid out again instead of keeping the width they had
-      // while the desktop sidebar was visible.
+      // Historical rows deliberately retain their item identities. Once a
+      // viewport resize settles, tell FlatList to lay mounted iOS cells out
+      // again instead of keeping the sidebar-visible width. Deferring this
+      // avoids rerendering the history window on every sidebar drag frame.
       extraData={historyLayoutWidth}
       strictMode
       testID="agent-chat-scroll"
