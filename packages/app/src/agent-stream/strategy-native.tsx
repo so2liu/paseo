@@ -113,6 +113,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
   const userScrollEndFrameIdRef = useRef<number | null>(null);
   const programmaticScrollEventBudgetRef = useRef(0);
+  const [historyLayoutWidth, setHistoryLayoutWidth] = useState(0);
   const [isNativeViewportSettling, setIsNativeViewportSettling] = useState(false);
   const nativeViewportSettlingFrameIdRef = useRef<number | null>(null);
   const historyStartReadyRef = useRef(false);
@@ -443,6 +444,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     const viewportChanged =
       (previousViewportWidth > 0 && previousViewportWidth !== viewportWidth) ||
       (previousViewportHeight > 0 && previousViewportHeight !== viewportHeight);
+    setHistoryLayoutWidth((previousWidth) =>
+      previousWidth === viewportWidth ? previousWidth : viewportWidth,
+    );
     streamViewportMetricsRef.current = {
       ...streamViewportMetricsRef.current,
       containerKey: "native-virtualized",
@@ -552,6 +556,11 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       data={historyRows}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
+      // Historical rows deliberately retain their item identities. Tell
+      // FlatList when its cross-axis constraint changes so already-mounted
+      // iOS cells are laid out again instead of keeping the width they had
+      // while the desktop sidebar was visible.
+      extraData={historyLayoutWidth}
       strictMode
       testID="agent-chat-scroll"
       nativeID="agent-chat-scroll-native-virtualized"

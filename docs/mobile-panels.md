@@ -78,6 +78,10 @@ definition, no longer eligible to begin.
 - The desktop left sidebar is retained too. App chrome owns separate mounted and visible decisions:
   closing it or yielding its width marks it inactive and applies `display: none` without conditionally
   removing the sidebar tree.
+- The native agent stream passes its measured viewport width through `FlatList.extraData`. Historical
+  rows intentionally retain stable item identities, so a desktop-sidebar width change must explicitly
+  invalidate their cross-axis layout; otherwise mounted iOS rows can keep their old text wrapping until
+  rotation while newly virtualized rows use the new width.
 - Animated panel nodes use React Native static styles plus inline theme values. Do not attach
   Unistyles-generated styles to those nodes; Unistyles and Reanimated patching the same Fabric node
   has caused native crashes.
