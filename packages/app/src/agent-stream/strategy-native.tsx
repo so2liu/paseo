@@ -37,6 +37,7 @@ import {
   evaluateHistoryStartPagination,
   rearmHistoryStartPagination,
 } from "./history-start-pagination";
+import { hasNativeGestureMovedTowardHistoryStart } from "./native-history-scroll-intent";
 import { createNativeHistoryLayoutInvalidationController } from "./native-history-layout-invalidation";
 
 const DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION = Object.freeze({
@@ -111,6 +112,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     contentMeasuredForKey: null as string | null,
   });
   const scrollOffsetYRef = useRef(0);
+  const userScrollGestureStartOffsetYRef = useRef(0);
   const isUserScrollActiveRef = useRef(false);
   const hasArmedHistoryPaginationForGestureRef = useRef(false);
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
@@ -264,6 +266,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       contentMeasuredForKey: null,
     };
     scrollOffsetYRef.current = 0;
+    userScrollGestureStartOffsetYRef.current = 0;
     isUserScrollActiveRef.current = false;
     hasArmedHistoryPaginationForGestureRef.current = false;
     clearPendingUserScrollEnd();
@@ -385,7 +388,10 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     if (
       isUserScrollActiveRef.current &&
       !hasArmedHistoryPaginationForGestureRef.current &&
-      contentOffset.y > previousOffsetY + 1
+      hasNativeGestureMovedTowardHistoryStart(
+        userScrollGestureStartOffsetYRef.current,
+        contentOffset.y,
+      )
     ) {
       hasArmedHistoryPaginationForGestureRef.current = true;
       historyStartPaginationStateRef.current = rearmHistoryStartPagination(
@@ -412,6 +418,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const handleScrollBeginDrag = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     clearPendingUserScrollEnd();
     isUserScrollActiveRef.current = true;
+    userScrollGestureStartOffsetYRef.current = event.nativeEvent.contentOffset.y;
     hasArmedHistoryPaginationForGestureRef.current = false;
     scrollKeyboardDismiss.onScrollBeginDrag(event);
     bottomAnchorController.beginUserScroll();
