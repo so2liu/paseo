@@ -125,6 +125,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const userScrollGestureStartOffsetYRef = useRef(0);
   const nativeHistoryTouchStateRef = useRef(createNativeHistoryTouchState());
   const isUserScrollActiveRef = useRef(false);
+  const hasCurrentTouchStartedScrollRef = useRef(false);
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
   const userScrollEndFrameIdRef = useRef<number | null>(null);
   const programmaticScrollEventBudgetRef = useRef(0);
@@ -282,6 +283,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     userScrollGestureStartOffsetYRef.current = 0;
     nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
     isUserScrollActiveRef.current = false;
+    hasCurrentTouchStartedScrollRef.current = false;
     clearPendingUserScrollEnd();
     clearNativeViewportSettling();
     setIsNativeViewportSettling(false);
@@ -434,6 +436,8 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const handleScrollBeginDrag = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     clearPendingUserScrollEnd();
     isUserScrollActiveRef.current = true;
+    hasCurrentTouchStartedScrollRef.current =
+      nativeHistoryTouchStateRef.current.activeTouchCount > 0;
     userScrollGestureStartOffsetYRef.current = event.nativeEvent.contentOffset.y;
     if (
       nativeHistoryTouchStateRef.current.startPageY === null &&
@@ -446,6 +450,12 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
 
   const handleTouchStart = useStableEvent((event: GestureResponderEvent) => {
+    if (
+      nativeHistoryTouchStateRef.current.activeTouchCount === 0 &&
+      event.nativeEvent.touches.length === 1
+    ) {
+      hasCurrentTouchStartedScrollRef.current = false;
+    }
     const transition = startNativeHistoryTouch(nativeHistoryTouchStateRef.current, {
       touchCount: event.nativeEvent.touches.length,
       pageY: event.nativeEvent.pageY,
@@ -490,6 +500,26 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
         historyStartPaginationStateRef.current,
       );
     }
+    if (
+      event.nativeEvent.touches.length === 0 &&
+      !hasCurrentTouchStartedScrollRef.current &&
+      isUserScrollActiveRef.current
+    ) {
+      const metrics = streamViewportMetricsRef.current;
+      const isNearBottom = isNearBottomForStreamRenderStrategy({
+        strategy,
+        offsetY: metrics.offsetY,
+        threshold: 32,
+        contentHeight: metrics.contentHeight,
+        viewportHeight: metrics.viewportHeight,
+      });
+      isUserScrollActiveRef.current = false;
+      nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
+      bottomAnchorController.endUserScroll({ isNearBottom });
+    }
   });
 
   const handleTouchCancel = useStableEvent(() => {
@@ -508,13 +538,15 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     clearPendingUserScrollEnd();
     userScrollEndFrameIdRef.current = requestAnimationFrame(() => {
       userScrollEndFrameIdRef.current = null;
-      isUserScrollActiveRef.current = false;
-      if (shouldSettleNativeHistoryTouchOnScrollEnd(nativeHistoryTouchStateRef.current)) {
-        nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
-        historyStartPaginationStateRef.current = disarmHistoryStartPagination(
-          historyStartPaginationStateRef.current,
-        );
+      if (!shouldSettleNativeHistoryTouchOnScrollEnd(nativeHistoryTouchStateRef.current)) {
+        return;
       }
+      isUserScrollActiveRef.current = false;
+      hasCurrentTouchStartedScrollRef.current = false;
+      nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
       bottomAnchorController.endUserScroll({ isNearBottom });
     });
   });
@@ -530,15 +562,17 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       if (!isUserScrollActiveRef.current) {
         return;
       }
+      if (!shouldSettleNativeHistoryTouchOnScrollEnd(nativeHistoryTouchStateRef.current)) {
+        return;
+      }
       const isNearBottom = isScrollEventNearBottom(event);
       clearPendingUserScrollEnd();
       isUserScrollActiveRef.current = false;
-      if (shouldSettleNativeHistoryTouchOnScrollEnd(nativeHistoryTouchStateRef.current)) {
-        nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
-        historyStartPaginationStateRef.current = disarmHistoryStartPagination(
-          historyStartPaginationStateRef.current,
-        );
-      }
+      hasCurrentTouchStartedScrollRef.current = false;
+      nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
       bottomAnchorController.endUserScroll({ isNearBottom });
     },
   );
