@@ -456,7 +456,88 @@ describe("createWebStreamStrategy", () => {
       scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -1 }));
     });
 
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    act(() => {
+      scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -1 }));
+    });
+
     expect(onNearHistoryStart).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps touch intent through inertial scrolling to the history edge", async () => {
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
+    const viewportRef = React.createRef<StreamViewportHandle>();
+    const onNearHistoryStart = vi.fn();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        strategy.render({
+          agentId: "agent",
+          segments: {
+            historyVirtualized: [],
+            historyMounted: [userMessage(1), userMessage(2)],
+            liveHead: [],
+          },
+          boundary: {
+            hasVirtualizedHistory: false,
+            hasMountedHistory: true,
+            hasLiveHead: false,
+          },
+          renderers: createRenderers(vi.fn()),
+          listEmptyComponent: null,
+          viewportRef,
+          routeBottomAnchorRequest: null,
+          isAuthoritativeHistoryReady: true,
+          onNearBottomChange: vi.fn(),
+          onNearHistoryStart,
+          isLoadingOlderHistory: false,
+          hasOlderHistory: true,
+          olderHistoryProgressKey: "epoch-1:20",
+          scrollEnabled: true,
+          listStyle: null,
+          baseListContentContainerStyle: null,
+          forwardListContentContainerStyle: null,
+        }),
+      );
+    });
+
+    const scrollContainer = container.querySelector('[data-testid="agent-chat-scroll"]');
+    if (!(scrollContainer instanceof HTMLElement)) {
+      throw new Error("Expected agent chat scroll container");
+    }
+    Object.defineProperty(scrollContainer, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(scrollContainer, "scrollHeight", { configurable: true, value: 1200 });
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 200 });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    act(() => scrollContainer.dispatchEvent(new Event("scroll")));
+
+    const touchEvent = (type: string, clientY?: number) => {
+      const event = new Event(type);
+      Object.defineProperty(event, "touches", {
+        value: clientY === undefined ? [] : [{ clientY }],
+      });
+      return event;
+    };
+    act(() => {
+      scrollContainer.dispatchEvent(touchEvent("touchstart", 100));
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 120));
+      scrollContainer.dispatchEvent(touchEvent("touchend"));
+    });
+    expect(onNearHistoryStart).not.toHaveBeenCalled();
+
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 64 });
+    act(() => scrollContainer.dispatchEvent(new Event("scroll")));
+
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
   });
 
   it("arms older history when a scrollbar drag moves upward", async () => {
