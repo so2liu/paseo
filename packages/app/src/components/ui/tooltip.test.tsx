@@ -138,6 +138,17 @@ describe("resolveTooltipEnabled", () => {
     ).toBe(true);
   });
 
+  it("keeps explicitly enabled tooltips available on native tablets", () => {
+    expect(
+      resolveTooltipEnabled({
+        isCompact: false,
+        isWebEnvironment: false,
+        enabledOnDesktop: true,
+        enabledOnMobile: true,
+      }),
+    ).toBe(true);
+  });
+
   it("still supports explicitly enabled compact tooltips on native", () => {
     expect(
       resolveTooltipEnabled({

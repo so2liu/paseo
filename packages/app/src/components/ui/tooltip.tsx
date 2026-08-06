@@ -45,8 +45,9 @@ export function resolveTooltipEnabled(input: {
   }
   // Native tablets share the non-compact layout but do not have reliable hover.
   // Treating them as desktop can mount a full-screen tooltip Modal on focus and
-  // interrupt the trigger's press while the JS thread is busy.
-  return input.isWebEnvironment && input.enabledOnDesktop;
+  // interrupt the trigger's press while the JS thread is busy. Keep native
+  // tooltips available only when the caller explicitly opts into mobile behavior.
+  return input.isWebEnvironment ? input.enabledOnDesktop : input.enabledOnMobile;
 }
 
 interface Rect {
