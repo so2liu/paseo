@@ -79,10 +79,18 @@ function isScrollContainerAtBottom(
   return isScrollContainerNearBottom(scrollContainer, AUTO_SCROLL_RESUME_THRESHOLD_PX);
 }
 
-function isEditableEventTarget(target: EventTarget | null): boolean {
+function isInteractiveEventTarget(target: EventTarget | null): boolean {
   return (
     target instanceof Element &&
-    target.closest("input, textarea, [contenteditable]:not([contenteditable='false'])") !== null
+    target.closest(
+      "input, textarea, select, button, a[href], summary, " +
+        "[contenteditable]:not([contenteditable='false']), " +
+        "[role='button'], [role='checkbox'], [role='combobox'], [role='link'], " +
+        "[role='listbox'], [role='menuitem'], [role='menuitemcheckbox'], " +
+        "[role='menuitemradio'], [role='option'], [role='radio'], [role='scrollbar'], " +
+        "[role='searchbox'], [role='slider'], [role='spinbutton'], [role='switch'], " +
+        "[role='tab'], [role='textbox'], [role='treeitem']",
+    ) !== null
   );
 }
 
@@ -619,7 +627,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       disarmHistoryInput("pointer");
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isEditableEventTarget(event.target)) {
+      if (event.defaultPrevented || isInteractiveEventTarget(event.target)) {
         return;
       }
       const isUpwardKey =

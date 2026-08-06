@@ -457,11 +457,29 @@ describe("createWebStreamStrategy", () => {
     const textarea = document.createElement("textarea");
     const editable = document.createElement("div");
     editable.contentEditable = "true";
-    scrollContainer.append(input, textarea, editable);
+    const button = document.createElement("div");
+    button.role = "button";
+    const radio = document.createElement("div");
+    radio.role = "radio";
+    const tab = document.createElement("div");
+    tab.role = "tab";
+    scrollContainer.append(input, textarea, editable, button, radio, tab);
     act(() => {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
       textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", bubbles: true }));
       editable.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      button.dispatchEvent(
+        new KeyboardEvent("keydown", { key: " ", shiftKey: true, bubbles: true }),
+      );
+      radio.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      tab.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      const preventedKey = new KeyboardEvent("keydown", {
+        key: "PageUp",
+        bubbles: true,
+        cancelable: true,
+      });
+      preventedKey.preventDefault();
+      scrollContainer.dispatchEvent(preventedKey);
       scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -1, ctrlKey: true }));
     });
 
