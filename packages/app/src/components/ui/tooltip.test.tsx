@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { Pressable, Text } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Tooltip, TooltipTrigger } from "./tooltip";
+import { resolveTooltipEnabled, Tooltip, TooltipTrigger } from "./tooltip";
 
 vi.mock("@/constants/platform", () => ({
   isWeb: true,
@@ -112,5 +112,40 @@ describe("TooltipTrigger", () => {
     pressTrigger();
 
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("resolveTooltipEnabled", () => {
+  it("does not enable desktop-only tooltips on native tablets", () => {
+    expect(
+      resolveTooltipEnabled({
+        isCompact: false,
+        isWebEnvironment: false,
+        enabledOnDesktop: true,
+        enabledOnMobile: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps desktop tooltips enabled on web", () => {
+    expect(
+      resolveTooltipEnabled({
+        isCompact: false,
+        isWebEnvironment: true,
+        enabledOnDesktop: true,
+        enabledOnMobile: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("still supports explicitly enabled compact tooltips on native", () => {
+    expect(
+      resolveTooltipEnabled({
+        isCompact: true,
+        isWebEnvironment: false,
+        enabledOnDesktop: true,
+        enabledOnMobile: true,
+      }),
+    ).toBe(true);
   });
 });

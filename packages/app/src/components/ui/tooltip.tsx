@@ -34,6 +34,21 @@ import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
 type Side = "top" | "bottom" | "left" | "right";
 type Align = "start" | "center" | "end";
 
+export function resolveTooltipEnabled(input: {
+  isCompact: boolean;
+  isWebEnvironment: boolean;
+  enabledOnDesktop: boolean;
+  enabledOnMobile: boolean;
+}): boolean {
+  if (input.isCompact) {
+    return input.enabledOnMobile;
+  }
+  // Native tablets share the non-compact layout but do not have reliable hover.
+  // Treating them as desktop can mount a full-screen tooltip Modal on focus and
+  // interrupt the trigger's press while the JS thread is busy.
+  return input.isWebEnvironment && input.enabledOnDesktop;
+}
+
 interface Rect {
   x: number;
   y: number;
@@ -248,7 +263,12 @@ export function Tooltip({
   });
 
   const isCompact = useIsCompactFormFactor();
-  const enabled = isCompact ? enabledOnMobile : enabledOnDesktop;
+  const enabled = resolveTooltipEnabled({
+    isCompact,
+    isWebEnvironment: isWeb,
+    enabledOnDesktop,
+    enabledOnMobile,
+  });
 
   const value = useMemo<TooltipContextValue>(
     () => ({
