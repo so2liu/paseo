@@ -149,9 +149,10 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   };
   const lastKnownScrollTopRef = useRef(0);
   const pendingUserScrollUpIntentRef = useRef(false);
-  const lastTouchClientYRef = useRef<number | null>(null);
+  const touchStartClientYRef = useRef<number | null>(null);
   const activeHistoryInputRef = useRef<WebHistoryInputKind | null>(null);
   const historyPaginationArmedForInputRef = useRef(false);
+  const historyPaginationConsumedForInputRef = useRef(false);
   const pendingWheelInputEndFrameRef = useRef<number | null>(null);
   const pendingTouchInputEndTimeoutRef = useRef<number | null>(null);
   const pendingAutoScrollFrameRef = useRef<number | null>(null);
@@ -217,6 +218,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     });
     historyStartPaginationStateRef.current = result.state;
     if (result.shouldLoad) {
+      historyPaginationConsumedForInputRef.current = true;
       onNearHistoryStart();
     }
   });
@@ -237,6 +239,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     }
     activeHistoryInputRef.current = null;
     historyPaginationArmedForInputRef.current = false;
+    historyPaginationConsumedForInputRef.current = false;
     pendingUserScrollUpIntentRef.current = false;
     historyStartPaginationStateRef.current = disarmHistoryStartPagination(
       historyStartPaginationStateRef.current,
@@ -251,10 +254,12 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       if (activeHistoryInputRef.current !== kind) {
         activeHistoryInputRef.current = kind;
         historyPaginationArmedForInputRef.current = false;
+        historyPaginationConsumedForInputRef.current = false;
       }
       if (
         armPagination &&
         !historyPaginationArmedForInputRef.current &&
+        !historyPaginationConsumedForInputRef.current &&
         !isLoadingOlderHistoryRef.current
       ) {
         historyStartPaginationStateRef.current = rearmHistoryStartPagination(
@@ -400,6 +405,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       historyStartPaginationStateRef.current = disarmHistoryStartPagination(
         historyStartPaginationStateRef.current,
       );
+      historyPaginationArmedForInputRef.current = historyPaginationConsumedForInputRef.current;
       pendingUserScrollUpIntentRef.current = false;
     } else if (followOutputRef.current && pendingUserScrollUpIntentRef.current) {
       if (!isAtBottom) {
@@ -561,33 +567,33 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         return;
       }
       beginHistoryInput("touch", false, true);
-      lastTouchClientYRef.current = touch.clientY;
+      touchStartClientYRef.current = touch.clientY;
     };
     const handleTouchMove = (event: TouchEvent) => {
       const touch = event.touches[0];
       if (!touch) {
         return;
       }
-      const previousTouchY = lastTouchClientYRef.current;
-      if (previousTouchY !== null && touch.clientY > previousTouchY + 1) {
+      const touchStartY = touchStartClientYRef.current;
+      if (touchStartY !== null && touch.clientY > touchStartY + 1) {
         beginHistoryInput("touch", true);
         pendingUserScrollUpIntentRef.current = true;
         cancelPendingStickToBottom();
         evaluateHistoryStart();
-      } else if (previousTouchY !== null && touch.clientY < previousTouchY - 1) {
+      } else if (touchStartY !== null && touch.clientY < touchStartY - 1) {
         historyStartPaginationStateRef.current = disarmHistoryStartPagination(
           historyStartPaginationStateRef.current,
         );
+        historyPaginationArmedForInputRef.current = historyPaginationConsumedForInputRef.current;
         pendingUserScrollUpIntentRef.current = false;
       }
-      lastTouchClientYRef.current = touch.clientY;
     };
     const handleTouchEnd = () => {
-      lastTouchClientYRef.current = null;
+      touchStartClientYRef.current = null;
       scheduleTouchHistoryInputEnd();
     };
     const handleTouchCancel = () => {
-      lastTouchClientYRef.current = null;
+      touchStartClientYRef.current = null;
       disarmHistoryInput("touch");
     };
     const handlePointerDown = (event: PointerEvent) => {

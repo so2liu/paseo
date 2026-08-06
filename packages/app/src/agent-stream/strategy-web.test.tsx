@@ -537,7 +537,8 @@ describe("createWebStreamStrategy", () => {
     };
     act(() => {
       scrollContainer.dispatchEvent(touchEvent("touchstart", 100));
-      scrollContainer.dispatchEvent(touchEvent("touchmove", 120));
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 100.6));
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 101.2));
       scrollContainer.dispatchEvent(touchEvent("touchend"));
     });
     expect(onNearHistoryStart).not.toHaveBeenCalled();
@@ -605,6 +606,8 @@ describe("createWebStreamStrategy", () => {
     act(() => {
       scrollContainer.dispatchEvent(touchEvent("touchstart", 100));
       scrollContainer.dispatchEvent(touchEvent("touchmove", 120));
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 90));
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 140));
     });
     Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 64 });
     act(() => scrollContainer.dispatchEvent(new Event("scroll")));
@@ -620,7 +623,7 @@ describe("createWebStreamStrategy", () => {
           olderHistoryProgressKey: "epoch-1:10",
         }),
       );
-      scrollContainer.dispatchEvent(touchEvent("touchmove", 110));
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 90));
       Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 80 });
       scrollContainer.dispatchEvent(new Event("scroll"));
       scrollContainer.dispatchEvent(touchEvent("touchmove", 140));
