@@ -620,7 +620,12 @@ describe("createWebStreamStrategy", () => {
           olderHistoryProgressKey: "epoch-1:10",
         }),
       );
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 110));
+      Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 80 });
+      scrollContainer.dispatchEvent(new Event("scroll"));
       scrollContainer.dispatchEvent(touchEvent("touchmove", 140));
+      Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 64 });
+      scrollContainer.dispatchEvent(new Event("scroll"));
     });
 
     expect(onNearHistoryStart).toHaveBeenCalledTimes(1);

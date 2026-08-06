@@ -400,7 +400,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       historyStartPaginationStateRef.current = disarmHistoryStartPagination(
         historyStartPaginationStateRef.current,
       );
-      historyPaginationArmedForInputRef.current = false;
       pendingUserScrollUpIntentRef.current = false;
     } else if (followOutputRef.current && pendingUserScrollUpIntentRef.current) {
       if (!isAtBottom) {
@@ -579,7 +578,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         historyStartPaginationStateRef.current = disarmHistoryStartPagination(
           historyStartPaginationStateRef.current,
         );
-        historyPaginationArmedForInputRef.current = false;
         pendingUserScrollUpIntentRef.current = false;
       }
       lastTouchClientYRef.current = touch.clientY;
