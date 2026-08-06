@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cancelNativeHistoryTouch,
   consumeNativeHistoryPagination,
   createNativeHistoryTouchState,
   endNativeHistoryTouch,
@@ -65,6 +66,9 @@ describe("native history scroll intent", () => {
 
     expect(settleNativeHistoryTouch()).toEqual({
       startPageY: null,
+      peakPageY: null,
+      offsetDirectionAnchorY: null,
+      offsetPeakY: null,
       activeTouchCount: 0,
       multiTouchBlocked: false,
       paginationArmed: false,
@@ -83,16 +87,18 @@ describe("native history scroll intent", () => {
       state: { paginationArmed: true, paginationConsumed: false },
     });
 
-    transition = moveNativeHistoryTouch(transition.state, { touchCount: 1, pageY: 180 });
+    transition = moveNativeHistoryTouch(transition.state, { touchCount: 1, pageY: 210 });
     expect(transition).toMatchObject({
       shouldDisarmPagination: true,
       state: { paginationArmed: false, paginationConsumed: false },
     });
-    transition = moveNativeHistoryTouch(transition.state, { touchCount: 1, pageY: 220 });
+    transition = moveNativeHistoryTouch(transition.state, { touchCount: 1, pageY: 213 });
+    expect(transition.shouldArmPagination).toBe(false);
+    transition = moveNativeHistoryTouch(transition.state, { touchCount: 1, pageY: 215 });
     expect(transition.shouldArmPagination).toBe(true);
 
     const consumed = consumeNativeHistoryPagination(transition.state);
-    const consumedReverse = moveNativeHistoryTouch(consumed, { touchCount: 1, pageY: 180 });
+    const consumedReverse = moveNativeHistoryTouch(consumed, { touchCount: 1, pageY: 205 });
     expect(consumedReverse).toMatchObject({
       shouldDisarmPagination: true,
       state: { paginationArmed: true, paginationConsumed: true },
@@ -111,12 +117,48 @@ describe("native history scroll intent", () => {
     expect(transition.shouldArmPagination).toBe(true);
     transition = moveNativeHistoryOffset(transition.state, {
       gestureStartOffsetY: 40,
-      currentOffsetY: 20,
+      currentOffsetY: 50,
     });
     expect(transition).toMatchObject({
       shouldDisarmPagination: true,
       state: { paginationArmed: false, paginationConsumed: false },
     });
+    transition = moveNativeHistoryOffset(transition.state, {
+      gestureStartOffsetY: 40,
+      currentOffsetY: 50.5,
+    });
+    expect(transition.shouldArmPagination).toBe(false);
+    transition = moveNativeHistoryOffset(transition.state, {
+      gestureStartOffsetY: 40,
+      currentOffsetY: 52,
+    });
+    expect(transition.shouldArmPagination).toBe(true);
+  });
+
+  it("preserves a consumed pagination budget after touch cancellation", () => {
+    let transition = startNativeHistoryTouch(createNativeHistoryTouchState(), {
+      touchCount: 1,
+      pageY: 200,
+    });
+    transition = moveNativeHistoryTouch(transition.state, { touchCount: 1, pageY: 220 });
+    const consumed = consumeNativeHistoryPagination(transition.state);
+
+    const cancelled = cancelNativeHistoryTouch(consumed, true);
+    expect(cancelled).toMatchObject({
+      shouldDisarmPagination: true,
+      state: {
+        activeTouchCount: 0,
+        multiTouchBlocked: true,
+        paginationArmed: true,
+        paginationConsumed: true,
+      },
+    });
+    expect(
+      moveNativeHistoryOffset(cancelled.state, {
+        gestureStartOffsetY: 40,
+        currentOffsetY: 60,
+      }).shouldArmPagination,
+    ).toBe(false);
   });
 
   it("does not let an old scroll settlement discard a newer active touch", () => {

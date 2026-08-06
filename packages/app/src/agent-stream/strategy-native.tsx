@@ -39,6 +39,7 @@ import {
   rearmHistoryStartPagination,
 } from "./history-start-pagination";
 import {
+  cancelNativeHistoryTouch,
   consumeNativeHistoryPagination,
   createNativeHistoryTouchState,
   endNativeHistoryTouch,
@@ -530,7 +531,11 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
 
   const handleTouchCancel = useStableEvent(() => {
-    nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
+    const transition = cancelNativeHistoryTouch(
+      nativeHistoryTouchStateRef.current,
+      isUserScrollActiveRef.current,
+    );
+    nativeHistoryTouchStateRef.current = transition.state;
     historyStartPaginationStateRef.current = disarmHistoryStartPagination(
       historyStartPaginationStateRef.current,
     );
