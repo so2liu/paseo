@@ -21,6 +21,23 @@ import {
   evaluateHistoryStartPagination,
   rearmHistoryStartPagination,
 } from "./history-start-pagination";
+import {
+  beginWebHistoryInput,
+  beginWebKeyboardInput,
+  cancelWebTouchInput,
+  consumeWebHistoryPagination,
+  createWebHistoryInputState,
+  disarmWebHistoryInput,
+  endWebKeyboardInput,
+  endWebTouchInput,
+  moveWebTouchInput,
+  reverseWebHistoryInput,
+  shouldHandleWebHistoryKey,
+  startWebTouchInput,
+  updateWebWheelInput,
+  type WebHistoryInputKind,
+  type WebHistoryInputTransition,
+} from "./web-history-input";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -35,8 +52,6 @@ const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 64;
 const AUTO_SCROLL_RESUME_THRESHOLD_PX = 1;
 const TOUCH_SCROLL_SETTLE_TIMEOUT_MS = 120;
 const WHEEL_SCROLL_SETTLE_TIMEOUT_MS = 120;
-
-type WebHistoryInputKind = "keyboard" | "pointer" | "touch" | "wheel";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -165,12 +180,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   };
   const lastKnownScrollTopRef = useRef(0);
   const pendingUserScrollUpIntentRef = useRef(false);
-  const touchStartClientYRef = useRef<number | null>(null);
-  const isMultiTouchGestureRef = useRef(false);
-  const activeHistoryInputRef = useRef<WebHistoryInputKind | null>(null);
-  const activeKeyboardKeyRef = useRef<string | null>(null);
-  const historyPaginationArmedForInputRef = useRef(false);
-  const historyPaginationConsumedForInputRef = useRef(false);
+  const historyInputRef = useRef(createWebHistoryInputState());
   const pendingWheelInputEndTimeoutRef = useRef<number | null>(null);
   const pendingTouchInputEndTimeoutRef = useRef<number | null>(null);
   const pendingAutoScrollFrameRef = useRef<number | null>(null);
@@ -220,6 +230,18 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   }, [rowVirtualizer]);
   const virtualRows = rowVirtualizer.getVirtualItems();
   const virtualTotalSize = rowVirtualizer.getTotalSize();
+  const applyHistoryInputTransition = useCallback((transition: WebHistoryInputTransition) => {
+    historyInputRef.current = transition.state;
+    if (transition.paginationCommand === "rearm") {
+      historyStartPaginationStateRef.current = rearmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
+    } else if (transition.paginationCommand === "disarm") {
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
+    }
+  }, []);
   const evaluateHistoryStart = useStableEvent(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) {
@@ -236,58 +258,49 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     });
     historyStartPaginationStateRef.current = result.state;
     if (result.shouldLoad) {
-      historyPaginationConsumedForInputRef.current = true;
+      historyInputRef.current = consumeWebHistoryPagination(historyInputRef.current);
       onNearHistoryStart();
     }
   });
 
-  const disarmHistoryInput = useCallback((kind?: WebHistoryInputKind) => {
-    if (kind !== undefined && activeHistoryInputRef.current !== kind) {
-      return;
-    }
-    const wheelEndTimeout = pendingWheelInputEndTimeoutRef.current;
-    if (wheelEndTimeout !== null) {
-      pendingWheelInputEndTimeoutRef.current = null;
-      window.clearTimeout(wheelEndTimeout);
-    }
-    const touchEndTimeout = pendingTouchInputEndTimeoutRef.current;
-    if (touchEndTimeout !== null) {
-      pendingTouchInputEndTimeoutRef.current = null;
-      window.clearTimeout(touchEndTimeout);
-    }
-    activeHistoryInputRef.current = null;
-    activeKeyboardKeyRef.current = null;
-    historyPaginationArmedForInputRef.current = false;
-    historyPaginationConsumedForInputRef.current = false;
-    pendingUserScrollUpIntentRef.current = false;
-    historyStartPaginationStateRef.current = disarmHistoryStartPagination(
-      historyStartPaginationStateRef.current,
-    );
-  }, []);
+  const disarmHistoryInput = useCallback(
+    (kind?: WebHistoryInputKind) => {
+      if (kind !== undefined && historyInputRef.current.activeKind !== kind) {
+        return;
+      }
+      const wheelEndTimeout = pendingWheelInputEndTimeoutRef.current;
+      if (wheelEndTimeout !== null) {
+        pendingWheelInputEndTimeoutRef.current = null;
+        window.clearTimeout(wheelEndTimeout);
+      }
+      const touchEndTimeout = pendingTouchInputEndTimeoutRef.current;
+      if (touchEndTimeout !== null) {
+        pendingTouchInputEndTimeoutRef.current = null;
+        window.clearTimeout(touchEndTimeout);
+      }
+      applyHistoryInputTransition(disarmWebHistoryInput(historyInputRef.current, kind));
+      pendingUserScrollUpIntentRef.current = false;
+    },
+    [applyHistoryInputTransition],
+  );
+
+  const resetHistoryInput = useCallback(() => {
+    disarmHistoryInput();
+    historyInputRef.current = createWebHistoryInputState();
+  }, [disarmHistoryInput]);
 
   const beginHistoryInput = useCallback(
     (kind: WebHistoryInputKind, armPagination: boolean, forceNew = false) => {
-      if (forceNew) {
-        disarmHistoryInput();
-      }
-      if (activeHistoryInputRef.current !== kind) {
-        activeHistoryInputRef.current = kind;
-        historyPaginationArmedForInputRef.current = false;
-        historyPaginationConsumedForInputRef.current = false;
-      }
-      if (
-        armPagination &&
-        !historyPaginationArmedForInputRef.current &&
-        !historyPaginationConsumedForInputRef.current &&
-        !isLoadingOlderHistoryRef.current
-      ) {
-        historyStartPaginationStateRef.current = rearmHistoryStartPagination(
-          historyStartPaginationStateRef.current,
-        );
-        historyPaginationArmedForInputRef.current = true;
-      }
+      applyHistoryInputTransition(
+        beginWebHistoryInput(historyInputRef.current, {
+          kind,
+          armPagination,
+          forceNew,
+          isLoadingOlderHistory: isLoadingOlderHistoryRef.current,
+        }),
+      );
     },
-    [disarmHistoryInput],
+    [applyHistoryInputTransition],
   );
 
   const scheduleTouchHistoryInputEnd = useCallback(() => {
@@ -408,10 +421,10 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       currentScrollTop > lastKnownScrollTopRef.current + USER_SCROLL_DELTA_EPSILON;
 
     const hasExplicitUpwardInput =
-      pendingUserScrollUpIntentRef.current || activeHistoryInputRef.current !== null;
+      pendingUserScrollUpIntentRef.current || historyInputRef.current.activeKind !== null;
 
     if (scrolledUp && hasExplicitUpwardInput) {
-      beginHistoryInput(activeHistoryInputRef.current ?? "pointer", true);
+      beginHistoryInput(historyInputRef.current.activeKind ?? "pointer", true);
       cancelPendingStickToBottom();
       if (followOutputRef.current) {
         setFollowOutput(false);
@@ -421,10 +434,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       setFollowOutput(true);
       disarmHistoryInput();
     } else if (scrolledDown) {
-      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
-        historyStartPaginationStateRef.current,
-      );
-      historyPaginationArmedForInputRef.current = historyPaginationConsumedForInputRef.current;
+      applyHistoryInputTransition(reverseWebHistoryInput(historyInputRef.current));
       pendingUserScrollUpIntentRef.current = false;
     } else if (followOutputRef.current && pendingUserScrollUpIntentRef.current) {
       if (!isAtBottom) {
@@ -437,10 +447,14 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     lastKnownScrollTopRef.current = currentScrollTop;
     updateScrollMetrics();
     evaluateHistoryStart();
-    if (activeHistoryInputRef.current === "touch" && touchStartClientYRef.current === null) {
+    if (
+      historyInputRef.current.activeKind === "touch" &&
+      historyInputRef.current.touchStartClientY === null
+    ) {
       scheduleTouchHistoryInputEnd();
     }
   }, [
+    applyHistoryInputTransition,
     beginHistoryInput,
     cancelPendingStickToBottom,
     disarmHistoryInput,
@@ -451,7 +465,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
   useEffect(() => {
     historyStartPaginationStateRef.current = createHistoryStartPaginationState();
-    disarmHistoryInput();
+    resetHistoryInput();
     const frame = window.requestAnimationFrame(() => {
       historyStartReadyRef.current = true;
       evaluateHistoryStart();
@@ -460,7 +474,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       window.cancelAnimationFrame(frame);
       historyStartReadyRef.current = false;
     };
-  }, [disarmHistoryInput, evaluateHistoryStart, props.agentId]);
+  }, [evaluateHistoryStart, props.agentId, resetHistoryInput]);
 
   useLayoutEffect(() => {
     if (!isActivationReady) {
@@ -562,10 +576,12 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     }
 
     const handleWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) {
-        return;
-      }
-      if (event.deltaY === 0) {
+      const transition = updateWebWheelInput(historyInputRef.current, {
+        deltaY: event.deltaY,
+        isLoadingOlderHistory: isLoadingOlderHistoryRef.current,
+        isZoomGesture: event.ctrlKey,
+      });
+      if (transition.direction === "none") {
         return;
       }
       const wheelEndTimeout = pendingWheelInputEndTimeoutRef.current;
@@ -573,84 +589,55 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         pendingWheelInputEndTimeoutRef.current = null;
         window.clearTimeout(wheelEndTimeout);
       }
-      if (event.deltaY < 0) {
-        beginHistoryInput("wheel", true);
+      applyHistoryInputTransition(transition);
+      if (transition.direction === "toward-history") {
         pendingUserScrollUpIntentRef.current = true;
         cancelPendingStickToBottom();
         evaluateHistoryStart();
-      } else if (activeHistoryInputRef.current === "wheel") {
-        historyStartPaginationStateRef.current = disarmHistoryStartPagination(
-          historyStartPaginationStateRef.current,
-        );
-        historyPaginationArmedForInputRef.current = historyPaginationConsumedForInputRef.current;
-        pendingUserScrollUpIntentRef.current = false;
       } else {
-        disarmHistoryInput();
-        return;
+        pendingUserScrollUpIntentRef.current = false;
       }
-      pendingWheelInputEndTimeoutRef.current = window.setTimeout(() => {
-        pendingWheelInputEndTimeoutRef.current = null;
-        disarmHistoryInput("wheel");
-      }, WHEEL_SCROLL_SETTLE_TIMEOUT_MS);
+      if (transition.shouldSettle) {
+        pendingWheelInputEndTimeoutRef.current = window.setTimeout(() => {
+          pendingWheelInputEndTimeoutRef.current = null;
+          disarmHistoryInput("wheel");
+        }, WHEEL_SCROLL_SETTLE_TIMEOUT_MS);
+      }
     };
     const handleTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1) {
-        isMultiTouchGestureRef.current = true;
-        touchStartClientYRef.current = null;
-        disarmHistoryInput();
-        return;
-      }
-      if (isMultiTouchGestureRef.current) {
-        return;
-      }
-      const touch = event.touches[0];
-      if (!touch) {
-        return;
-      }
-      beginHistoryInput("touch", false, true);
-      touchStartClientYRef.current = touch.clientY;
+      applyHistoryInputTransition(
+        startWebTouchInput(
+          historyInputRef.current,
+          Array.from(event.touches, (touch) => touch.clientY),
+          isLoadingOlderHistoryRef.current,
+        ),
+      );
     };
     const handleTouchMove = (event: TouchEvent) => {
-      if (isMultiTouchGestureRef.current || event.touches.length !== 1) {
-        if (event.touches.length !== 1) {
-          isMultiTouchGestureRef.current = true;
-          touchStartClientYRef.current = null;
-          disarmHistoryInput("touch");
-        }
-        return;
-      }
-      const touch = event.touches[0];
-      if (!touch) {
-        return;
-      }
-      const touchStartY = touchStartClientYRef.current;
-      if (touchStartY !== null && touch.clientY > touchStartY + 1) {
-        beginHistoryInput("touch", true);
+      const transition = moveWebTouchInput(
+        historyInputRef.current,
+        Array.from(event.touches, (touch) => touch.clientY),
+        isLoadingOlderHistoryRef.current,
+      );
+      applyHistoryInputTransition(transition);
+      if (transition.direction === "toward-history") {
         pendingUserScrollUpIntentRef.current = true;
         cancelPendingStickToBottom();
         evaluateHistoryStart();
-      } else if (touchStartY !== null && touch.clientY < touchStartY - 1) {
-        historyStartPaginationStateRef.current = disarmHistoryStartPagination(
-          historyStartPaginationStateRef.current,
-        );
-        historyPaginationArmedForInputRef.current = historyPaginationConsumedForInputRef.current;
+      } else if (transition.direction === "toward-newer") {
         pendingUserScrollUpIntentRef.current = false;
       }
     };
     const handleTouchEnd = (event: TouchEvent) => {
-      if (isMultiTouchGestureRef.current || event.touches.length > 0) {
-        isMultiTouchGestureRef.current = event.touches.length > 0;
-        touchStartClientYRef.current = null;
-        disarmHistoryInput("touch");
-        return;
+      const transition = endWebTouchInput(historyInputRef.current, event.touches.length);
+      applyHistoryInputTransition(transition);
+      if (transition.shouldSettle) {
+        scheduleTouchHistoryInputEnd();
       }
-      touchStartClientYRef.current = null;
-      scheduleTouchHistoryInputEnd();
     };
     const handleTouchCancel = () => {
-      isMultiTouchGestureRef.current = false;
-      touchStartClientYRef.current = null;
-      disarmHistoryInput("touch");
+      applyHistoryInputTransition(cancelWebTouchInput(historyInputRef.current));
+      pendingUserScrollUpIntentRef.current = false;
     };
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType === "touch") {
@@ -662,38 +649,40 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       disarmHistoryInput("pointer");
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isInteractiveEventTarget(event.target)) {
-        return;
-      }
-      const isUpwardKey =
-        event.key === "ArrowUp" ||
-        event.key === "PageUp" ||
-        event.key === "Home" ||
-        (event.key === " " && event.shiftKey);
-      if (!isUpwardKey) {
-        return;
-      }
       if (
-        activeHistoryInputRef.current === "keyboard" &&
-        activeKeyboardKeyRef.current !== event.key
+        !shouldHandleWebHistoryKey({
+          key: event.key,
+          shiftKey: event.shiftKey,
+          defaultPrevented: event.defaultPrevented,
+          isInteractiveTarget: isInteractiveEventTarget(event.target),
+        })
       ) {
         return;
       }
-      activeKeyboardKeyRef.current = event.key;
+      const transition = beginWebKeyboardInput(
+        historyInputRef.current,
+        event.key,
+        isLoadingOlderHistoryRef.current,
+      );
+      if (transition.ignored) {
+        return;
+      }
+      applyHistoryInputTransition(transition);
       // Key repeat belongs to the same held-key gesture. Re-arm only after keyup.
-      beginHistoryInput("keyboard", true);
       pendingUserScrollUpIntentRef.current = true;
       cancelPendingStickToBottom();
       evaluateHistoryStart();
     };
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (activeKeyboardKeyRef.current !== event.key) {
+      const transition = endWebKeyboardInput(historyInputRef.current, event.key);
+      if (transition.ignored) {
         return;
       }
-      disarmHistoryInput("keyboard");
+      applyHistoryInputTransition(transition);
+      pendingUserScrollUpIntentRef.current = false;
     };
     const handleWindowBlur = () => {
-      disarmHistoryInput();
+      resetHistoryInput();
     };
 
     scrollContainer.addEventListener("scroll", handleDomScroll, { passive: true });
@@ -722,14 +711,16 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       scrollContainer.removeEventListener("touchmove", handleTouchMove);
       scrollContainer.removeEventListener("touchend", handleTouchEnd);
       scrollContainer.removeEventListener("touchcancel", handleTouchCancel);
-      disarmHistoryInput();
+      resetHistoryInput();
     };
   }, [
+    applyHistoryInputTransition,
     beginHistoryInput,
     cancelPendingStickToBottom,
     disarmHistoryInput,
     evaluateHistoryStart,
     handleDomScroll,
+    resetHistoryInput,
     scheduleTouchHistoryInputEnd,
   ]);
 
