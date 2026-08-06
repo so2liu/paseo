@@ -34,6 +34,7 @@ const BOTTOM_OVERSCROLL_TOLERANCE_PX = 2;
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 64;
 const AUTO_SCROLL_RESUME_THRESHOLD_PX = 1;
 const TOUCH_SCROLL_SETTLE_TIMEOUT_MS = 120;
+const WHEEL_SCROLL_SETTLE_TIMEOUT_MS = 120;
 
 type WebHistoryInputKind = "keyboard" | "pointer" | "touch" | "wheel";
 
@@ -161,7 +162,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const activeKeyboardKeyRef = useRef<string | null>(null);
   const historyPaginationArmedForInputRef = useRef(false);
   const historyPaginationConsumedForInputRef = useRef(false);
-  const pendingWheelInputEndFrameRef = useRef<number | null>(null);
+  const pendingWheelInputEndTimeoutRef = useRef<number | null>(null);
   const pendingTouchInputEndTimeoutRef = useRef<number | null>(null);
   const pendingAutoScrollFrameRef = useRef<number | null>(null);
   const pendingAutoScrollTimeoutRef = useRef<number | null>(null);
@@ -235,10 +236,10 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     if (kind !== undefined && activeHistoryInputRef.current !== kind) {
       return;
     }
-    const wheelEndFrame = pendingWheelInputEndFrameRef.current;
-    if (wheelEndFrame !== null) {
-      pendingWheelInputEndFrameRef.current = null;
-      window.cancelAnimationFrame(wheelEndFrame);
+    const wheelEndTimeout = pendingWheelInputEndTimeoutRef.current;
+    if (wheelEndTimeout !== null) {
+      pendingWheelInputEndTimeoutRef.current = null;
+      window.clearTimeout(wheelEndTimeout);
     }
     const touchEndTimeout = pendingTouchInputEndTimeoutRef.current;
     if (touchEndTimeout !== null) {
@@ -556,19 +557,19 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         return;
       }
       if (event.deltaY < 0) {
-        const wheelEndFrame = pendingWheelInputEndFrameRef.current;
-        if (wheelEndFrame !== null) {
-          pendingWheelInputEndFrameRef.current = null;
-          window.cancelAnimationFrame(wheelEndFrame);
+        const wheelEndTimeout = pendingWheelInputEndTimeoutRef.current;
+        if (wheelEndTimeout !== null) {
+          pendingWheelInputEndTimeoutRef.current = null;
+          window.clearTimeout(wheelEndTimeout);
         }
         beginHistoryInput("wheel", true);
         pendingUserScrollUpIntentRef.current = true;
         cancelPendingStickToBottom();
         evaluateHistoryStart();
-        pendingWheelInputEndFrameRef.current = window.requestAnimationFrame(() => {
-          pendingWheelInputEndFrameRef.current = null;
+        pendingWheelInputEndTimeoutRef.current = window.setTimeout(() => {
+          pendingWheelInputEndTimeoutRef.current = null;
           disarmHistoryInput("wheel");
-        });
+        }, WHEEL_SCROLL_SETTLE_TIMEOUT_MS);
       } else if (event.deltaY > 0) {
         disarmHistoryInput();
       }

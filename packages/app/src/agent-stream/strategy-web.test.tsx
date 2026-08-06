@@ -487,6 +487,15 @@ describe("createWebStreamStrategy", () => {
       scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -1 }));
     });
 
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    });
+    act(() => {
+      scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -1 }));
+    });
+
     expect(onNearHistoryStart).toHaveBeenCalledTimes(2);
   });
 
@@ -939,7 +948,7 @@ describe("createWebStreamStrategy", () => {
     act(() => scrollContainer.dispatchEvent(new Event("scroll")));
     act(() => scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -10 })));
     await act(async () => {
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 150));
     });
 
     Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 64 });
