@@ -14,8 +14,19 @@ const visibleHistoryStart = {
 };
 
 describe("history start pagination", () => {
-  it("loads once for each authoritative history cursor", () => {
+  it("does not load older pages from stale initial geometry without user intent", () => {
     const initial = createHistoryStartPaginationState();
+    const evaluated = evaluateHistoryStartPagination(initial, visibleHistoryStart);
+    const nextCursor = evaluateHistoryStartPagination(evaluated.state, {
+      ...visibleHistoryStart,
+      progressKey: "epoch-1:10",
+    });
+
+    expect([evaluated.shouldLoad, nextCursor.shouldLoad]).toEqual([false, false]);
+  });
+
+  it("loads once for each authoritative history cursor", () => {
+    const initial = rearmHistoryStartPagination(createHistoryStartPaginationState());
     const first = evaluateHistoryStartPagination(initial, visibleHistoryStart);
     const duplicate = evaluateHistoryStartPagination(first.state, visibleHistoryStart);
     const nextPage = evaluateHistoryStartPagination(first.state, {
@@ -32,7 +43,7 @@ describe("history start pagination", () => {
 
   it("allows the same revision again after the user leaves the history edge", () => {
     const first = evaluateHistoryStartPagination(
-      createHistoryStartPaginationState(),
+      rearmHistoryStartPagination(createHistoryStartPaginationState()),
       visibleHistoryStart,
     );
     const away = evaluateHistoryStartPagination(first.state, {
@@ -46,7 +57,7 @@ describe("history start pagination", () => {
 
   it("re-arms the same cursor when the user makes another upward edge gesture", () => {
     const first = evaluateHistoryStartPagination(
-      createHistoryStartPaginationState(),
+      rearmHistoryStartPagination(createHistoryStartPaginationState()),
       visibleHistoryStart,
     );
     const retried = evaluateHistoryStartPagination(
@@ -58,7 +69,7 @@ describe("history start pagination", () => {
   });
 
   it("waits while history loading is unavailable or already active", () => {
-    const state = createHistoryStartPaginationState();
+    const state = rearmHistoryStartPagination(createHistoryStartPaginationState());
 
     expect([
       evaluateHistoryStartPagination(state, { ...visibleHistoryStart, isReady: false }).shouldLoad,

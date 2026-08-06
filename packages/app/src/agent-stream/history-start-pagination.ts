@@ -2,16 +2,20 @@ export const HISTORY_START_THRESHOLD_PX = 96;
 
 export interface HistoryStartPaginationState {
   requestedProgressKey: string | null;
+  // Initial layout measurements can briefly look like the history edge before
+  // the latest tail has been measured. Only a real upward gesture may arm
+  // backward pagination, otherwise a long conversation drains every old page.
+  userInitiated: boolean;
 }
 
 export function createHistoryStartPaginationState(): HistoryStartPaginationState {
-  return { requestedProgressKey: null };
+  return { requestedProgressKey: null, userInitiated: false };
 }
 
 export function rearmHistoryStartPagination(
-  _state: HistoryStartPaginationState,
+  state: HistoryStartPaginationState,
 ): HistoryStartPaginationState {
-  return createHistoryStartPaginationState();
+  return { ...state, requestedProgressKey: null, userInitiated: true };
 }
 
 export function evaluateHistoryStartPagination(
@@ -25,9 +29,13 @@ export function evaluateHistoryStartPagination(
   },
 ): { state: HistoryStartPaginationState; shouldLoad: boolean } {
   if (input.distanceFromHistoryStart > HISTORY_START_THRESHOLD_PX) {
-    return { state: createHistoryStartPaginationState(), shouldLoad: false };
+    return {
+      state: { ...state, requestedProgressKey: null },
+      shouldLoad: false,
+    };
   }
   if (
+    !state.userInitiated ||
     !input.isReady ||
     !input.hasOlderHistory ||
     input.isLoadingOlderHistory ||
@@ -39,7 +47,7 @@ export function evaluateHistoryStartPagination(
     return { state, shouldLoad: false };
   }
   return {
-    state: { requestedProgressKey: input.progressKey },
+    state: { ...state, requestedProgressKey: input.progressKey },
     shouldLoad: true,
   };
 }
