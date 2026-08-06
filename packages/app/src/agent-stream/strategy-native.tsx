@@ -12,6 +12,7 @@ import {
   Keyboard,
   Platform,
   View,
+  type GestureResponderEvent,
   type LayoutChangeEvent,
   type ListRenderItemInfo,
   type NativeScrollEvent,
@@ -37,7 +38,10 @@ import {
   evaluateHistoryStartPagination,
   rearmHistoryStartPagination,
 } from "./history-start-pagination";
-import { hasNativeGestureMovedTowardHistoryStart } from "./native-history-scroll-intent";
+import {
+  hasNativeGestureMovedTowardHistoryStart,
+  hasNativeInvertedTouchMovedTowardHistoryStart,
+} from "./native-history-scroll-intent";
 import { createNativeHistoryLayoutInvalidationController } from "./native-history-layout-invalidation";
 
 const DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION = Object.freeze({
@@ -113,6 +117,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
   const scrollOffsetYRef = useRef(0);
   const userScrollGestureStartOffsetYRef = useRef(0);
+  const userTouchStartPageYRef = useRef<number | null>(null);
   const isUserScrollActiveRef = useRef(false);
   const hasArmedHistoryPaginationForGestureRef = useRef(false);
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
@@ -267,6 +272,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     };
     scrollOffsetYRef.current = 0;
     userScrollGestureStartOffsetYRef.current = 0;
+    userTouchStartPageYRef.current = null;
     isUserScrollActiveRef.current = false;
     hasArmedHistoryPaginationForGestureRef.current = false;
     clearPendingUserScrollEnd();
@@ -419,9 +425,52 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     clearPendingUserScrollEnd();
     isUserScrollActiveRef.current = true;
     userScrollGestureStartOffsetYRef.current = event.nativeEvent.contentOffset.y;
-    hasArmedHistoryPaginationForGestureRef.current = false;
+    if (userTouchStartPageYRef.current === null) {
+      hasArmedHistoryPaginationForGestureRef.current = false;
+    }
     scrollKeyboardDismiss.onScrollBeginDrag(event);
     bottomAnchorController.beginUserScroll();
+  });
+
+  const handleTouchStart = useStableEvent((event: GestureResponderEvent) => {
+    userTouchStartPageYRef.current = event.nativeEvent.pageY;
+    hasArmedHistoryPaginationForGestureRef.current = false;
+  });
+
+  const handleTouchMove = useStableEvent((event: GestureResponderEvent) => {
+    const touchStartPageY = userTouchStartPageYRef.current;
+    if (
+      hasArmedHistoryPaginationForGestureRef.current ||
+      touchStartPageY === null ||
+      !hasNativeInvertedTouchMovedTowardHistoryStart(touchStartPageY, event.nativeEvent.pageY)
+    ) {
+      return;
+    }
+    // At the clamped history edge Android may emit no offset delta at all.
+    // Track the physical drag as well so an explicit inverted-list history
+    // gesture can still request exactly one older page.
+    hasArmedHistoryPaginationForGestureRef.current = true;
+    historyStartPaginationStateRef.current = rearmHistoryStartPagination(
+      historyStartPaginationStateRef.current,
+    );
+    evaluateHistoryStart();
+  });
+
+  const handleTouchEnd = useStableEvent(() => {
+    userTouchStartPageYRef.current = null;
+    if (!isUserScrollActiveRef.current) {
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
+    }
+  });
+
+  const handleTouchCancel = useStableEvent(() => {
+    userTouchStartPageYRef.current = null;
+    hasArmedHistoryPaginationForGestureRef.current = false;
+    historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+      historyStartPaginationStateRef.current,
+    );
   });
 
   // Defer drag end so momentum can take ownership, but capture the terminal
@@ -597,6 +646,10 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       style={listStyle}
       onLayout={handleListLayout}
       onScroll={handleScroll}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       onScrollBeginDrag={handleScrollBeginDrag}
       onScrollEndDrag={handleScrollEndDrag}
       onMomentumScrollBegin={handleMomentumScrollBegin}
