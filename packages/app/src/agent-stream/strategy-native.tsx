@@ -12,6 +12,7 @@ import {
   Keyboard,
   Platform,
   View,
+  type GestureResponderEvent,
   type LayoutChangeEvent,
   type ListRenderItemInfo,
   type NativeScrollEvent,
@@ -33,9 +34,21 @@ import {
 } from "./strategy";
 import {
   createHistoryStartPaginationState,
+  disarmHistoryStartPagination,
   evaluateHistoryStartPagination,
   rearmHistoryStartPagination,
 } from "./history-start-pagination";
+import {
+  cancelNativeHistoryTouch,
+  consumeNativeHistoryPagination,
+  createNativeHistoryTouchState,
+  endNativeHistoryTouch,
+  moveNativeHistoryOffset,
+  moveNativeHistoryTouch,
+  settleNativeHistoryTouch,
+  shouldSettleNativeHistoryTouchOnScrollEnd,
+  startNativeHistoryTouch,
+} from "./native-history-scroll-intent";
 import { createNativeHistoryLayoutInvalidationController } from "./native-history-layout-invalidation";
 
 const DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION = Object.freeze({
@@ -110,7 +123,12 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     contentMeasuredForKey: null as string | null,
   });
   const scrollOffsetYRef = useRef(0);
+  const userScrollGestureStartOffsetYRef = useRef(0);
+  const nativeHistoryTouchStateRef = useRef(createNativeHistoryTouchState());
   const isUserScrollActiveRef = useRef(false);
+  const hasCurrentTouchStartedScrollRef = useRef(false);
+  const nativeScrollGestureGenerationRef = useRef(0);
+  const nativeMomentumGestureGenerationRef = useRef<number | null>(null);
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
   const userScrollEndFrameIdRef = useRef<number | null>(null);
   const programmaticScrollEventBudgetRef = useRef(0);
@@ -162,6 +180,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     });
     historyStartPaginationStateRef.current = result.state;
     if (result.shouldLoad) {
+      nativeHistoryTouchStateRef.current = consumeNativeHistoryPagination(
+        nativeHistoryTouchStateRef.current,
+      );
       onNearHistoryStart();
     }
   });
@@ -262,7 +283,12 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       contentMeasuredForKey: null,
     };
     scrollOffsetYRef.current = 0;
+    userScrollGestureStartOffsetYRef.current = 0;
+    nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
     isUserScrollActiveRef.current = false;
+    hasCurrentTouchStartedScrollRef.current = false;
+    nativeScrollGestureGenerationRef.current = 0;
+    nativeMomentumGestureGenerationRef.current = null;
     clearPendingUserScrollEnd();
     clearNativeViewportSettling();
     setIsNativeViewportSettling(false);
@@ -379,6 +405,22 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     const nearBottom = isScrollEventNearBottom(event);
     onNearBottomChange(nearBottom);
 
+    if (isUserScrollActiveRef.current) {
+      const transition = moveNativeHistoryOffset(nativeHistoryTouchStateRef.current, {
+        gestureStartOffsetY: userScrollGestureStartOffsetYRef.current,
+        currentOffsetY: contentOffset.y,
+      });
+      nativeHistoryTouchStateRef.current = transition.state;
+      if (transition.shouldArmPagination) {
+        historyStartPaginationStateRef.current = rearmHistoryStartPagination(
+          historyStartPaginationStateRef.current,
+        );
+      } else if (transition.shouldDisarmPagination) {
+        historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+          historyStartPaginationStateRef.current,
+        );
+      }
+    }
     evaluateHistoryStart();
 
     if (
@@ -397,34 +439,139 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
 
   const handleScrollBeginDrag = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!isLoadingOlderHistory) {
-      historyStartPaginationStateRef.current = rearmHistoryStartPagination(
+    clearPendingUserScrollEnd();
+    nativeScrollGestureGenerationRef.current += 1;
+    nativeMomentumGestureGenerationRef.current = null;
+    isUserScrollActiveRef.current = true;
+    hasCurrentTouchStartedScrollRef.current =
+      nativeHistoryTouchStateRef.current.activeTouchCount > 0;
+    userScrollGestureStartOffsetYRef.current = event.nativeEvent.contentOffset.y;
+    if (
+      nativeHistoryTouchStateRef.current.startPageY === null &&
+      !nativeHistoryTouchStateRef.current.multiTouchBlocked
+    ) {
+      nativeHistoryTouchStateRef.current = createNativeHistoryTouchState();
+    }
+    scrollKeyboardDismiss.onScrollBeginDrag(event);
+    bottomAnchorController.beginUserScroll();
+  });
+
+  const handleTouchStart = useStableEvent((event: GestureResponderEvent) => {
+    if (
+      nativeHistoryTouchStateRef.current.activeTouchCount === 0 &&
+      event.nativeEvent.touches.length === 1
+    ) {
+      hasCurrentTouchStartedScrollRef.current = false;
+    }
+    const transition = startNativeHistoryTouch(nativeHistoryTouchStateRef.current, {
+      touchCount: event.nativeEvent.touches.length,
+      pageY: event.nativeEvent.pageY,
+    });
+    nativeHistoryTouchStateRef.current = transition.state;
+    if (transition.shouldDisarmPagination) {
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
         historyStartPaginationStateRef.current,
       );
     }
-    clearPendingUserScrollEnd();
-    isUserScrollActiveRef.current = true;
-    scrollKeyboardDismiss.onScrollBeginDrag(event);
-    bottomAnchorController.beginUserScroll();
+  });
+
+  const handleTouchMove = useStableEvent((event: GestureResponderEvent) => {
+    const transition = moveNativeHistoryTouch(nativeHistoryTouchStateRef.current, {
+      touchCount: event.nativeEvent.touches.length,
+      pageY: event.nativeEvent.pageY,
+    });
+    nativeHistoryTouchStateRef.current = transition.state;
+    if (transition.shouldDisarmPagination) {
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
+    }
+    if (!transition.shouldArmPagination) return;
+    // At the clamped history edge Android may emit no offset delta at all.
+    // Track the physical drag as well so an explicit inverted-list history
+    // gesture can still request exactly one older page.
+    historyStartPaginationStateRef.current = rearmHistoryStartPagination(
+      historyStartPaginationStateRef.current,
+    );
     evaluateHistoryStart();
+  });
+
+  const handleTouchEnd = useStableEvent((event: GestureResponderEvent) => {
+    const transition = endNativeHistoryTouch(nativeHistoryTouchStateRef.current, {
+      remainingTouchCount: event.nativeEvent.touches.length,
+      isUserScrollActive: isUserScrollActiveRef.current,
+    });
+    nativeHistoryTouchStateRef.current = transition.state;
+    if (transition.shouldDisarmPagination) {
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
+    }
+    if (
+      event.nativeEvent.touches.length === 0 &&
+      !hasCurrentTouchStartedScrollRef.current &&
+      isUserScrollActiveRef.current
+    ) {
+      const metrics = streamViewportMetricsRef.current;
+      const isNearBottom = isNearBottomForStreamRenderStrategy({
+        strategy,
+        offsetY: metrics.offsetY,
+        threshold: 32,
+        contentHeight: metrics.contentHeight,
+        viewportHeight: metrics.viewportHeight,
+      });
+      isUserScrollActiveRef.current = false;
+      nativeMomentumGestureGenerationRef.current = null;
+      nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
+      bottomAnchorController.endUserScroll({ isNearBottom });
+    }
+  });
+
+  const handleTouchCancel = useStableEvent(() => {
+    const transition = cancelNativeHistoryTouch(
+      nativeHistoryTouchStateRef.current,
+      isUserScrollActiveRef.current,
+    );
+    nativeHistoryTouchStateRef.current = transition.state;
+    historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+      historyStartPaginationStateRef.current,
+    );
   });
 
   // Defer drag end so momentum can take ownership, but capture the terminal
   // gesture position now because layout may move the viewport in the meantime.
   const handleScrollEndDrag = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const isNearBottom = isScrollEventNearBottom(event);
+    const dragGestureGeneration = nativeScrollGestureGenerationRef.current;
     scrollKeyboardDismiss.onScrollEndDrag(event);
 
     clearPendingUserScrollEnd();
     userScrollEndFrameIdRef.current = requestAnimationFrame(() => {
       userScrollEndFrameIdRef.current = null;
+      if (
+        !shouldSettleNativeHistoryTouchOnScrollEnd(nativeHistoryTouchStateRef.current, {
+          settlingGestureGeneration: dragGestureGeneration,
+          currentGestureGeneration: nativeScrollGestureGenerationRef.current,
+        })
+      ) {
+        return;
+      }
       isUserScrollActiveRef.current = false;
+      hasCurrentTouchStartedScrollRef.current = false;
+      nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
       bottomAnchorController.endUserScroll({ isNearBottom });
     });
   });
 
   const handleMomentumScrollBegin = useStableEvent(() => {
     clearPendingUserScrollEnd();
+    nativeMomentumGestureGenerationRef.current = nativeScrollGestureGenerationRef.current;
   });
 
   const handleMomentumScrollEnd = useStableEvent(
@@ -434,9 +581,25 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       if (!isUserScrollActiveRef.current) {
         return;
       }
+      const momentumGestureGeneration = nativeMomentumGestureGenerationRef.current;
+      if (
+        momentumGestureGeneration === null ||
+        !shouldSettleNativeHistoryTouchOnScrollEnd(nativeHistoryTouchStateRef.current, {
+          settlingGestureGeneration: momentumGestureGeneration,
+          currentGestureGeneration: nativeScrollGestureGenerationRef.current,
+        })
+      ) {
+        return;
+      }
       const isNearBottom = isScrollEventNearBottom(event);
       clearPendingUserScrollEnd();
       isUserScrollActiveRef.current = false;
+      hasCurrentTouchStartedScrollRef.current = false;
+      nativeMomentumGestureGenerationRef.current = null;
+      nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
       bottomAnchorController.endUserScroll({ isNearBottom });
     },
   );
@@ -576,6 +739,10 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       style={listStyle}
       onLayout={handleListLayout}
       onScroll={handleScroll}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       onScrollBeginDrag={handleScrollBeginDrag}
       onScrollEndDrag={handleScrollEndDrag}
       onMomentumScrollBegin={handleMomentumScrollBegin}

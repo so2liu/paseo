@@ -78,7 +78,12 @@ export async function expectLoadedTimelineDoesNotScroll(page: Page): Promise<voi
 export async function holdNextOlderTimelinePage(
   page: Page,
   agent: LongTimelineAgent,
-): Promise<AgentTimelineResponseGate & { expectLoading(): Promise<void> }> {
+): Promise<
+  AgentTimelineResponseGate & {
+    expectLoading(): Promise<void>;
+    expectNotLoading(): Promise<void>;
+  }
+> {
   const gate = await delayAgentOlderTimelineResponse(page, agent.agentId);
   return {
     ...gate,
@@ -86,6 +91,14 @@ export async function holdNextOlderTimelinePage(
       await gate.waitForDelayedResponse();
       await expect(page.getByTestId("load-older-history-spinner")).toBeVisible();
       await expectTimelinePromptNotMounted(page, agent.oldestPrompt);
+    },
+    async expectNotLoading() {
+      // Give initial layout effects and scroll metrics time to settle. A stale
+      // geometry fetch fires immediately; without user intent no request may
+      // reach the held response during this observation window.
+      await page.waitForTimeout(500);
+      expect(gate.hasDelayedResponse()).toBe(false);
+      await expect(page.getByTestId("load-older-history-spinner")).toHaveCount(0);
     },
   };
 }
@@ -109,31 +122,35 @@ export async function scrollTimelineToOldestLoadedEdge(page: Page): Promise<void
   });
 }
 
-export async function scrollTimelineUntilOlderHistoryIsReachable(page: Page): Promise<void> {
+export async function scrollTimelineUntilPromptVisible(page: Page, prompt: string): Promise<void> {
   const scroll = page.locator('[data-testid="agent-chat-scroll"]:visible').first();
-  const previousHeight = await scroll.evaluate((element) => {
-    if (!(element instanceof HTMLElement)) {
-      throw new Error("Agent chat scroll element is not an HTMLElement");
-    }
-    return element.scrollHeight;
-  });
+  const promptLocator = page.getByText(prompt, { exact: true });
 
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      }),
-  );
-  await scrollTimelineToOldestLoadedEdge(page);
-  await expect
-    .poll(async () =>
-      scroll.evaluate((element) => {
-        if (!(element instanceof HTMLElement)) {
-          throw new Error("Agent chat scroll element is not an HTMLElement");
-        }
-        return element.scrollHeight;
-      }),
-    )
-    .toBeGreaterThan(previousHeight);
-  await scrollTimelineToOldestLoadedEdge(page);
+  for (let gesture = 0; gesture < 10; gesture += 1) {
+    const previousHeight = await scroll.evaluate((element) => {
+      if (!(element instanceof HTMLElement)) {
+        throw new Error("Agent chat scroll element is not an HTMLElement");
+      }
+      return element.scrollHeight;
+    });
+    await scrollTimelineToOldestLoadedEdge(page);
+    if (await promptLocator.isVisible()) {
+      return;
+    }
+    await expect
+      .poll(async () =>
+        scroll.evaluate((element) => {
+          if (!(element instanceof HTMLElement)) {
+            throw new Error("Agent chat scroll element is not an HTMLElement");
+          }
+          return element.scrollHeight;
+        }),
+      )
+      .toBeGreaterThan(previousHeight);
+    // A wheel burst owns one pagination budget. Let it settle before issuing
+    // the next explicit gesture so this test never relies on runaway loading.
+    await page.waitForTimeout(200);
+  }
+
+  await expect(promptLocator).toBeVisible({ timeout: 30_000 });
 }

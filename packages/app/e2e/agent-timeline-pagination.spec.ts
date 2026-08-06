@@ -6,7 +6,8 @@ import {
   holdNextOlderTimelinePage,
   makeLoadedTimelineFitViewport,
   openAgentTimeline,
-  scrollTimelineUntilOlderHistoryIsReachable,
+  scrollTimelineToOldestLoadedEdge,
+  scrollTimelineUntilPromptVisible,
   seedLongMockAgentTimeline,
 } from "./helpers/timeline-pagination";
 
@@ -21,7 +22,7 @@ test.describe("Agent timeline pagination", () => {
       await expectTimelinePromptVisible(page, agent.newestPrompt);
       await expectTimelinePromptNotMounted(page, agent.oldestPrompt);
 
-      await scrollTimelineUntilOlderHistoryIsReachable(page);
+      await scrollTimelineUntilPromptVisible(page, agent.oldestPrompt);
 
       await expectTimelinePromptVisible(page, agent.oldestPrompt);
     } finally {
@@ -29,7 +30,9 @@ test.describe("Agent timeline pagination", () => {
     }
   });
 
-  test("loads older history when the initial page does not fill the viewport", async ({ page }) => {
+  test("waits for an explicit history gesture when the initial page does not fill the viewport", async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
     const agent = await seedLongMockAgentTimeline({ turns: 30 });
     try {
@@ -38,6 +41,9 @@ test.describe("Agent timeline pagination", () => {
       await openAgentTimeline(page, agent);
       await expectTimelinePromptVisible(page, agent.newestPrompt);
       await expectLoadedTimelineDoesNotScroll(page);
+      await olderPage.expectNotLoading();
+
+      await scrollTimelineToOldestLoadedEdge(page);
       await olderPage.expectLoading();
       olderPage.release();
       await expectTimelinePromptVisible(page, agent.oldestPrompt);

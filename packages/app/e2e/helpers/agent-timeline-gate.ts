@@ -12,6 +12,7 @@ interface CreatedAgentTimelineGate {
 
 export interface AgentTimelineResponseGate {
   release(): void;
+  hasDelayedResponse(): boolean;
   waitForDelayedResponse(): Promise<void>;
 }
 
@@ -170,6 +171,7 @@ export async function delayAgentOlderTimelineResponse(
         forward();
       }
     },
+    hasDelayedResponse: () => delayedResponseSeen,
     waitForDelayedResponse: () => delayedResponse,
   };
 }
