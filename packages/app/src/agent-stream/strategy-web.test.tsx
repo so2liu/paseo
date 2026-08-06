@@ -519,6 +519,17 @@ describe("createWebStreamStrategy", () => {
     });
 
     expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 200 });
+    act(() => scrollContainer.dispatchEvent(new Event("scroll")));
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 64 });
+    act(() => {
+      scrollContainer.dispatchEvent(new Event("pointerdown"));
+      window.dispatchEvent(new Event("pointercancel"));
+      scrollContainer.dispatchEvent(new Event("scroll"));
+    });
+
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
   });
 
   it("does not treat a layout-driven scrollTop reduction as user input", async () => {
