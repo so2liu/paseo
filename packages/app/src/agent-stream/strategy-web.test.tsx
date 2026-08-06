@@ -9,6 +9,14 @@ import type { StreamItem } from "@/types/stream";
 import type { StreamRenderInput, StreamSegmentRenderers, StreamViewportHandle } from "./strategy";
 import { createWebStreamStrategy } from "./strategy-web";
 
+vi.mock("react-native-unistyles", () => ({
+  withUnistyles: (component: unknown) => component,
+}));
+
+vi.mock("@/components/ui/loading-spinner", () => ({
+  LoadingSpinner: () => null,
+}));
+
 vi.hoisted(() => {
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -538,6 +546,91 @@ describe("createWebStreamStrategy", () => {
     act(() => scrollContainer.dispatchEvent(new Event("scroll")));
 
     expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps one touch gesture scoped across older-history loading changes", async () => {
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
+    const viewportRef = React.createRef<StreamViewportHandle>();
+    const onNearHistoryStart = vi.fn();
+    const renderInput: StreamRenderInput = {
+      agentId: "agent",
+      segments: {
+        historyVirtualized: [],
+        historyMounted: [userMessage(1), userMessage(2)],
+        liveHead: [],
+      },
+      boundary: {
+        hasVirtualizedHistory: false,
+        hasMountedHistory: true,
+        hasLiveHead: false,
+      },
+      renderers: createRenderers(vi.fn()),
+      listEmptyComponent: null,
+      viewportRef,
+      routeBottomAnchorRequest: null,
+      isAuthoritativeHistoryReady: true,
+      onNearBottomChange: vi.fn(),
+      onNearHistoryStart,
+      isLoadingOlderHistory: false,
+      hasOlderHistory: true,
+      olderHistoryProgressKey: "epoch-1:20",
+      scrollEnabled: true,
+      listStyle: null,
+      baseListContentContainerStyle: null,
+      forwardListContentContainerStyle: null,
+    };
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => root?.render(strategy.render(renderInput)));
+    const scrollContainer = container.querySelector('[data-testid="agent-chat-scroll"]');
+    if (!(scrollContainer instanceof HTMLElement)) {
+      throw new Error("Expected agent chat scroll container");
+    }
+    Object.defineProperty(scrollContainer, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(scrollContainer, "scrollHeight", { configurable: true, value: 1200 });
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 200 });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
+    const touchEvent = (type: string, clientY?: number) => {
+      const event = new Event(type);
+      Object.defineProperty(event, "touches", {
+        value: clientY === undefined ? [] : [{ clientY }],
+      });
+      return event;
+    };
+    act(() => {
+      scrollContainer.dispatchEvent(touchEvent("touchstart", 100));
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 120));
+    });
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 64 });
+    act(() => scrollContainer.dispatchEvent(new Event("scroll")));
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      root?.render(strategy.render({ ...renderInput, isLoadingOlderHistory: true }));
+    });
+    act(() => {
+      root?.render(
+        strategy.render({
+          ...renderInput,
+          olderHistoryProgressKey: "epoch-1:10",
+        }),
+      );
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 140));
+    });
+
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      scrollContainer.dispatchEvent(touchEvent("touchend"));
+      scrollContainer.dispatchEvent(touchEvent("touchstart", 100));
+      scrollContainer.dispatchEvent(touchEvent("touchmove", 120));
+    });
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(2);
   });
 
   it("arms older history when a scrollbar drag moves upward", async () => {

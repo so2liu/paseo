@@ -159,6 +159,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const pendingVirtualRowMeasureFramesRef = useRef(new Map<Element, number>());
   const historyStartReadyRef = useRef(false);
   const historyStartPaginationStateRef = useRef(createHistoryStartPaginationState());
+  const isLoadingOlderHistoryRef = useRef(isLoadingOlderHistory);
   const shouldUseVirtualizer = segments.historyVirtualized.length > 0;
   const {
     renderHistoryVirtualizedRow,
@@ -168,6 +169,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   } = renderers;
 
   followOutputRef.current = followOutput;
+  isLoadingOlderHistoryRef.current = isLoadingOlderHistory;
 
   const hasRouteBottomAnchorRequest = routeBottomAnchorRequest !== null;
   const activationKey = routeBottomAnchorRequest?.requestKey ?? props.agentId;
@@ -250,14 +252,18 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         activeHistoryInputRef.current = kind;
         historyPaginationArmedForInputRef.current = false;
       }
-      if (armPagination && !historyPaginationArmedForInputRef.current && !isLoadingOlderHistory) {
+      if (
+        armPagination &&
+        !historyPaginationArmedForInputRef.current &&
+        !isLoadingOlderHistoryRef.current
+      ) {
         historyStartPaginationStateRef.current = rearmHistoryStartPagination(
           historyStartPaginationStateRef.current,
         );
         historyPaginationArmedForInputRef.current = true;
       }
     },
-    [disarmHistoryInput, isLoadingOlderHistory],
+    [disarmHistoryInput],
   );
 
   const scheduleTouchHistoryInputEnd = useCallback(() => {
