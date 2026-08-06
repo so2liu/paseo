@@ -604,7 +604,8 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       if (!isUpwardKey) {
         return;
       }
-      beginHistoryInput("keyboard", true, true);
+      // Key repeat belongs to the same held-key gesture. Re-arm only after keyup.
+      beginHistoryInput("keyboard", true);
       pendingUserScrollUpIntentRef.current = true;
       cancelPendingStickToBottom();
       evaluateHistoryStart();
