@@ -124,12 +124,28 @@ describe("native history scroll intent", () => {
       touchCount: 1,
       pageY: 200,
     });
-    expect(shouldSettleNativeHistoryTouchOnScrollEnd(activeTouch.state)).toBe(false);
+    expect(
+      shouldSettleNativeHistoryTouchOnScrollEnd(activeTouch.state, {
+        settlingGestureGeneration: 1,
+        currentGestureGeneration: 1,
+      }),
+    ).toBe(false);
 
     const released = endNativeHistoryTouch(activeTouch.state, {
       remainingTouchCount: 0,
       isUserScrollActive: true,
     });
-    expect(shouldSettleNativeHistoryTouchOnScrollEnd(released.state)).toBe(true);
+    expect(
+      shouldSettleNativeHistoryTouchOnScrollEnd(released.state, {
+        settlingGestureGeneration: 1,
+        currentGestureGeneration: 1,
+      }),
+    ).toBe(true);
+    expect(
+      shouldSettleNativeHistoryTouchOnScrollEnd(released.state, {
+        settlingGestureGeneration: 1,
+        currentGestureGeneration: 2,
+      }),
+    ).toBe(false);
   });
 });

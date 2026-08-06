@@ -191,6 +191,12 @@ export function settleNativeHistoryTouch(): NativeHistoryTouchState {
   return createNativeHistoryTouchState();
 }
 
-export function shouldSettleNativeHistoryTouchOnScrollEnd(state: NativeHistoryTouchState): boolean {
-  return state.activeTouchCount === 0;
+export function shouldSettleNativeHistoryTouchOnScrollEnd(
+  state: NativeHistoryTouchState,
+  input: { settlingGestureGeneration: number; currentGestureGeneration: number },
+): boolean {
+  return (
+    state.activeTouchCount === 0 &&
+    input.settlingGestureGeneration === input.currentGestureGeneration
+  );
 }
