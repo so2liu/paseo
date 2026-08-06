@@ -158,6 +158,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const pendingUserScrollUpIntentRef = useRef(false);
   const touchStartClientYRef = useRef<number | null>(null);
   const activeHistoryInputRef = useRef<WebHistoryInputKind | null>(null);
+  const activeKeyboardKeyRef = useRef<string | null>(null);
   const historyPaginationArmedForInputRef = useRef(false);
   const historyPaginationConsumedForInputRef = useRef(false);
   const pendingWheelInputEndFrameRef = useRef<number | null>(null);
@@ -245,6 +246,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       window.clearTimeout(touchEndTimeout);
     }
     activeHistoryInputRef.current = null;
+    activeKeyboardKeyRef.current = null;
     historyPaginationArmedForInputRef.current = false;
     historyPaginationConsumedForInputRef.current = false;
     pendingUserScrollUpIntentRef.current = false;
@@ -425,7 +427,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     lastKnownScrollTopRef.current = currentScrollTop;
     updateScrollMetrics();
     evaluateHistoryStart();
-    if (activeHistoryInputRef.current === "touch") {
+    if (activeHistoryInputRef.current === "touch" && touchStartClientYRef.current === null) {
       scheduleTouchHistoryInputEnd();
     }
   }, [
@@ -627,13 +629,23 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       if (!isUpwardKey) {
         return;
       }
+      if (
+        activeHistoryInputRef.current === "keyboard" &&
+        activeKeyboardKeyRef.current !== event.key
+      ) {
+        return;
+      }
+      activeKeyboardKeyRef.current = event.key;
       // Key repeat belongs to the same held-key gesture. Re-arm only after keyup.
       beginHistoryInput("keyboard", true);
       pendingUserScrollUpIntentRef.current = true;
       cancelPendingStickToBottom();
       evaluateHistoryStart();
     };
-    const handleKeyUp = () => {
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (activeKeyboardKeyRef.current !== event.key) {
+        return;
+      }
       disarmHistoryInput("keyboard");
     };
     const handleWindowBlur = () => {

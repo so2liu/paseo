@@ -627,6 +627,10 @@ describe("createWebStreamStrategy", () => {
     act(() => scrollContainer.dispatchEvent(new Event("scroll")));
     expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
 
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    });
+
     act(() => {
       root?.render(strategy.render({ ...renderInput, isLoadingOlderHistory: true }));
     });
@@ -651,6 +655,80 @@ describe("createWebStreamStrategy", () => {
       scrollContainer.dispatchEvent(touchEvent("touchend"));
       scrollContainer.dispatchEvent(touchEvent("touchstart", 100));
       scrollContainer.dispatchEvent(touchEvent("touchmove", 120));
+    });
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps keyboard pagination scoped to the initiating held key", async () => {
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
+    const viewportRef = React.createRef<StreamViewportHandle>();
+    const onNearHistoryStart = vi.fn();
+    const renderInput: StreamRenderInput = {
+      agentId: "agent",
+      segments: {
+        historyVirtualized: [],
+        historyMounted: [userMessage(1), userMessage(2)],
+        liveHead: [],
+      },
+      boundary: {
+        hasVirtualizedHistory: false,
+        hasMountedHistory: true,
+        hasLiveHead: false,
+      },
+      renderers: createRenderers(vi.fn()),
+      listEmptyComponent: null,
+      viewportRef,
+      routeBottomAnchorRequest: null,
+      isAuthoritativeHistoryReady: true,
+      onNearBottomChange: vi.fn(),
+      onNearHistoryStart,
+      isLoadingOlderHistory: false,
+      hasOlderHistory: true,
+      olderHistoryProgressKey: "epoch-1:20",
+      scrollEnabled: true,
+      listStyle: null,
+      baseListContentContainerStyle: null,
+      forwardListContentContainerStyle: null,
+    };
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => root?.render(strategy.render(renderInput)));
+    const scrollContainer = container.querySelector('[data-testid="agent-chat-scroll"]');
+    if (!(scrollContainer instanceof HTMLElement)) {
+      throw new Error("Expected agent chat scroll container");
+    }
+    Object.defineProperty(scrollContainer, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(scrollContainer, "scrollHeight", { configurable: true, value: 1200 });
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 200 });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    act(() => scrollContainer.dispatchEvent(new Event("scroll")));
+
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 64 });
+    act(() => {
+      scrollContainer.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp" }));
+      scrollContainer.dispatchEvent(new Event("scroll"));
+    });
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      root?.render(
+        strategy.render({
+          ...renderInput,
+          olderHistoryProgressKey: "epoch-1:10",
+        }),
+      );
+      window.dispatchEvent(new KeyboardEvent("keyup", { key: "Shift" }));
+      scrollContainer.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", repeat: true }));
+    });
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keyup", { key: "PageUp" }));
+      scrollContainer.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp" }));
     });
     expect(onNearHistoryStart).toHaveBeenCalledTimes(2);
   });
