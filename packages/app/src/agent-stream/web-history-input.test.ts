@@ -81,17 +81,19 @@ describe("web history input", () => {
   it("rearms an unused reversed touch but preserves a consumed touch budget", () => {
     let transition = startWebTouchInput(createWebHistoryInputState(), [100], false);
     transition = moveWebTouchInput(transition.state, [120], false);
-    transition = moveWebTouchInput(transition.state, [90], false);
+    transition = moveWebTouchInput(transition.state, [110], false);
     expect(transition).toMatchObject({
       paginationCommand: "disarm",
       state: { paginationArmed: false, paginationConsumed: false },
     });
-    transition = moveWebTouchInput(transition.state, [140], false);
+    transition = moveWebTouchInput(transition.state, [110.5], false);
+    expect(transition.paginationCommand).toBe("none");
+    transition = moveWebTouchInput(transition.state, [112], false);
     expect(transition.paginationCommand).toBe("rearm");
 
     const consumed = consumeWebHistoryPagination(transition.state);
-    const consumedReverse = moveWebTouchInput(consumed, [90], false);
-    const consumedUp = moveWebTouchInput(consumedReverse.state, [140], false);
+    const consumedReverse = moveWebTouchInput(consumed, [105], false);
+    const consumedUp = moveWebTouchInput(consumedReverse.state, [120], false);
     expect(consumedUp.paginationCommand).toBe("none");
     expect(consumedUp.state.paginationConsumed).toBe(true);
   });

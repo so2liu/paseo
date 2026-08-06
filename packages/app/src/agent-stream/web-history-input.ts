@@ -10,6 +10,7 @@ export interface WebHistoryInputState {
   paginationArmed: boolean;
   paginationConsumed: boolean;
   touchStartClientY: number | null;
+  touchPeakClientY: number | null;
   multiTouchBlocked: boolean;
 }
 
@@ -42,6 +43,7 @@ export function createWebHistoryInputState(): WebHistoryInputState {
     paginationArmed: false,
     paginationConsumed: false,
     touchStartClientY: null,
+    touchPeakClientY: null,
     multiTouchBlocked: false,
   };
 }
@@ -54,6 +56,7 @@ function resetActiveInput(state: WebHistoryInputState): WebHistoryInputState {
     paginationArmed: false,
     paginationConsumed: false,
     touchStartClientY: null,
+    touchPeakClientY: null,
   };
 }
 
@@ -135,7 +138,11 @@ export function startWebTouchInput(
   });
   return {
     ...started,
-    state: { ...started.state, touchStartClientY: clientYs[0] ?? null },
+    state: {
+      ...started.state,
+      touchStartClientY: clientYs[0] ?? null,
+      touchPeakClientY: clientYs[0] ?? null,
+    },
   };
 }
 
@@ -159,18 +166,28 @@ export function moveWebTouchInput(
   if (clientY === undefined || touchStartClientY === null) {
     return { state, paginationCommand: "none", direction: "none" };
   }
+  const touchPeakClientY = state.touchPeakClientY ?? touchStartClientY;
+  if (clientY < touchPeakClientY - WEB_TOUCH_DIRECTION_THRESHOLD_PX) {
+    const reversed = reverseWebHistoryInput({
+      ...state,
+      touchStartClientY: clientY,
+      touchPeakClientY: clientY,
+    });
+    return { ...reversed, direction: "toward-newer" };
+  }
+  const nextState = {
+    ...state,
+    touchPeakClientY: Math.max(touchPeakClientY, clientY),
+  };
   if (clientY > touchStartClientY + WEB_TOUCH_DIRECTION_THRESHOLD_PX) {
-    const armed = beginWebHistoryInput(state, {
+    const armed = beginWebHistoryInput(nextState, {
       kind: "touch",
       armPagination: true,
       isLoadingOlderHistory,
     });
     return { ...armed, direction: "toward-history" };
   }
-  if (clientY < touchStartClientY - WEB_TOUCH_DIRECTION_THRESHOLD_PX) {
-    return { ...reverseWebHistoryInput(state), direction: "toward-newer" };
-  }
-  return { state, paginationCommand: "none", direction: "none" };
+  return { state: nextState, paginationCommand: "none", direction: "none" };
 }
 
 export function endWebTouchInput(
