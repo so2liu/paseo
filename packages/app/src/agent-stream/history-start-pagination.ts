@@ -18,6 +18,12 @@ export function rearmHistoryStartPagination(
   return { ...state, requestedProgressKey: null, userInitiated: true };
 }
 
+export function disarmHistoryStartPagination(
+  state: HistoryStartPaginationState,
+): HistoryStartPaginationState {
+  return state.userInitiated ? { ...state, userInitiated: false } : state;
+}
+
 export function evaluateHistoryStartPagination(
   state: HistoryStartPaginationState,
   input: {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createHistoryStartPaginationState,
+  disarmHistoryStartPagination,
   evaluateHistoryStartPagination,
   rearmHistoryStartPagination,
 } from "./history-start-pagination";
@@ -72,6 +73,15 @@ describe("history start pagination", () => {
     );
 
     expect([first.shouldLoad, retried.shouldLoad]).toEqual([true, true]);
+  });
+
+  it("clears an unused gesture when scrolling ends away from the history edge", () => {
+    const armed = rearmHistoryStartPagination(createHistoryStartPaginationState());
+
+    expect(disarmHistoryStartPagination(armed)).toEqual({
+      requestedProgressKey: null,
+      userInitiated: false,
+    });
   });
 
   it("waits while history loading is unavailable or already active", () => {

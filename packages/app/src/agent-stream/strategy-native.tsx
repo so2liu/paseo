@@ -33,6 +33,7 @@ import {
 } from "./strategy";
 import {
   createHistoryStartPaginationState,
+  disarmHistoryStartPagination,
   evaluateHistoryStartPagination,
   rearmHistoryStartPagination,
 } from "./history-start-pagination";
@@ -111,6 +112,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
   const scrollOffsetYRef = useRef(0);
   const isUserScrollActiveRef = useRef(false);
+  const hasArmedHistoryPaginationForGestureRef = useRef(false);
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
   const userScrollEndFrameIdRef = useRef<number | null>(null);
   const programmaticScrollEventBudgetRef = useRef(0);
@@ -263,6 +265,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     };
     scrollOffsetYRef.current = 0;
     isUserScrollActiveRef.current = false;
+    hasArmedHistoryPaginationForGestureRef.current = false;
     clearPendingUserScrollEnd();
     clearNativeViewportSettling();
     setIsNativeViewportSettling(false);
@@ -379,6 +382,16 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     const nearBottom = isScrollEventNearBottom(event);
     onNearBottomChange(nearBottom);
 
+    if (
+      isUserScrollActiveRef.current &&
+      !hasArmedHistoryPaginationForGestureRef.current &&
+      contentOffset.y > previousOffsetY + 1
+    ) {
+      hasArmedHistoryPaginationForGestureRef.current = true;
+      historyStartPaginationStateRef.current = rearmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
+    }
     evaluateHistoryStart();
 
     if (
@@ -397,16 +410,11 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
 
   const handleScrollBeginDrag = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!isLoadingOlderHistory) {
-      historyStartPaginationStateRef.current = rearmHistoryStartPagination(
-        historyStartPaginationStateRef.current,
-      );
-    }
     clearPendingUserScrollEnd();
     isUserScrollActiveRef.current = true;
+    hasArmedHistoryPaginationForGestureRef.current = false;
     scrollKeyboardDismiss.onScrollBeginDrag(event);
     bottomAnchorController.beginUserScroll();
-    evaluateHistoryStart();
   });
 
   // Defer drag end so momentum can take ownership, but capture the terminal
@@ -419,6 +427,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     userScrollEndFrameIdRef.current = requestAnimationFrame(() => {
       userScrollEndFrameIdRef.current = null;
       isUserScrollActiveRef.current = false;
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
       bottomAnchorController.endUserScroll({ isNearBottom });
     });
   });
@@ -437,6 +448,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       const isNearBottom = isScrollEventNearBottom(event);
       clearPendingUserScrollEnd();
       isUserScrollActiveRef.current = false;
+      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
       bottomAnchorController.endUserScroll({ isNearBottom });
     },
   );
