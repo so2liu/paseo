@@ -25,7 +25,7 @@ describe("history start pagination", () => {
     expect([evaluated.shouldLoad, nextCursor.shouldLoad]).toEqual([false, false]);
   });
 
-  it("loads once for each authoritative history cursor", () => {
+  it("loads at most one page for each explicit user gesture", () => {
     const initial = rearmHistoryStartPagination(createHistoryStartPaginationState());
     const first = evaluateHistoryStartPagination(initial, visibleHistoryStart);
     const duplicate = evaluateHistoryStartPagination(first.state, visibleHistoryStart);
@@ -33,15 +33,20 @@ describe("history start pagination", () => {
       ...visibleHistoryStart,
       progressKey: "epoch-1:10",
     });
+    const nextGesture = evaluateHistoryStartPagination(
+      rearmHistoryStartPagination(nextPage.state),
+      { ...visibleHistoryStart, progressKey: "epoch-1:10" },
+    );
 
-    expect([first.shouldLoad, duplicate.shouldLoad, nextPage.shouldLoad]).toEqual([
-      true,
-      false,
-      true,
-    ]);
+    expect([
+      first.shouldLoad,
+      duplicate.shouldLoad,
+      nextPage.shouldLoad,
+      nextGesture.shouldLoad,
+    ]).toEqual([true, false, false, true]);
   });
 
-  it("allows the same revision again after the user leaves the history edge", () => {
+  it("clears consumed intent after the user leaves the history edge", () => {
     const first = evaluateHistoryStartPagination(
       rearmHistoryStartPagination(createHistoryStartPaginationState()),
       visibleHistoryStart,
@@ -52,7 +57,8 @@ describe("history start pagination", () => {
     });
     const returned = evaluateHistoryStartPagination(away.state, visibleHistoryStart);
 
-    expect([first.shouldLoad, away.shouldLoad, returned.shouldLoad]).toEqual([true, false, true]);
+    expect([first.shouldLoad, away.shouldLoad, returned.shouldLoad]).toEqual([true, false, false]);
+    expect(returned.state.userInitiated).toBe(false);
   });
 
   it("re-arms the same cursor when the user makes another upward edge gesture", () => {

@@ -30,7 +30,11 @@ export function evaluateHistoryStartPagination(
 ): { state: HistoryStartPaginationState; shouldLoad: boolean } {
   if (input.distanceFromHistoryStart > HISTORY_START_THRESHOLD_PX) {
     return {
-      state: { ...state, requestedProgressKey: null },
+      state: {
+        ...state,
+        requestedProgressKey: null,
+        userInitiated: state.requestedProgressKey === null && state.userInitiated,
+      },
       shouldLoad: false,
     };
   }
@@ -47,7 +51,7 @@ export function evaluateHistoryStartPagination(
     return { state, shouldLoad: false };
   }
   return {
-    state: { ...state, requestedProgressKey: input.progressKey },
+    state: { requestedProgressKey: input.progressKey, userInitiated: false },
     shouldLoad: true,
   };
 }
