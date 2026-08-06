@@ -564,23 +564,33 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       if (event.ctrlKey) {
         return;
       }
+      if (event.deltaY === 0) {
+        return;
+      }
+      const wheelEndTimeout = pendingWheelInputEndTimeoutRef.current;
+      if (wheelEndTimeout !== null) {
+        pendingWheelInputEndTimeoutRef.current = null;
+        window.clearTimeout(wheelEndTimeout);
+      }
       if (event.deltaY < 0) {
-        const wheelEndTimeout = pendingWheelInputEndTimeoutRef.current;
-        if (wheelEndTimeout !== null) {
-          pendingWheelInputEndTimeoutRef.current = null;
-          window.clearTimeout(wheelEndTimeout);
-        }
         beginHistoryInput("wheel", true);
         pendingUserScrollUpIntentRef.current = true;
         cancelPendingStickToBottom();
         evaluateHistoryStart();
-        pendingWheelInputEndTimeoutRef.current = window.setTimeout(() => {
-          pendingWheelInputEndTimeoutRef.current = null;
-          disarmHistoryInput("wheel");
-        }, WHEEL_SCROLL_SETTLE_TIMEOUT_MS);
-      } else if (event.deltaY > 0) {
+      } else if (activeHistoryInputRef.current === "wheel") {
+        historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+          historyStartPaginationStateRef.current,
+        );
+        historyPaginationArmedForInputRef.current = historyPaginationConsumedForInputRef.current;
+        pendingUserScrollUpIntentRef.current = false;
+      } else {
         disarmHistoryInput();
+        return;
       }
+      pendingWheelInputEndTimeoutRef.current = window.setTimeout(() => {
+        pendingWheelInputEndTimeoutRef.current = null;
+        disarmHistoryInput("wheel");
+      }, WHEEL_SCROLL_SETTLE_TIMEOUT_MS);
     };
     const handleTouchStart = (event: TouchEvent) => {
       const touch = event.touches[0];

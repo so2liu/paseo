@@ -502,6 +502,7 @@ describe("createWebStreamStrategy", () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     });
     act(() => {
+      scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: 1 }));
       scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -1 }));
     });
 
