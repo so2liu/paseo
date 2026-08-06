@@ -446,7 +446,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
 
   const handleTouchStart = useStableEvent((event: GestureResponderEvent) => {
-    clearPendingUserScrollEnd();
     const transition = startNativeHistoryTouch(nativeHistoryTouchStateRef.current, {
       touchCount: event.nativeEvent.touches.length,
       pageY: event.nativeEvent.pageY,
@@ -510,10 +509,12 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     userScrollEndFrameIdRef.current = requestAnimationFrame(() => {
       userScrollEndFrameIdRef.current = null;
       isUserScrollActiveRef.current = false;
-      nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
-      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
-        historyStartPaginationStateRef.current,
-      );
+      if (shouldSettleNativeHistoryTouchOnScrollEnd(nativeHistoryTouchStateRef.current)) {
+        nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
+        historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+          historyStartPaginationStateRef.current,
+        );
+      }
       bottomAnchorController.endUserScroll({ isNearBottom });
     });
   });
