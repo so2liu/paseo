@@ -619,6 +619,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     const handleKeyUp = () => {
       disarmHistoryInput("keyboard");
     };
+    const handleWindowBlur = () => {
+      disarmHistoryInput();
+    };
 
     scrollContainer.addEventListener("scroll", handleDomScroll, { passive: true });
     scrollContainer.addEventListener("wheel", handleWheel, { passive: true });
@@ -627,6 +630,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     window.addEventListener("pointerup", handlePointerUp, { passive: true });
     window.addEventListener("pointercancel", handlePointerUp, { passive: true });
     window.addEventListener("keyup", handleKeyUp, { passive: true });
+    window.addEventListener("blur", handleWindowBlur, { passive: true });
     scrollContainer.addEventListener("touchstart", handleTouchStart, { passive: true });
     scrollContainer.addEventListener("touchmove", handleTouchMove, { passive: true });
     scrollContainer.addEventListener("touchend", handleTouchEnd, { passive: true });
@@ -640,6 +644,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleWindowBlur);
       scrollContainer.removeEventListener("touchstart", handleTouchStart);
       scrollContainer.removeEventListener("touchmove", handleTouchMove);
       scrollContainer.removeEventListener("touchend", handleTouchEnd);

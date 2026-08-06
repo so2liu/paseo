@@ -704,6 +704,17 @@ describe("createWebStreamStrategy", () => {
     });
 
     expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 200 });
+    act(() => scrollContainer.dispatchEvent(new Event("scroll")));
+    act(() => {
+      scrollContainer.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp" }));
+      window.dispatchEvent(new Event("blur"));
+    });
+    Object.defineProperty(scrollContainer, "scrollTop", { configurable: true, value: 64 });
+    act(() => scrollContainer.dispatchEvent(new Event("scroll")));
+
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
   });
 
   it("does not treat a layout-driven scrollTop reduction as user input", async () => {
