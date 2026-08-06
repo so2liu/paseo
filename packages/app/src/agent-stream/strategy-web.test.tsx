@@ -453,6 +453,20 @@ describe("createWebStreamStrategy", () => {
 
     expect(onNearHistoryStart).not.toHaveBeenCalled();
 
+    const input = document.createElement("input");
+    const textarea = document.createElement("textarea");
+    const editable = document.createElement("div");
+    editable.contentEditable = "true";
+    scrollContainer.append(input, textarea, editable);
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", bubbles: true }));
+      editable.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -1, ctrlKey: true }));
+    });
+
+    expect(onNearHistoryStart).not.toHaveBeenCalled();
+
     act(() => {
       scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -1 }));
       scrollContainer?.dispatchEvent(new Event("scroll"));

@@ -78,6 +78,13 @@ function isScrollContainerAtBottom(
   return isScrollContainerNearBottom(scrollContainer, AUTO_SCROLL_RESUME_THRESHOLD_PX);
 }
 
+function isEditableEventTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest("input, textarea, [contenteditable]:not([contenteditable='false'])") !== null
+  );
+}
+
 function scrollElementToBottom(
   scrollContainer: HTMLElement,
   behavior: ScrollBehaviorLike = "auto",
@@ -543,6 +550,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     }
 
     const handleWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) {
+        return;
+      }
       if (event.deltaY < 0) {
         const wheelEndFrame = pendingWheelInputEndFrameRef.current;
         if (wheelEndFrame !== null) {
@@ -606,6 +616,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       disarmHistoryInput("pointer");
     };
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (isEditableEventTarget(event.target)) {
+        return;
+      }
       const isUpwardKey =
         event.key === "ArrowUp" ||
         event.key === "PageUp" ||
