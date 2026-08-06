@@ -45,6 +45,7 @@ import {
   moveNativeHistoryOffset,
   moveNativeHistoryTouch,
   settleNativeHistoryTouch,
+  shouldSettleNativeHistoryTouchOnScrollEnd,
   startNativeHistoryTouch,
 } from "./native-history-scroll-intent";
 import { createNativeHistoryLayoutInvalidationController } from "./native-history-layout-invalidation";
@@ -445,6 +446,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
 
   const handleTouchStart = useStableEvent((event: GestureResponderEvent) => {
+    clearPendingUserScrollEnd();
     const transition = startNativeHistoryTouch(nativeHistoryTouchStateRef.current, {
       touchCount: event.nativeEvent.touches.length,
       pageY: event.nativeEvent.pageY,
@@ -530,10 +532,12 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       const isNearBottom = isScrollEventNearBottom(event);
       clearPendingUserScrollEnd();
       isUserScrollActiveRef.current = false;
-      nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
-      historyStartPaginationStateRef.current = disarmHistoryStartPagination(
-        historyStartPaginationStateRef.current,
-      );
+      if (shouldSettleNativeHistoryTouchOnScrollEnd(nativeHistoryTouchStateRef.current)) {
+        nativeHistoryTouchStateRef.current = settleNativeHistoryTouch();
+        historyStartPaginationStateRef.current = disarmHistoryStartPagination(
+          historyStartPaginationStateRef.current,
+        );
+      }
       bottomAnchorController.endUserScroll({ isNearBottom });
     },
   );

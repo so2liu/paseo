@@ -3,6 +3,7 @@ const NATIVE_INVERTED_HISTORY_TOUCH_INTENT_THRESHOLD_PX = 4;
 
 export interface NativeHistoryTouchState {
   startPageY: number | null;
+  activeTouchCount: number;
   multiTouchBlocked: boolean;
   paginationArmed: boolean;
   paginationConsumed: boolean;
@@ -20,6 +21,7 @@ type NativeHistoryDirection = "none" | "toward-history" | "toward-newer";
 export function createNativeHistoryTouchState(): NativeHistoryTouchState {
   return {
     startPageY: null,
+    activeTouchCount: 0,
     multiTouchBlocked: false,
     paginationArmed: false,
     paginationConsumed: false,
@@ -99,7 +101,12 @@ export function startNativeHistoryTouch(
 ): NativeHistoryTouchTransition {
   if (input.touchCount !== 1) {
     return {
-      state: { ...state, startPageY: null, multiTouchBlocked: true },
+      state: {
+        ...state,
+        startPageY: null,
+        activeTouchCount: input.touchCount,
+        multiTouchBlocked: true,
+      },
       shouldArmPagination: false,
       shouldDisarmPagination: true,
       shouldResetPaginationBudget: false,
@@ -107,7 +114,7 @@ export function startNativeHistoryTouch(
   }
   if (state.multiTouchBlocked) {
     return {
-      state,
+      state: { ...state, activeTouchCount: input.touchCount },
       shouldArmPagination: false,
       shouldDisarmPagination: false,
       shouldResetPaginationBudget: false,
@@ -117,6 +124,7 @@ export function startNativeHistoryTouch(
     state: {
       ...state,
       startPageY: input.pageY,
+      activeTouchCount: input.touchCount,
       paginationArmed: false,
       paginationConsumed: false,
     },
@@ -133,7 +141,14 @@ export function moveNativeHistoryTouch(
   if (state.multiTouchBlocked || input.touchCount !== 1) {
     return {
       state:
-        input.touchCount === 1 ? state : { ...state, startPageY: null, multiTouchBlocked: true },
+        input.touchCount === 1
+          ? { ...state, activeTouchCount: input.touchCount }
+          : {
+              ...state,
+              startPageY: null,
+              activeTouchCount: input.touchCount,
+              multiTouchBlocked: true,
+            },
       shouldArmPagination: false,
       shouldDisarmPagination: input.touchCount !== 1,
       shouldResetPaginationBudget: false,
@@ -147,7 +162,10 @@ export function moveNativeHistoryTouch(
     delta,
     NATIVE_INVERTED_HISTORY_TOUCH_INTENT_THRESHOLD_PX,
   );
-  return transitionNativeHistoryDirection(state, direction);
+  return transitionNativeHistoryDirection(
+    { ...state, activeTouchCount: input.touchCount },
+    direction,
+  );
 }
 
 export function endNativeHistoryTouch(
@@ -159,6 +177,7 @@ export function endNativeHistoryTouch(
     state: {
       ...state,
       startPageY: null,
+      activeTouchCount: input.remainingTouchCount,
       multiTouchBlocked:
         wasMultiTouch && (input.isUserScrollActive || input.remainingTouchCount > 0),
     },
@@ -170,4 +189,8 @@ export function endNativeHistoryTouch(
 
 export function settleNativeHistoryTouch(): NativeHistoryTouchState {
   return createNativeHistoryTouchState();
+}
+
+export function shouldSettleNativeHistoryTouchOnScrollEnd(state: NativeHistoryTouchState): boolean {
+  return state.activeTouchCount === 0;
 }

@@ -8,6 +8,7 @@ import {
   moveNativeHistoryTouch,
   moveNativeHistoryOffset,
   settleNativeHistoryTouch,
+  shouldSettleNativeHistoryTouchOnScrollEnd,
   startNativeHistoryTouch,
 } from "./native-history-scroll-intent";
 
@@ -64,6 +65,7 @@ describe("native history scroll intent", () => {
 
     expect(settleNativeHistoryTouch()).toEqual({
       startPageY: null,
+      activeTouchCount: 0,
       multiTouchBlocked: false,
       paginationArmed: false,
       paginationConsumed: false,
@@ -115,5 +117,19 @@ describe("native history scroll intent", () => {
       shouldDisarmPagination: true,
       state: { paginationArmed: false, paginationConsumed: false },
     });
+  });
+
+  it("does not let an old scroll settlement discard a newer active touch", () => {
+    const activeTouch = startNativeHistoryTouch(createNativeHistoryTouchState(), {
+      touchCount: 1,
+      pageY: 200,
+    });
+    expect(shouldSettleNativeHistoryTouchOnScrollEnd(activeTouch.state)).toBe(false);
+
+    const released = endNativeHistoryTouch(activeTouch.state, {
+      remainingTouchCount: 0,
+      isUserScrollActive: true,
+    });
+    expect(shouldSettleNativeHistoryTouchOnScrollEnd(released.state)).toBe(true);
   });
 });
