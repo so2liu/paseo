@@ -303,16 +303,22 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     [applyHistoryInputTransition],
   );
 
-  const scheduleTouchHistoryInputEnd = useCallback(() => {
+  const clearPendingTouchHistoryInputEnd = useCallback(() => {
     const pendingTimeout = pendingTouchInputEndTimeoutRef.current;
-    if (pendingTimeout !== null) {
-      window.clearTimeout(pendingTimeout);
+    if (pendingTimeout === null) {
+      return;
     }
+    pendingTouchInputEndTimeoutRef.current = null;
+    window.clearTimeout(pendingTimeout);
+  }, []);
+
+  const scheduleTouchHistoryInputEnd = useCallback(() => {
+    clearPendingTouchHistoryInputEnd();
     pendingTouchInputEndTimeoutRef.current = window.setTimeout(() => {
       pendingTouchInputEndTimeoutRef.current = null;
       disarmHistoryInput("touch");
     }, TOUCH_SCROLL_SETTLE_TIMEOUT_MS);
-  }, [disarmHistoryInput]);
+  }, [clearPendingTouchHistoryInputEnd, disarmHistoryInput]);
 
   const measureVirtualizedRowElement = useCallback(
     (node: HTMLDivElement | null) => {
@@ -605,6 +611,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       }
     };
     const handleTouchStart = (event: TouchEvent) => {
+      clearPendingTouchHistoryInputEnd();
       applyHistoryInputTransition(
         startWebTouchInput(
           historyInputRef.current,
@@ -717,6 +724,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     applyHistoryInputTransition,
     beginHistoryInput,
     cancelPendingStickToBottom,
+    clearPendingTouchHistoryInputEnd,
     disarmHistoryInput,
     evaluateHistoryStart,
     handleDomScroll,
