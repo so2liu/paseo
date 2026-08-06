@@ -166,6 +166,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const lastKnownScrollTopRef = useRef(0);
   const pendingUserScrollUpIntentRef = useRef(false);
   const touchStartClientYRef = useRef<number | null>(null);
+  const isMultiTouchGestureRef = useRef(false);
   const activeHistoryInputRef = useRef<WebHistoryInputKind | null>(null);
   const activeKeyboardKeyRef = useRef<string | null>(null);
   const historyPaginationArmedForInputRef = useRef(false);
@@ -593,6 +594,15 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       }, WHEEL_SCROLL_SETTLE_TIMEOUT_MS);
     };
     const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        isMultiTouchGestureRef.current = true;
+        touchStartClientYRef.current = null;
+        disarmHistoryInput();
+        return;
+      }
+      if (isMultiTouchGestureRef.current) {
+        return;
+      }
       const touch = event.touches[0];
       if (!touch) {
         return;
@@ -601,6 +611,14 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       touchStartClientYRef.current = touch.clientY;
     };
     const handleTouchMove = (event: TouchEvent) => {
+      if (isMultiTouchGestureRef.current || event.touches.length !== 1) {
+        if (event.touches.length !== 1) {
+          isMultiTouchGestureRef.current = true;
+          touchStartClientYRef.current = null;
+          disarmHistoryInput("touch");
+        }
+        return;
+      }
       const touch = event.touches[0];
       if (!touch) {
         return;
@@ -619,11 +637,18 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         pendingUserScrollUpIntentRef.current = false;
       }
     };
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (event: TouchEvent) => {
+      if (isMultiTouchGestureRef.current || event.touches.length > 0) {
+        isMultiTouchGestureRef.current = event.touches.length > 0;
+        touchStartClientYRef.current = null;
+        disarmHistoryInput("touch");
+        return;
+      }
       touchStartClientYRef.current = null;
       scheduleTouchHistoryInputEnd();
     };
     const handleTouchCancel = () => {
+      isMultiTouchGestureRef.current = false;
       touchStartClientYRef.current = null;
       disarmHistoryInput("touch");
     };

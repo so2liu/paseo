@@ -679,8 +679,23 @@ describe("createWebStreamStrategy", () => {
 
     expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
 
+    const touchListEvent = (type: string, clientYs: number[]) => {
+      const event = new Event(type);
+      Object.defineProperty(event, "touches", {
+        value: clientYs.map((clientY) => ({ clientY })),
+      });
+      return event;
+    };
     act(() => {
-      scrollContainer.dispatchEvent(touchEvent("touchend"));
+      scrollContainer.dispatchEvent(touchListEvent("touchstart", [100, 200]));
+      scrollContainer.dispatchEvent(touchListEvent("touchmove", [140, 180]));
+      scrollContainer.dispatchEvent(touchListEvent("touchend", [140]));
+      scrollContainer.dispatchEvent(touchListEvent("touchmove", [160]));
+    });
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      scrollContainer.dispatchEvent(touchListEvent("touchend", []));
       scrollContainer.dispatchEvent(touchEvent("touchstart", 100));
       scrollContainer.dispatchEvent(touchEvent("touchmove", 120));
     });
