@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  consumeNativeHistoryPagination,
   createNativeHistoryTouchState,
   endNativeHistoryTouch,
   hasNativeGestureMovedTowardHistoryStart,
   hasNativeInvertedTouchMovedTowardHistoryStart,
   moveNativeHistoryTouch,
+  moveNativeHistoryOffset,
   settleNativeHistoryTouch,
   startNativeHistoryTouch,
 } from "./native-history-scroll-intent";
@@ -45,7 +47,6 @@ describe("native history scroll intent", () => {
     transition = moveNativeHistoryTouch(transition.state, {
       touchCount: 1,
       pageY: 220,
-      paginationBudgetConsumed: false,
     });
     expect(transition.shouldArmPagination).toBe(false);
 
@@ -58,13 +59,61 @@ describe("native history scroll intent", () => {
       moveNativeHistoryTouch(transition.state, {
         touchCount: 1,
         pageY: 240,
-        paginationBudgetConsumed: false,
       }).shouldArmPagination,
     ).toBe(false);
 
     expect(settleNativeHistoryTouch()).toEqual({
       startPageY: null,
       multiTouchBlocked: false,
+      paginationArmed: false,
+      paginationConsumed: false,
+    });
+  });
+
+  it("disarms unused reverse movement without restoring a consumed budget", () => {
+    let transition = startNativeHistoryTouch(createNativeHistoryTouchState(), {
+      touchCount: 1,
+      pageY: 200,
+    });
+    transition = moveNativeHistoryTouch(transition.state, { touchCount: 1, pageY: 220 });
+    expect(transition).toMatchObject({
+      shouldArmPagination: true,
+      state: { paginationArmed: true, paginationConsumed: false },
+    });
+
+    transition = moveNativeHistoryTouch(transition.state, { touchCount: 1, pageY: 180 });
+    expect(transition).toMatchObject({
+      shouldDisarmPagination: true,
+      state: { paginationArmed: false, paginationConsumed: false },
+    });
+    transition = moveNativeHistoryTouch(transition.state, { touchCount: 1, pageY: 220 });
+    expect(transition.shouldArmPagination).toBe(true);
+
+    const consumed = consumeNativeHistoryPagination(transition.state);
+    const consumedReverse = moveNativeHistoryTouch(consumed, { touchCount: 1, pageY: 180 });
+    expect(consumedReverse).toMatchObject({
+      shouldDisarmPagination: true,
+      state: { paginationArmed: true, paginationConsumed: true },
+    });
+    expect(
+      moveNativeHistoryTouch(consumedReverse.state, { touchCount: 1, pageY: 220 })
+        .shouldArmPagination,
+    ).toBe(false);
+  });
+
+  it("applies the same reversal budget to native offset movement", () => {
+    let transition = moveNativeHistoryOffset(createNativeHistoryTouchState(), {
+      gestureStartOffsetY: 40,
+      currentOffsetY: 60,
+    });
+    expect(transition.shouldArmPagination).toBe(true);
+    transition = moveNativeHistoryOffset(transition.state, {
+      gestureStartOffsetY: 40,
+      currentOffsetY: 20,
+    });
+    expect(transition).toMatchObject({
+      shouldDisarmPagination: true,
+      state: { paginationArmed: false, paginationConsumed: false },
     });
   });
 });
