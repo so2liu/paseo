@@ -1970,12 +1970,14 @@ export class OmpAgentSession implements AgentSession {
     event: Extract<OmpAgentSessionEvent, { type: "message_update" }>,
     turnId: string | undefined,
   ): void {
-    if (event.message.role !== "assistant") {
+    // Newer pi-derived runtimes omit the cumulative message and send deltas only, so the role
+    // is only checkable when the legacy field is present.
+    if (event.message && event.message.role !== "assistant") {
       return;
     }
     if (event.assistantMessageEvent.type === "text_delta") {
       // Omp-compatible runtimes may emit updates without a preceding message_start.
-      this.activeAssistantMessageId ??= event.message.responseId || randomUUID();
+      this.activeAssistantMessageId ??= event.message?.responseId || randomUUID();
       this.emit({
         type: "timeline",
         provider: this.provider,

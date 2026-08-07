@@ -495,6 +495,37 @@ describe("OMP agent client and session", () => {
     expect(omp.isClosed()).toBe(true);
   });
 
+  test("streams assistant deltas when the runtime omits the cumulative message", async () => {
+    const omp = new OmpHarness();
+    await omp.start();
+
+    await omp.requireStartTurn("hello");
+    const runtime = omp.runtime();
+    runtime.beginTurn();
+    runtime.emit({
+      type: "message_start",
+      message: { role: "assistant", content: [], responseId: "assistant-1" },
+    });
+    runtime.emit({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: "hel" },
+    });
+    runtime.emit({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: "lo" },
+    });
+    runtime.emit({
+      type: "message_update",
+      assistantMessageEvent: { type: "thinking_delta", delta: "thinking" },
+    });
+
+    expect(omp.timeline()).toEqual([
+      { type: "assistant_message", text: "hel", messageId: "assistant-1" },
+      { type: "assistant_message", text: "lo", messageId: "assistant-1" },
+      { type: "reasoning", text: "thinking" },
+    ]);
+  });
+
   test("interrupt terminalizes in-flight tool calls and running subagents", async () => {
     const omp = new OmpHarness();
     await omp.start();
