@@ -157,7 +157,11 @@ export type PiAgentSessionEvent =
   | { type: "message_end"; message: PiAgentMessage }
   | {
       type: "message_update";
-      message: PiAgentMessage;
+      // COMPAT(piCumulativeMessageUpdate): added in v0.2.5, remove after 2027-02-07 once the
+      // supported pi floor is >= 0.84. pi <= 0.83 repeated the cumulative assistant message on
+      // every update; pi >= 0.84 sends deltas only, and message_start/message_end carry the
+      // authoritative message.
+      message?: PiAgentMessage;
       assistantMessageEvent: PiAssistantMessageEvent;
     }
   | {

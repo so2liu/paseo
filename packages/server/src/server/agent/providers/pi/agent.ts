@@ -2199,12 +2199,14 @@ export class PiRpcAgentSession implements AgentSession {
     event: Extract<PiAgentSessionEvent, { type: "message_update" }>,
     turnId: string | undefined,
   ): void {
-    if (event.message.role !== "assistant") {
+    // pi >= 0.84 omits the cumulative message and sends deltas only, so the role is only
+    // checkable when the legacy field is present.
+    if (event.message && event.message.role !== "assistant") {
       return;
     }
     if (event.assistantMessageEvent.type === "text_delta") {
       // Pi-compatible runtimes may emit updates without a preceding message_start.
-      this.activeAssistantMessageId ??= event.message.responseId || randomUUID();
+      this.activeAssistantMessageId ??= event.message?.responseId || randomUUID();
       this.emit({
         type: "timeline",
         provider: this.provider,

@@ -281,7 +281,10 @@ export const OmpAgentSessionEventSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("message_update"),
-      message: OmpAgentMessageSchema,
+      // COMPAT(ompCumulativeMessageUpdate): added in v0.2.5, remove after 2027-02-07. Pi-derived
+      // runtimes dropped the cumulative message from message_update in pi 0.84; keeping it
+      // required would make every streamed delta fail validation and disappear.
+      message: OmpAgentMessageSchema.optional(),
       assistantMessageEvent: OmpAssistantMessageEventSchema,
     })
     .passthrough(),
