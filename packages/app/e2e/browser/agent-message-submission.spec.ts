@@ -259,7 +259,10 @@ async function expectRejectedSubmissionRestored(
   page: Page,
   input: { prompt: string; errorMessage: string },
 ): Promise<void> {
-  await expect(page.getByText(input.errorMessage)).toBeVisible({ timeout: 30_000 });
+  // Two surfaces carry the rejection on this fork: the "[System Error] ..." row in the chat
+  // and the toast. The test is about the draft being restored and retryable, not about how
+  // many places report the failure, so the first match is enough.
+  await expect(page.getByText(input.errorMessage).first()).toBeVisible({ timeout: 30_000 });
   await expectComposerDraft(page, input.prompt);
   await expectComposerEditable(page);
   await expectAttachmentPill(page, "composer-image-attachment-pill");

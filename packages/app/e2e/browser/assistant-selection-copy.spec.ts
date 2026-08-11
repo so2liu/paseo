@@ -356,7 +356,11 @@ test("copying an assistant selection preserves Markdown structure and links", as
     expect(clipboard.html).toContain(
       '<strong><a href="https://example.com/issues/1">First issue</a></strong>',
     );
-    expect(clipboard.html).toContain("<code>apply_patch</code>");
+    // The fork pastes inline code as a styled inline span rather than <code>: a <code> block
+    // breaks the line in editors that treat it as block-level, which is what
+    // "keep inline code inline when pasted" fixed. utils/rich-clipboard.test.ts owns the markup.
+    expect(clipboard.html).toContain(">apply_patch</span>");
+    expect(clipboard.html).not.toContain("<code>apply_patch</code>");
     expect(clipboard.html).toContain("<div>5. Fifth item</div>");
     expect(clipboard.html).toContain("A hard break<br>");
     expect(clipboard.html).toContain(
@@ -371,10 +375,11 @@ test("copying an assistant selection preserves Markdown structure and links", as
     expect(clipboard.html).toContain(
       '<a href="file:///tmp/paseo%20notes.md#L4">workspace file</a>',
     );
-    expect(clipboard.html).toContain("<code>https://example.com/generated</code>");
-    expect(clipboard.html).not.toContain(
-      '<a href="https://example.com/generated"><code>https://example.com/generated</code></a>',
-    );
+    // Same fork inline-code markup as above: a styled span, not <code>. The point of these
+    // two assertions is that an autolink inside inline code stays plain text rather than
+    // becoming a link, and that still holds.
+    expect(clipboard.html).toContain(">https://example.com/generated</span>");
+    expect(clipboard.html).not.toContain('<a href="https://example.com/generated">');
     expect(clipboard.html).toContain('<code class="language-typescript">');
     expect(clipboard.html).toContain(
       '<pre><code class="language-text">before\n```\nafter\n</code></pre>',
