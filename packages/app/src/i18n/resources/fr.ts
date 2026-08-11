@@ -37,6 +37,8 @@ export const fr: TranslationResources = {
       daemonClientUnavailable: "ClientDaemonindisponible",
       daemonClientDisconnected: "Le clientDaemonest déconnecté",
       noFileFound: "Aucun fichier trouvé pour{{token}}",
+      ambiguousFile:
+        "Plusieurs fichiers correspondent à {{token}} ; demandez le chemin complet à l'agent",
       unexpectedDictationError:
         "Une erreur inattendue s'est produite lors du traitement de la dictée.",
     },
@@ -1052,6 +1054,10 @@ export const fr: TranslationResources = {
         serviceRunning: "Service {{name}} en cours",
         serviceUnhealthy: "Service {{name}} en échec",
         creating: "Création...",
+      },
+      kind: {
+        worktree: "Worktree",
+        local: "Local",
       },
       actions: {
         menu: "ActionsWorkspace",

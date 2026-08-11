@@ -37,6 +37,7 @@ export const es: TranslationResources = {
       daemonClientUnavailable: "ClienteDaemonno disponible",
       daemonClientDisconnected: "El clienteDaemonestá desconectado",
       noFileFound: "No se encontró ningún archivo para{{token}}",
+      ambiguousFile: "Varios archivos coinciden con {{token}}; pide al agente la ruta completa",
       unexpectedDictationError: "Se produjo un error inesperado al manejar el dictado.",
     },
     connectionStatus: {
@@ -1053,6 +1054,10 @@ export const es: TranslationResources = {
         serviceRunning: "Servicio {{name}} en ejecución",
         serviceUnhealthy: "Servicio {{name}} con fallos",
         creating: "Creando...",
+      },
+      kind: {
+        worktree: "Worktree",
+        local: "Local",
       },
       actions: {
         menu: "AccionesWorkspace",

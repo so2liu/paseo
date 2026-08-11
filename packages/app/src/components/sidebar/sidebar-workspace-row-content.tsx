@@ -1,4 +1,5 @@
 import { memo, useId, useMemo, useCallback, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, type GestureResponderEvent, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
@@ -28,6 +29,7 @@ import {
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { StatusRing } from "@/components/status-ring";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { workspaceKindLabelKey } from "@/components/sidebar/workspace-kind-label";
 import { formatTimeAgo } from "@/utils/time";
 
 // The scrim spans more than the kebab so the fade starts left of the diff stat. Solid from
@@ -199,11 +201,10 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             </Text>
             <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
           </View>
-          {workspace.createdAt ? (
-            <Text style={styles.workspaceSubtitle} numberOfLines={1}>
-              {formatTimeAgo(workspace.createdAt)}
-            </Text>
-          ) : null}
+          <WorkspaceCreatedRow
+            createdAt={workspace.createdAt ?? null}
+            workspaceKind={workspace.workspaceKind}
+          />
           <WorkspaceMetaRow
             hostBadge={hostBadge ?? null}
             prHint={workspace.prHint}
@@ -224,6 +225,40 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     </View>
   );
 });
+
+/**
+ * When the row was created, and what backs it.
+ *
+ * The kind sits next to the time because both answer "which of these near-identical rows is
+ * the one I want" — a worktree and the checkout it was cut from otherwise read the same, and
+ * the leading glyph only shows the kind while the row is idle.
+ */
+function WorkspaceCreatedRow({
+  createdAt,
+  workspaceKind,
+}: {
+  createdAt: Date | null;
+  workspaceKind: SidebarWorkspaceEntry["workspaceKind"];
+}) {
+  const { t } = useTranslation();
+  if (!createdAt) return null;
+  const kindLabel = t(workspaceKindLabelKey(workspaceKind));
+  return (
+    <View style={styles.workspaceCreatedRow}>
+      <Text style={styles.workspaceSubtitle} numberOfLines={1}>
+        {formatTimeAgo(createdAt)}
+      </Text>
+      <Text style={styles.workspaceSubtitle}>·</Text>
+      <Text
+        style={styles.workspaceSubtitle}
+        numberOfLines={1}
+        testID={`sidebar-workspace-kind-${workspaceKind}`}
+      >
+        {kindLabel}
+      </Text>
+    </View>
+  );
+}
 
 function MarkDoneButton({ onPress }: { onPress: () => void }) {
   const [isHovered, setIsHovered] = useState(false);
@@ -576,6 +611,11 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
     lineHeight: Math.round(theme.fontSize.xs * 1.2),
+  },
+  workspaceCreatedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
   },
   workspaceMarkDoneRow: {
     flexDirection: "row",

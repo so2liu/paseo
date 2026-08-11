@@ -35,6 +35,7 @@ export const en = {
       daemonClientUnavailable: "Daemon client unavailable",
       daemonClientDisconnected: "Daemon client is disconnected",
       noFileFound: "No file found for {{token}}",
+      ambiguousFile: "Several files match {{token}}; ask the agent for the full path",
       unexpectedDictationError: "An unexpected error occurred while handling dictation.",
     },
     connectionStatus: {
@@ -1032,6 +1033,10 @@ export const en = {
         serviceRunning: "Service {{name}} running",
         serviceUnhealthy: "Service {{name}} unhealthy",
         creating: "Creating...",
+      },
+      kind: {
+        worktree: "Worktree",
+        local: "Local",
       },
       actions: {
         menu: "Workspace actions",
