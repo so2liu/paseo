@@ -1023,6 +1023,10 @@ export const ar: TranslationResources = {
         serviceUnhealthy: "الخدمة {{name}} غير سليمة",
         creating: "جارٍ الإنشاء...",
       },
+      kind: {
+        worktree: "شجرة عمل",
+        local: "محلي",
+      },
       actions: {
         menu: "إجراءات Workspace",
         newWorkspace: "مساحة عمل جديدة",

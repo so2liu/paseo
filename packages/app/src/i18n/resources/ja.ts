@@ -1034,6 +1034,10 @@ export const ja: TranslationResources = {
         serviceUnhealthy: "サービス {{name}} 異常",
         creating: "作成中...",
       },
+      kind: {
+        worktree: "ワークツリー",
+        local: "ローカル",
+      },
       actions: {
         menu: "ワークスペースアクション",
         newWorkspace: "新しいワークスペース",

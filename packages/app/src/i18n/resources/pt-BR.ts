@@ -1045,6 +1045,10 @@ export const ptBR: TranslationResources = {
         serviceUnhealthy: "Serviço {{name}} com falha",
         creating: "Criando...",
       },
+      kind: {
+        worktree: "Worktree",
+        local: "Local",
+      },
       actions: {
         menu: "Ações do workspace",
         newWorkspace: "Novo workspace",

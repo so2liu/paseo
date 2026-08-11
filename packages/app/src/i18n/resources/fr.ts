@@ -1053,6 +1053,10 @@ export const fr: TranslationResources = {
         serviceUnhealthy: "Service {{name}} en échec",
         creating: "Création...",
       },
+      kind: {
+        worktree: "Worktree",
+        local: "Local",
+      },
       actions: {
         menu: "ActionsWorkspace",
         newWorkspace: "Nouvel espace de travail",

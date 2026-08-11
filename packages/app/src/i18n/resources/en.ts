@@ -1033,6 +1033,10 @@ export const en = {
         serviceUnhealthy: "Service {{name}} unhealthy",
         creating: "Creating...",
       },
+      kind: {
+        worktree: "Worktree",
+        local: "Local",
+      },
       actions: {
         menu: "Workspace actions",
         newWorkspace: "New workspace",

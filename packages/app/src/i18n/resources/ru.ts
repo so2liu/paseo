@@ -1045,6 +1045,10 @@ export const ru: TranslationResources = {
         serviceUnhealthy: "Сервис {{name}} неисправен",
         creating: "Создание...",
       },
+      kind: {
+        worktree: "Worktree",
+        local: "Локально",
+      },
       actions: {
         menu: "Действия Workspace",
         newWorkspace: "Новое рабочее пространство",

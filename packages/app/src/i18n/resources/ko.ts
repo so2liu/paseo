@@ -1030,6 +1030,10 @@ export const ko: TranslationResources = {
         serviceUnhealthy: "서비스 {{name}} 비정상",
         creating: "생성하는 중...",
       },
+      kind: {
+        worktree: "워크트리",
+        local: "로컬",
+      },
       actions: {
         menu: "워크스페이스 작업",
         newWorkspace: "새 워크스페이스",

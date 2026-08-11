@@ -1013,6 +1013,10 @@ export const zhCN: TranslationResources = {
         serviceUnhealthy: "服务 {{name}} 异常",
         creating: "正在创建...",
       },
+      kind: {
+        worktree: "工作树",
+        local: "本地",
+      },
       actions: {
         menu: "Workspace 操作",
         newWorkspace: "新建 workspace",

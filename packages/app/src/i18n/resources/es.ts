@@ -1054,6 +1054,10 @@ export const es: TranslationResources = {
         serviceUnhealthy: "Servicio {{name}} con fallos",
         creating: "Creando...",
       },
+      kind: {
+        worktree: "Worktree",
+        local: "Local",
+      },
       actions: {
         menu: "AccionesWorkspace",
         newWorkspace: "Nuevo espacio de trabajo",
