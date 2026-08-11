@@ -37,6 +37,7 @@ export const zhCN: TranslationResources = {
       daemonClientUnavailable: "Daemon client 不可用",
       daemonClientDisconnected: "Daemon client 已断开连接",
       noFileFound: "未找到 {{token}} 对应的文件",
+      ambiguousFile: "有多个文件匹配 {{token}}，请让智能体给出完整路径",
       unexpectedDictationError: "处理听写时发生意外错误。",
     },
     connectionStatus: {

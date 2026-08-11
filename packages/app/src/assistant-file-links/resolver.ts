@@ -67,6 +67,52 @@ export class UnresolvedFileLinkError extends Error {
   }
 }
 
+export class AmbiguousFileLinkError extends Error {
+  constructor(readonly token: string) {
+    super(i18n.t("common.errors.ambiguousFile", { token }));
+    this.name = "AmbiguousFileLinkError";
+  }
+}
+
+/**
+ * How many candidates to ask for before deciding a bare name is ambiguous.
+ *
+ * One is not enough: with `limit: 1` the daemon's ranking silently decides which
+ * `design.md` in the repo the agent meant, and its tie-breakers (match offset, then
+ * path order) have nothing to do with intent — a directory whose name starts with a
+ * digit wins over the one the user is working in. Asking for a page of candidates is
+ * what makes "more than one match" observable at all.
+ */
+const AMBIGUITY_LOOKUP_LIMIT = 25;
+
+/**
+ * Pick the file an agent meant by a path suffix, or nothing.
+ *
+ * Depth is the only signal that carries intent here. A name written without any
+ * directory means the file the workspace is organized around, so the shallowest match
+ * wins; `design.md` at the root beats `260402-sandbox/design.md`. When the shallowest
+ * depth is shared, nothing in the message distinguishes the candidates, and opening an
+ * arbitrary one is worse than saying so — the user follows a link and silently lands in
+ * an unrelated file.
+ */
+function selectUnambiguousMatch(entries: DirectorySuggestionEntry[]): {
+  match: DirectorySuggestionEntry | null;
+  ambiguous: boolean;
+} {
+  const files = entries.filter((entry) => entry.kind === "file");
+  if (files.length === 0) return { match: null, ambiguous: false };
+
+  const depthOf = (entry: DirectorySuggestionEntry) =>
+    entry.path.replace(/\\/g, "/").split("/").filter(Boolean).length;
+  const shallowest = Math.min(...files.map(depthOf));
+  const contenders = files.filter((entry) => depthOf(entry) === shallowest);
+  const [match] = contenders;
+  if (!match || contenders.length > 1) {
+    return { match: null, ambiguous: true };
+  }
+  return { match, ambiguous: false };
+}
+
 export async function fetchDaemonResolution({
   ambiguousQuery,
   token,
@@ -87,15 +133,19 @@ export async function fetchDaemonResolution({
       includeFiles: true,
       includeDirectories: false,
       matchMode: "suffix",
-      limit: 1,
+      limit: AMBIGUITY_LOOKUP_LIMIT,
     });
   } catch {
     throw new UnresolvedFileLinkError(token);
   }
 
-  const match = suggestions.entries.find((entry) => entry.kind === "file");
-  if (!match || suggestions.error) {
+  if (suggestions.error) {
     throw new UnresolvedFileLinkError(token);
+  }
+
+  const { match, ambiguous } = selectUnambiguousMatch(suggestions.entries);
+  if (!match) {
+    throw ambiguous ? new AmbiguousFileLinkError(token) : new UnresolvedFileLinkError(token);
   }
 
   return {

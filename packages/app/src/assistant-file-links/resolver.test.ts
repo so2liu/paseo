@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AmbiguousFileLinkError,
   classifyForResolution,
   fetchDaemonResolution,
   getAssistantFileLinkToken,
@@ -191,7 +192,7 @@ describe("fetchDaemonResolution", () => {
         query: "file.ts",
         cwd: "/Users/test/project",
         matchMode: "suffix",
-        limit: 1,
+        limit: 25,
       },
     ]);
     expect(result).toEqual({
@@ -236,6 +237,53 @@ describe("fetchDaemonResolution", () => {
         getDirectorySuggestions: unavailableSuggestions,
       }),
     ).rejects.toEqual(new UnresolvedFileLinkError("dumm.md"));
+  });
+  it("prefers the shallowest match when a bare name appears in several directories", async () => {
+    const { getDirectorySuggestions } = suggestionsFromMap({
+      "design.md": [
+        { path: "260402-sandbox/design.md", kind: "file" },
+        { path: "design.md", kind: "file" },
+      ],
+    });
+
+    const result = await fetchDaemonResolution({
+      ambiguousQuery: "design.md",
+      token: "design.md",
+      target: {
+        raw: "design.md",
+        path: "/Users/test/project/design.md",
+        lineStart: undefined,
+        lineEnd: undefined,
+      },
+      workspaceRoot: "/Users/test/project",
+      getDirectorySuggestions,
+    });
+
+    expect(result.path).toBe("/Users/test/project/design.md");
+  });
+
+  it("refuses to guess when equally shallow files share the bare name", async () => {
+    const { getDirectorySuggestions } = suggestionsFromMap({
+      "design.md": [
+        { path: "260402-sandbox/design.md", kind: "file" },
+        { path: "docs/design.md", kind: "file" },
+      ],
+    });
+
+    await expect(
+      fetchDaemonResolution({
+        ambiguousQuery: "design.md",
+        token: "design.md",
+        target: {
+          raw: "design.md",
+          path: "/Users/test/project/design.md",
+          lineStart: undefined,
+          lineEnd: undefined,
+        },
+        workspaceRoot: "/Users/test/project",
+        getDirectorySuggestions,
+      }),
+    ).rejects.toBeInstanceOf(AmbiguousFileLinkError);
   });
 });
 

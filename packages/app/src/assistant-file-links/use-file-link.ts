@@ -10,6 +10,7 @@ import {
   type AssistantFileLinkResolverContextValue,
 } from "./provider";
 import {
+  AmbiguousFileLinkError,
   classifyForResolution,
   fetchDaemonResolution,
   type AssistantFileLinkResolution,
@@ -337,7 +338,11 @@ async function dispatchUnresolvedError(input: {
   ) {
     return;
   }
-  current.toast?.show(input.noFileFoundMessage, {
+  // An ambiguous name carries its own message: "not found" would be wrong and would send
+  // the user looking for a file that is there several times over.
+  const message =
+    input.error instanceof AmbiguousFileLinkError ? input.error.message : input.noFileFoundMessage;
+  current.toast?.show(message, {
     variant: "error",
     testID: "assistant-file-link-not-found-toast",
   });
