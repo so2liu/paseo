@@ -2199,8 +2199,6 @@ export class PiRpcAgentSession implements AgentSession {
     event: Extract<PiAgentSessionEvent, { type: "message_update" }>,
     turnId: string | undefined,
   ): void {
-    // pi >= 0.84 omits the cumulative message and sends deltas only, so the role is only
-    // checkable when the legacy field is present.
     if (event.message && event.message.role !== "assistant") {
       return;
     }

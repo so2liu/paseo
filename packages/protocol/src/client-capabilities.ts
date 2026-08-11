@@ -24,6 +24,10 @@ export const CLIENT_CAPS = {
   // queue snapshots to clients whose outbound schema includes these messages.
   // Remove the gate after 2027-01-20.
   agentMessageQueue: "agent_message_queue",
+  // COMPAT(compactProviderSnapshots): added in v0.2.X. Capable clients receive
+  // provider catalogs with shared thinking sets and may revalidate by content hash.
+  // Remove the legacy snapshot encoding after 2027-02-04.
+  compactProviderSnapshots: "compact_provider_snapshots",
   browserHost: "browser_host",
 } as const;
 
