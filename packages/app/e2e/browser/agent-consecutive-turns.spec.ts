@@ -720,7 +720,9 @@ async function recordDelayedRunningTransition(
   const gate = await installDaemonWebSocketGate(page);
   await openAgentRoute(page, { workspaceId: agent.workspaceId, agentId: agent.agentId });
   await expectAgentIdle(page);
-  await expect(page.getByRole("button", { name: "Copy turn" })).toHaveCount(1);
+  // The fork splits upstream's "Copy turn" into "Copy conclusion" and "Copy full response";
+  // the conclusion button is the one-per-completed-turn control this asserts on.
+  await expect(page.getByTestId("assistant-copy-conclusion")).toHaveCount(1);
 
   const prompt = "Second prompt keeps streaming.";
   gate.holdNextAgentStreamEvent("turn_started");
