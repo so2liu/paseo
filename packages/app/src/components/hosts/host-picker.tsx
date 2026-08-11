@@ -337,6 +337,7 @@ export function HostPicker({
             active={active}
             selected={selected}
             onPress={onPress}
+            testID={hostOptionTestID?.(option.id)}
           />
         );
       }

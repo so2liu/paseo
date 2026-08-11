@@ -15,6 +15,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   getWorkspaceSecondaryHeaderHeight,
   scaleWorkspaceSecondaryHeaderGeometry,
+  useIsCompactFormFactor,
 } from "@/constants/layout";
 import * as Clipboard from "expo-clipboard";
 import { ChevronDown, Eye, EyeOff, RotateCw } from "lucide-react-native";
@@ -23,9 +24,17 @@ import {
   TreeChevron,
   TreeIndentGuides,
   treeRowPaddingLeft,
+  WORKSPACE_FILE_ROW_TRAILING_PADDING,
   WORKSPACE_FILE_ROW_VERTICAL_PADDING,
+  WORKSPACE_TREE_ICON_LABEL_GAP,
+  WORKSPACE_TREE_ICON_SIZE,
+  WORKSPACE_TREE_LOADING_ICON_SIZE,
 } from "@/components/tree-primitives";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import {
+  useOverlayFlatListScrollbar,
+  type OverlayFlatListScrollbar,
+} from "@/components/ui/overlay-scrollbar/use-overlay-flat-list-scrollbar";
 import type { Theme } from "@/styles/theme";
 import type {
   AgentFileExplorerState,
@@ -33,7 +42,8 @@ import type {
   ExplorerEntry,
 } from "@/stores/session-store";
 import { useSessionStore } from "@/stores/session-store";
-import { FileActionsMenu } from "@/components/file-actions-menu";
+import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
@@ -187,34 +197,40 @@ function TreeRowItem({
   );
 
   return (
-    <Pressable onPress={handlePress} style={pressableStyle} testID={testID}>
-      <TreeIndentGuides depth={depth} />
-      <View ref={dragSourceRef} style={styles.entryInfo}>
-        <View style={styles.entryIcon}>
-          {(() => {
-            if (!isDirectory) {
-              return <MaterialFileIcon fileName={entry.name} size={16} />;
-            }
-            if (loading) {
-              return <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />;
-            }
-            return <TreeChevron expanded={isExpanded} />;
-          })()}
+    <ContextMenu>
+      <ContextMenuTrigger onPress={handlePress} style={pressableStyle} testID={testID}>
+        <TreeIndentGuides depth={depth} />
+        <View ref={dragSourceRef} style={styles.entryInfo}>
+          <View style={styles.entryIcon}>
+            {(() => {
+              if (!isDirectory) {
+                return <MaterialFileIcon fileName={entry.name} size={WORKSPACE_TREE_ICON_SIZE} />;
+              }
+              if (loading) {
+                return (
+                  <ThemedLoadingSpinner
+                    size={WORKSPACE_TREE_LOADING_ICON_SIZE}
+                    uniProps={foregroundMutedColorMapping}
+                  />
+                );
+              }
+              return <TreeChevron expanded={isExpanded} />;
+            })()}
+          </View>
+          <Text style={styles.entryName} numberOfLines={1}>
+            {entry.name}
+          </Text>
         </View>
-        <Text style={styles.entryName} numberOfLines={1}>
-          {entry.name}
-        </Text>
-      </View>
-      <FileActionsMenu
+      </ContextMenuTrigger>
+      <FileActionsContextMenuContent
         fileKind={entry.kind}
         onCopyPath={handleCopy}
         onDownload={handleDownload}
         onAddToChat={onAddToChat ? handleAddToChat : undefined}
         header={metaHeader}
-        accessibilityLabel={t("workspace.fileActions.moreActions")}
         testIDPrefix={testID}
       />
-    </Pressable>
+    </ContextMenu>
   );
 }
 
@@ -234,6 +250,7 @@ export function FileExplorerPane({
   onAddToChat,
 }: FileExplorerPaneProps) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
 
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
   const workspaceStateKey = useMemo(
@@ -286,6 +303,7 @@ export function FileExplorerPane({
   );
 
   const treeListRef = useRef<FlatList<ExplorerTreeRow>>(null);
+  const scrollbar = useOverlayFlatListScrollbar(treeListRef, { enabled: !isCompact });
 
   const hasInitializedRef = useRef(false);
 
@@ -526,6 +544,7 @@ export function FileExplorerPane({
         currentSortLabel={currentSortLabel}
         isRefreshFetching={isRefreshFetching}
         treeListRef={treeListRef}
+        scrollbar={scrollbar}
         renderTreeRow={renderTreeRow}
         handleSortCycle={handleSortCycle}
         handleToggleHiddenFiles={handleToggleHiddenFiles}
@@ -547,6 +566,7 @@ interface FileExplorerPaneContentProps {
   currentSortLabel: string;
   isRefreshFetching: boolean;
   treeListRef: RefObject<FlatList<ExplorerTreeRow> | null>;
+  scrollbar: OverlayFlatListScrollbar;
   renderTreeRow: (info: ListRenderItemInfo<ExplorerTreeRow>) => ReactElement;
   handleSortCycle: () => void;
   handleToggleHiddenFiles: () => void;
@@ -567,6 +587,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
     currentSortLabel,
     isRefreshFetching,
     treeListRef,
+    scrollbar,
     renderTreeRow,
     handleSortCycle,
     handleToggleHiddenFiles,
@@ -689,12 +710,17 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           keyExtractor={treeRowKeyExtractor}
           testID="file-explorer-tree-scroll"
           contentContainerStyle={styles.entriesContent}
-          showsVerticalScrollIndicator
+          onLayout={scrollbar.onLayout}
+          onScroll={scrollbar.onScroll}
+          onContentSizeChange={scrollbar.onContentSizeChange}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={!scrollbar.enabled}
           initialNumToRender={24}
           maxToRenderPerBatch={40}
           windowSize={12}
         />
       )}
+      {treeRows.length > 0 ? scrollbar.overlay : null}
     </View>
   );
 }
@@ -1062,7 +1088,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: WORKSPACE_FILE_ROW_VERTICAL_PADDING,
-    paddingRight: theme.spacing[3],
+    paddingRight: WORKSPACE_FILE_ROW_TRAILING_PADDING,
   },
   entryRowActive: {
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -1071,10 +1097,14 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
+    gap: WORKSPACE_TREE_ICON_LABEL_GAP,
     minWidth: 0,
   },
   entryIcon: {
+    width: WORKSPACE_TREE_ICON_SIZE,
+    height: WORKSPACE_TREE_ICON_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
     flexShrink: 0,
   },
   entryName: {

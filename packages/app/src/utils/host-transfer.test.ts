@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { HostProfile } from "@/types/host-connection";
 import { parseHostTransfer, serializeHostTransfer } from "./host-transfer";
+import { defaultHostAppearance } from "@/hosts/appearance";
 
 const host: HostProfile = {
   serverId: "srv_test",
   label: "Mac mini",
   lifecycle: {},
+  appearance: defaultHostAppearance(),
   connections: [
     {
       id: "direct:macmini:6767",
@@ -50,6 +52,7 @@ describe("host transfer", () => {
         serverId: "srv_first",
         label: "srv_first",
         lifecycle: {},
+        appearance: defaultHostAppearance(),
         connections: [
           {
             id: "relay:wss:relay.example.com:443",
@@ -67,6 +70,7 @@ describe("host transfer", () => {
         serverId: "srv_second",
         label: "srv_second",
         lifecycle: {},
+        appearance: defaultHostAppearance(),
         connections: [
           {
             id: "relay:relay.example.com:443",

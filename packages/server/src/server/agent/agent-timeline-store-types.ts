@@ -4,6 +4,7 @@ export interface AgentTimelineRow {
   seq: number;
   timestamp: string;
   item: AgentTimelineItem;
+  readonly providerMessageId?: string;
 }
 
 export interface AgentTimelineCursor {
@@ -90,4 +91,5 @@ export interface AgentTimelineStore {
   completeBackfill(agentId: string): Promise<void>;
   /** Wait for every queued write to reach disk. */
   flush(): Promise<void>;
+  updateCommittedRow(agentId: string, row: AgentTimelineRow): Promise<void>;
 }

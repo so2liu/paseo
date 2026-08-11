@@ -44,6 +44,7 @@ vi.mock("expo-sharing", () => ({
 }));
 
 import { useDownloadStore } from "./download-store";
+import { defaultHostAppearance } from "@/hosts/appearance";
 
 describe("download store native transfers", () => {
   beforeEach(() => {
@@ -115,6 +116,7 @@ describe("download store native transfers", () => {
         serverId: "server-1",
         label: "Mac",
         lifecycle: {},
+        appearance: defaultHostAppearance(),
         connections: [
           {
             id: "direct:mac.local:6767",

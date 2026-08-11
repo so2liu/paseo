@@ -5,13 +5,15 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
   type ListRenderItemInfo,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type PressableStateCallbackType,
 } from "react-native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { router, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronRight, Folder, Home, Plus, Settings } from "lucide-react-native";
+import { Check, ChevronRight, Folder } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   BottomSheetBackdrop,
@@ -25,11 +27,9 @@ import {
   IsolatedBottomSheetModal,
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
-import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregated-agents";
-import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
-import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useProjects } from "@/hooks/use-projects";
 import { useAppSettings } from "@/hooks/use-settings";
 import {
@@ -40,23 +40,17 @@ import {
 import { useHosts } from "@/runtime/host-runtime";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
-import { getBindingIdForAction, getDefaultKeysForAction } from "@/keyboard/keyboard-shortcuts";
-import { chordStringToShortcutKeys } from "@/keyboard/shortcut-string";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
 import {
   clearCommandCenterFocusRestoreElement,
   takeCommandCenterFocusRestoreElement,
 } from "@/utils/command-center-focus-restore";
 import { focusWithRetries } from "@/utils/web-focus";
-import { buildOpenProjectRoute, buildSettingsRoute } from "@/utils/host-routes";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { formatTimeAgo } from "@/utils/time";
 import { shortenPath } from "@/utils/shorten-path";
-import { getShortcutOs } from "@/utils/shortcut-platform";
-import type { ShortcutKey } from "@/utils/format-shortcut";
 import { FONT_SIZE, SPACING } from "@/styles/theme";
-import type { CommandCenterContribution, CommandCenterIconProps } from "./contributions";
-import { useCommandCenterActions, useCommandCenterContributions } from "./provider";
+import { useCommandCenterContributions } from "./provider";
 import {
   buildContributionSections,
   joinSubtitleParts,
@@ -82,18 +76,31 @@ const ThemedCheck = withUnistyles(Check, (theme) => ({ color: theme.colors.foreg
 const ThemedChevronRight = withUnistyles(ChevronRight, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
-const ThemedPlus = withUnistyles(Plus, (theme) => ({ color: theme.colors.foregroundMuted }));
-const ThemedSettings = withUnistyles(Settings, (theme) => ({
-  color: theme.colors.foregroundMuted,
-}));
-const ThemedHome = withUnistyles(Home, (theme) => ({ color: theme.colors.foregroundMuted }));
 const COMMAND_CENTER_SNAP_POINTS = ["60%", "90%"];
 const KEYBOARD_SHOULD_PERSIST_TAPS = "always" as const;
 
+// Line heights are the default ones scaled by the user's font size rather than a fixed
+// multiplier: at the default size the row keeps upstream's tight two-line spacing, and the
+// text stops clipping once the user enlarges it.
+const TITLE_LINE_HEIGHT_AT_DEFAULT = 18;
+const SUBTITLE_LINE_HEIGHT_AT_DEFAULT = 16;
+
+function scaleLineHeight(fontSize: number, baseFontSize: number, baseLineHeight: number): number {
+  return Math.round((fontSize / baseFontSize) * baseLineHeight);
+}
+
 function commandCenterRowMetrics(uiFontSize: number): CommandCenterRowMetrics {
   const scale = uiFontSize / FONT_SIZE.base;
-  const titleLineHeight = Math.round(Math.round(FONT_SIZE.sm * scale) * 1.4);
-  const subtitleLineHeight = Math.round(Math.round(FONT_SIZE.xs * scale) * 1.5);
+  const titleLineHeight = scaleLineHeight(
+    Math.round(FONT_SIZE.sm * scale),
+    FONT_SIZE.sm,
+    TITLE_LINE_HEIGHT_AT_DEFAULT,
+  );
+  const subtitleLineHeight = scaleLineHeight(
+    Math.round(FONT_SIZE.xs * scale),
+    FONT_SIZE.xs,
+    SUBTITLE_LINE_HEIGHT_AT_DEFAULT,
+  );
   const verticalPadding = SPACING[2] * 2;
   const sectionGrowth = Math.max(0, subtitleLineHeight - 18);
 
@@ -106,105 +113,7 @@ function commandCenterRowMetrics(uiFontSize: number): CommandCenterRowMetrics {
   };
 }
 
-function PlusIcon({ size }: CommandCenterIconProps) {
-  return <ThemedPlus size={size} strokeWidth={2.4} />;
-}
-
-function SettingsIcon({ size }: CommandCenterIconProps) {
-  return <ThemedSettings size={size} strokeWidth={2.2} />;
-}
-
-function HomeIcon({ size }: CommandCenterIconProps) {
-  return <ThemedHome size={size} strokeWidth={2.2} />;
-}
-
-function resolveActionShortcutKeys(
-  actionId: string | undefined,
-  overrides: Record<string, string>,
-): ShortcutKey[][] | undefined {
-  if (!actionId) return undefined;
-  const platform = {
-    isMac: getShortcutOs() === "mac",
-    isDesktop: getIsElectronRuntime(),
-  };
-  const bindingId = getBindingIdForAction(actionId, platform);
-  if (!bindingId) return undefined;
-  const override = overrides[bindingId];
-  if (override) return chordStringToShortcutKeys(override);
-  const defaultKeys = getDefaultKeysForAction(actionId, platform);
-  return defaultKeys ? [defaultKeys] : undefined;
-}
-
-export function CommandCenterRootActions() {
-  const { t } = useTranslation();
-  const { overrides } = useKeyboardShortcutOverrides();
-  const openAddProject = useOpenAddProject();
-  const settingsRoute = useMemo<Href>(() => buildSettingsRoute(), []);
-  const homeRoute = useMemo<Href>(() => buildOpenProjectRoute(), []);
-  const actions = useMemo<CommandCenterContribution[]>(
-    () => [
-      {
-        id: "new-agent",
-        group: "actions",
-        groupRank: 0,
-        rank: 0,
-        keywords: ["open", "project", "folder", "workspace", "repo"],
-        visibility: "always",
-        run: () => {
-          clearCommandCenterFocusRestoreElement();
-          openAddProject();
-        },
-        presentation: {
-          kind: "action",
-          title: t("shell.commandCenter.addProject"),
-          sectionTitle: t("shell.commandCenter.actions"),
-          icon: PlusIcon,
-          shortcutKeys: resolveActionShortcutKeys("new-agent", overrides),
-        },
-      },
-      {
-        id: "home",
-        group: "actions",
-        groupRank: 0,
-        rank: 1,
-        keywords: ["home", "start", "import", "session", "pair", "device", "providers"],
-        visibility: "always",
-        run: () => {
-          clearCommandCenterFocusRestoreElement();
-          router.push(homeRoute);
-        },
-        presentation: {
-          kind: "action",
-          title: t("shell.commandCenter.home"),
-          sectionTitle: t("shell.commandCenter.actions"),
-          icon: HomeIcon,
-        },
-      },
-      {
-        id: "settings",
-        group: "actions",
-        groupRank: 0,
-        rank: 2,
-        keywords: ["settings", "preferences", "config", "configuration"],
-        visibility: "always",
-        run: () => {
-          clearCommandCenterFocusRestoreElement();
-          router.push(settingsRoute);
-        },
-        presentation: {
-          kind: "action",
-          title: t("sidebar.actions.settings"),
-          sectionTitle: t("shell.commandCenter.actions"),
-          icon: SettingsIcon,
-        },
-      },
-    ],
-    [homeRoute, openAddProject, overrides, settingsRoute, t],
-  );
-
-  useCommandCenterActions({ sourceId: "root", enabled: true, actions });
-  return null;
-}
+const DEFAULT_CATEGORY_RESULT_LIMIT = 5;
 
 function sortAgents(left: AggregatedAgent, right: AggregatedAgent): number {
   const leftNeedsInput = (left.pendingPermissionCount ?? 0) > 0 ? 1 : 0;
@@ -222,6 +131,10 @@ function sortAgents(left: AggregatedAgent, right: AggregatedAgent): number {
 function matchesQuery(searchText: string, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   return !normalized || searchText.includes(normalized);
+}
+
+function limitDefaultCategoryResults<Result>(results: Result[], query: string): Result[] {
+  return query.trim() ? results : results.slice(0, DEFAULT_CATEGORY_RESULT_LIMIT);
 }
 
 function useBuiltInSections(open: boolean, query: string): CommandCenterResultSection[] {
@@ -268,36 +181,40 @@ function useBuiltInSections(open: boolean, query: string): CommandCenterResultSe
     const workspaceTitleByKey = new Map(
       allWorkspaces.map((workspace) => [workspace.id.slice("workspace:".length), workspace.title]),
     );
-    const workspaces = allWorkspaces.filter((workspace) =>
-      matchesQuery(workspace.searchText, query),
+    const workspaces = limitDefaultCategoryResults(
+      allWorkspaces.filter((workspace) => matchesQuery(workspace.searchText, query)),
+      query,
     );
-    const agentResults = agents
-      .map<CommandCenterAgentResult>((agent) => {
-        const title = agent.title || t("shell.commandCenter.newAgent");
-        const workspaceTitle = agent.workspaceId
-          ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
-          : undefined;
-        const location = workspaceTitle ?? shortenPath(agent.cwd);
-        const subtitle = joinSubtitleParts([
-          showHost ? agent.serverLabel : null,
-          location,
-          formatTimeAgo(agent.lastActivityAt),
-        ]);
-        return {
-          kind: "agent",
-          id: `agent:${agent.serverId}:${agent.id}`,
-          agent,
-          title,
-          subtitle,
-          searchText: `${title} ${subtitle} ${agent.cwd}`.toLowerCase(),
-          run: () => {
-            clearCommandCenterFocusRestoreElement();
-            navigateToAgent({ serverId: agent.serverId, agentId: agent.id });
-          },
-        };
-      })
-      .filter((agent) => matchesQuery(agent.searchText, query))
-      .sort((left, right) => sortAgents(left.agent, right.agent));
+    const agentResults = limitDefaultCategoryResults(
+      agents
+        .map<CommandCenterAgentResult>((agent) => {
+          const title = agent.title || t("shell.commandCenter.newAgent");
+          const workspaceTitle = agent.workspaceId
+            ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
+            : undefined;
+          const location = workspaceTitle ?? shortenPath(agent.cwd);
+          const subtitle = joinSubtitleParts([
+            showHost ? agent.serverLabel : null,
+            location,
+            formatTimeAgo(agent.lastActivityAt),
+          ]);
+          return {
+            kind: "agent",
+            id: `agent:${agent.serverId}:${agent.id}`,
+            agent,
+            title,
+            subtitle,
+            searchText: `${title} ${subtitle} ${agent.cwd}`.toLowerCase(),
+            run: () => {
+              clearCommandCenterFocusRestoreElement();
+              navigateToAgent({ serverId: agent.serverId, agentId: agent.id });
+            },
+          };
+        })
+        .filter((agent) => matchesQuery(agent.searchText, query))
+        .sort((left, right) => sortAgents(left.agent, right.agent)),
+      query,
+    );
     return [
       {
         id: "workspaces",
@@ -426,6 +343,15 @@ interface ResultRowProps {
 
 const ResultRow = memo(function ResultRow({ result, height, active, onSelect }: ResultRowProps) {
   const press = useCallback(() => onSelect(result), [onSelect, result]);
+  const choice =
+    result.kind === "contribution" && result.contribution.presentation.kind === "choice"
+      ? result.contribution.presentation
+      : null;
+  const accessibilityLabel = choice?.path.join(" › ");
+  const accessibilityState = useMemo(
+    () => (isNative && choice ? { selected: choice.selected } : undefined),
+    [choice],
+  );
   const style = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
@@ -435,7 +361,15 @@ const ResultRow = memo(function ResultRow({ result, height, active, onSelect }: 
     [active, height],
   );
   return (
-    <Pressable style={style} onPress={press}>
+    <Pressable
+      style={style}
+      onPress={press}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={accessibilityState}
+      aria-pressed={isWeb ? choice?.selected : undefined}
+      testID={choice?.testId}
+    >
       <ResultContent result={result} />
     </Pressable>
   );
@@ -517,7 +451,7 @@ function ResultContent({ result }: { result: CommandCenterResult }) {
     );
   }
   return (
-    <View style={styles.rowContent} testID={presentation.testId}>
+    <View style={styles.rowContent}>
       <View style={styles.rowMain}>
         {Icon ? (
           <View style={styles.iconSlot}>
@@ -570,19 +504,54 @@ export function CommandCenter() {
   const listRef = useRef<FlatList<CommandCenterListRow>>(null);
   const bottomSheetListRef = useRef<BottomSheetFlatListMethods>(null);
   const bottomSheetInputRef = useRef<React.ElementRef<typeof BottomSheetTextInput>>(null);
+  const scrollMetricsRef = useRef({ offset: 0, visibleLength: 0 });
   const { sheetRef, handleSheetChange, handleSheetDismiss } = useIsolatedBottomSheetVisibility({
     visible: state.open,
     isEnabled: showBottomSheet,
     onClose: state.close,
   });
 
-  useEffect(() => {
+  const revealActiveResult = useCallback(() => {
     if (!state.open || !state.activeId) return;
     const index = state.rowIndexByResultId.get(state.activeId);
     if (index === undefined) return;
+    const { offset, visibleLength } = scrollMetricsRef.current;
+    if (visibleLength <= 0) return;
+    const rowTop = state.offsets[index];
+    const rowBottom = rowTop + state.rows[index].height;
+    let nextOffset: number | null = null;
+    if (rowTop < offset) nextOffset = rowTop;
+    if (rowBottom > offset + visibleLength) nextOffset = rowBottom - visibleLength;
+    if (nextOffset === null) return;
     const ref = showBottomSheet ? bottomSheetListRef.current : listRef.current;
-    ref?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
-  }, [showBottomSheet, state.activeId, state.open, state.rowIndexByResultId]);
+    const boundedOffset = Math.max(0, nextOffset);
+    scrollMetricsRef.current.offset = boundedOffset;
+    ref?.scrollToOffset({ offset: boundedOffset, animated: false });
+  }, [
+    showBottomSheet,
+    state.activeId,
+    state.offsets,
+    state.open,
+    state.rowIndexByResultId,
+    state.rows,
+  ]);
+  useEffect(() => {
+    if (!state.open) {
+      scrollMetricsRef.current = { offset: 0, visibleLength: 0 };
+      return;
+    }
+    revealActiveResult();
+  }, [revealActiveResult, state.open]);
+  const handleListLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      scrollMetricsRef.current.visibleLength = event.nativeEvent.layout.height;
+      revealActiveResult();
+    },
+    [revealActiveResult],
+  );
+  const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollMetricsRef.current.offset = event.nativeEvent.contentOffset.y;
+  }, []);
   useEffect(() => {
     if (!showBottomSheet || !state.open) return;
     const timer = setTimeout(() => bottomSheetInputRef.current?.focus(), 300);
@@ -627,6 +596,9 @@ export function CommandCenter() {
     initialNumToRender: 12,
     maxToRenderPerBatch: 10,
     windowSize: 5,
+    onLayout: handleListLayout,
+    onScroll: handleListScroll,
+    scrollEventThrottle: 16,
   };
   const keyPress = useCallback(
     ({ nativeEvent: { key } }: { nativeEvent: { key: string } }) => state.key(key),
@@ -657,6 +629,7 @@ export function CommandCenter() {
     return (
       <IsolatedBottomSheetModal
         ref={sheetRef}
+        contextBridge={null}
         snapPoints={COMMAND_CENTER_SNAP_POINTS}
         index={0}
         enableDynamicSizing={false}
@@ -786,13 +759,13 @@ const styles = StyleSheet.create((theme) => ({
   title: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
-    lineHeight: Math.round(theme.fontSize.sm * 1.4),
+    lineHeight: scaleLineHeight(theme.fontSize.sm, FONT_SIZE.sm, TITLE_LINE_HEIGHT_AT_DEFAULT),
     flexShrink: 1,
   },
   subtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    lineHeight: Math.round(theme.fontSize.xs * 1.5),
+    lineHeight: scaleLineHeight(theme.fontSize.xs, FONT_SIZE.xs, SUBTITLE_LINE_HEIGHT_AT_DEFAULT),
   },
   iconSlot: { width: 16, height: 20, alignItems: "center", justifyContent: "center" },
   rowShortcut: { flexShrink: 0 },
@@ -812,7 +785,7 @@ const styles = StyleSheet.create((theme) => ({
   breadcrumbGroup: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    lineHeight: Math.round(theme.fontSize.sm * 1.4),
+    lineHeight: scaleLineHeight(theme.fontSize.sm, FONT_SIZE.sm, TITLE_LINE_HEIGHT_AT_DEFAULT),
     flexShrink: 0,
   },
   emptyText: {

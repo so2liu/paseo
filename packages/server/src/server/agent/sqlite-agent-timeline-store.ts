@@ -166,6 +166,23 @@ export class SqliteAgentTimelineStore implements AgentTimelineStore {
     }
   }
 
+  /**
+   * Replace one already-committed row in place.
+   *
+   * Enrichment arrives after the fact — a tool call gets its result, a message
+   * its final text — and rewrites a row the client already holds a cursor for.
+   * The seq stays put so those cursors stay valid; only the payload changes.
+   * A row that is not there yet is a no-op rather than an insert: `bulkInsert`
+   * owns creation, and inserting here would resurrect a row a backfill dropped.
+   */
+  async updateCommittedRow(agentId: string, row: AgentTimelineRow): Promise<void> {
+    this.db
+      .prepare(
+        "UPDATE agent_timeline_rows SET timestamp = ?, item = ? WHERE agent_id = ? AND seq = ?",
+      )
+      .run(row.timestamp, JSON.stringify(row.item), agentId, row.seq);
+  }
+
   async fetchCommitted(
     agentId: string,
     options?: AgentTimelineFetchOptions,

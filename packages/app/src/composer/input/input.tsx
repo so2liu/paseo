@@ -1,10 +1,9 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
+  Pressable,
   View,
   Text,
   TextInput,
-  Pressable,
-  Platform,
   useWindowDimensions,
   NativeSyntheticEvent,
   TextInputContentSizeChangeEventData,
@@ -23,7 +22,7 @@ import {
 } from "react";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import type { Theme } from "@/styles/theme";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { ArrowUp, Keyboard, Mic, MicOff, CornerDownLeft, Plus, Square } from "lucide-react-native";
 import { useDictation } from "@/hooks/use-dictation";
 import { DictationOverlay } from "@/components/dictation-controls";
@@ -48,8 +47,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useIosHardwareKeyboardSubmit } from "@/hooks/use-ios-hardware-keyboard-submit";
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
@@ -60,6 +57,7 @@ import { isNative, isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { usesCompactNativeComposerLayout } from "@/composer/layout";
 import { useComposerHeightMirror } from "./height-mirror";
+import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import {
   resolveSendTooltipLabel,
   resolveSubmitAccessibilityLabel,
@@ -67,6 +65,7 @@ import {
   resolveVoiceTooltipText,
 } from "./labels";
 import {
+  applyDictationTranscript,
   computeCanStartDictation,
   resolveComposerSurfacePresentation,
   runAlternateSendAction,
@@ -125,8 +124,10 @@ export interface MessageInputProps {
   leftContent?: React.ReactNode;
   /** Content to render on the right side before the voice button (e.g., context window meter) */
   beforeVoiceContent?: React.ReactNode;
-  /** Content to render on the right side after voice button (e.g., realtime button, cancel button) */
+  /** Auxiliary content to render on the right side after the voice button. */
   rightContent?: React.ReactNode;
+  /** Primary action to render when the agent is active and the composer has no sendable content. */
+  activeActionContent?: React.ReactNode;
   voiceServerId?: string;
   voiceAgentId?: string;
   /** When true and there's sendable content, calls onQueue instead of onSubmit */
@@ -151,6 +152,12 @@ export interface MessageInputProps {
   /** Compact-phone composer mode. Non-compact layouts always render the text input. */
   compactInputMode?: "voice" | "text";
   onCompactInputModeChange?: (mode: "voice" | "text") => void;
+  /** What this composer is for. See `@/composer/input-mode` for what each mode implies. */
+  inputMode?: ComposerInputMode;
+  /** Renders `value` as static text on the same surface, for content there is nothing to type into. */
+  readOnly?: boolean;
+  /** Replaces the submit icon with this label, still inside the composer's own toolbar row. */
+  submitLabel?: string;
 }
 
 export interface MessageInputRef {
@@ -169,8 +176,6 @@ const MIN_INPUT_HEIGHT_DESKTOP = 46;
 const DEFAULT_MAX_INPUT_HEIGHT = 160;
 const MAX_INPUT_VIEWPORT_RATIO = 0.5;
 const MIN_INPUT_HEIGHT = isWeb ? MIN_INPUT_HEIGHT_DESKTOP : MIN_INPUT_HEIGHT_MOBILE;
-const ATTACHMENT_SHEET_SNAP_POINTS = ["34%", "45%"];
-
 type WebTextInputKeyPressEvent = NativeSyntheticEvent<
   TextInputKeyPressEventData & {
     metaKey?: boolean;
@@ -228,56 +233,8 @@ function AttachmentMenuList({ items }: { items: AttachmentMenuItem[] }) {
   );
 }
 
-function AttachmentSheetItem({
-  item,
-  onSelect,
-}: {
-  item: AttachmentMenuItem;
-  onSelect: (item: AttachmentMenuItem) => void;
-}) {
-  const handlePress = useCallback(() => {
-    onSelect(item);
-  }, [item, onSelect]);
-  const pressableStyle = useCallback(
-    ({ pressed }: { pressed: boolean }) => [
-      styles.attachmentSheetItem,
-      pressed && styles.attachmentSheetItemPressed,
-      item.disabled && styles.buttonDisabled,
-    ],
-    [item.disabled],
-  );
-
-  return (
-    <Pressable
-      testID={`message-input-attachment-menu-item-${item.id}`}
-      accessibilityRole="button"
-      disabled={item.disabled}
-      onPress={handlePress}
-      style={pressableStyle}
-    >
-      {item.icon ? <View style={styles.attachmentSheetItemIcon}>{item.icon}</View> : null}
-      <Text style={styles.attachmentSheetItemText}>{item.label}</Text>
-    </Pressable>
-  );
-}
-
-function AttachmentSheetList({
-  items,
-  onSelect,
-}: {
-  items: AttachmentMenuItem[];
-  onSelect: (item: AttachmentMenuItem) => void;
-}) {
-  return (
-    <View style={styles.attachmentSheetList}>
-      {items.map((item) => (
-        <AttachmentSheetItem key={item.id} item={item} onSelect={onSelect} />
-      ))}
-    </View>
-  );
-}
-
 function AttachmentDropdown({
+  visible,
   isConnected,
   disabled,
   attachButtonStyle,
@@ -285,6 +242,7 @@ function AttachmentDropdown({
   attachmentMenuItems,
   addAttachmentLabel,
 }: {
+  visible: boolean;
   isConnected: boolean;
   disabled: boolean;
   attachButtonStyle: React.ComponentProps<typeof DropdownMenuTrigger>["style"];
@@ -292,73 +250,10 @@ function AttachmentDropdown({
   attachmentMenuItems: AttachmentMenuItem[];
   addAttachmentLabel: string;
 }) {
-  const isCompact = useIsCompactFormFactor();
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
-  useDismissKeyboardOnOpen(isSheetOpen, isCompact);
-
   const isButtonDisabled = !isConnected || disabled;
-  const attachmentSheetHeader = useMemo<SheetHeader>(
-    () => ({ title: addAttachmentLabel }),
-    [addAttachmentLabel],
-  );
-  const handleOpenSheet = useCallback(() => {
-    if (isButtonDisabled) return;
-    setIsSheetOpen(true);
-  }, [isButtonDisabled]);
-  const handleCloseSheet = useCallback(() => {
-    setIsSheetOpen(false);
-  }, []);
-  const handleSheetItemSelect = useCallback((item: AttachmentMenuItem) => {
-    if (item.disabled) return;
-    setIsSheetOpen(false);
-    if (Platform.OS === "ios") {
-      setTimeout(item.onSelect, 250);
-      return;
-    }
-    item.onSelect();
-  }, []);
-  const mobileAttachButtonStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) => {
-      if (typeof attachButtonStyle === "function") {
-        return attachButtonStyle({ ...state, hovered: Boolean(state.hovered), open: isSheetOpen });
-      }
-      return attachButtonStyle;
-    },
-    [attachButtonStyle, isSheetOpen],
-  );
-  const renderMobileAttachButtonIcon = useCallback(
-    ({ hovered }: { hovered?: boolean }) => renderAttachButtonIcon({ hovered }),
-    [renderAttachButtonIcon],
-  );
-
-  if (isCompact) {
-    return (
-      <>
-        <Pressable
-          disabled={isButtonDisabled}
-          accessibilityLabel={addAttachmentLabel}
-          accessibilityRole="button"
-          testID="message-input-attach-button"
-          onPress={handleOpenSheet}
-          style={mobileAttachButtonStyle}
-        >
-          {renderMobileAttachButtonIcon}
-        </Pressable>
-        <AdaptiveModalSheet
-          header={attachmentSheetHeader}
-          visible={isSheetOpen}
-          onClose={handleCloseSheet}
-          snapPoints={ATTACHMENT_SHEET_SNAP_POINTS}
-          testID="message-input-attachment-menu"
-        >
-          <AttachmentSheetList items={attachmentMenuItems} onSelect={handleSheetItemSelect} />
-        </AdaptiveModalSheet>
-      </>
-    );
-  }
-
+  if (!visible) return null;
   return (
-    <DropdownMenu>
+    <DropdownMenu compactMode="sheet">
       <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
@@ -381,6 +276,7 @@ function AttachmentDropdown({
         offset={8}
         minWidth={220}
         testID="message-input-attachment-menu"
+        sheetTitle={addAttachmentLabel}
       >
         <AttachmentMenuList items={attachmentMenuItems} />
       </DropdownMenuContent>
@@ -442,12 +338,20 @@ function SendTooltipBody({
 function SendButtonContent({
   isSubmitLoading,
   submitIcon,
+  submitLabel,
 }: {
   isSubmitLoading: boolean;
   submitIcon: "arrow" | "return";
+  submitLabel: string | undefined;
+  // The fork sizes these icons through theme mappings, so the pixel size upstream
+  // threads through `SendButtonTooltip` is deliberately unused here.
+  buttonIconSize?: number;
 }) {
   if (isSubmitLoading) {
     return <ThemedLoadingSpinner size="small" uniProps={iconAccentForegroundMapping} />;
+  }
+  if (submitLabel) {
+    return <Text style={styles.sendButtonLabel}>{submitLabel}</Text>;
   }
   if (submitIcon === "return") {
     return <ThemedCornerDownLeft uniProps={composerIconAccentForegroundMapping} />;
@@ -693,7 +597,75 @@ function FocusHint({
   );
 }
 
+interface ComposerTextSurfaceProps {
+  readOnly: boolean;
+  value: string;
+  textInputRef: React.Ref<TextInput>;
+  textInputStyle: React.ComponentProps<typeof ThemedTextInput>["style"];
+  readOnlyTextStyle: React.ComponentProps<typeof Text>["style"];
+  placeholder: string;
+  accessibilityLabel: string;
+  onChangeText: (text: string) => void;
+  onFocus: () => void;
+  onBlur: () => void;
+  editable: boolean;
+  scrollEnabled: boolean;
+  autoFocus: boolean;
+  onContentSizeChange: (event: NativeSyntheticEvent<TextInputContentSizeChangeEventData>) => void;
+  onKeyPress: ((event: WebTextInputKeyPressEvent) => void) | undefined;
+  onSelectionChange: (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => void;
+  focusHintVisible: boolean;
+  focusInputKeys: ShortcutChord | null | undefined;
+  focusHintLabel: string;
+}
+
+/**
+ * The composer's content: an editable input, or static text when there is
+ * nothing to type. Both sit in the same bordered surface, so read-only is a
+ * state of this composer rather than a second one.
+ */
+function ComposerTextSurface(props: ComposerTextSurfaceProps): React.ReactElement {
+  if (props.readOnly) {
+    return (
+      <View style={styles.textInputScrollWrapper}>
+        <Text style={props.readOnlyTextStyle} testID="composer-readonly-content">
+          {props.value}
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.textInputScrollWrapper}>
+      <ThemedTextInput
+        ref={props.textInputRef}
+        dataSet={COMPOSER_INPUT_DATASET}
+        value={props.value}
+        onChangeText={props.onChangeText}
+        placeholder={props.placeholder}
+        uniProps={textInputPlaceholderColorMapping}
+        accessibilityLabel={props.accessibilityLabel}
+        onFocus={props.onFocus}
+        onBlur={props.onBlur}
+        style={props.textInputStyle}
+        multiline
+        scrollEnabled={props.scrollEnabled}
+        onContentSizeChange={props.onContentSizeChange}
+        editable={props.editable}
+        onKeyPress={props.onKeyPress}
+        onSelectionChange={props.onSelectionChange}
+        autoFocus={props.autoFocus}
+      />
+      <FocusHint
+        visible={props.focusHintVisible}
+        focusInputKeys={props.focusInputKeys}
+        label={props.focusHintLabel}
+      />
+    </View>
+  );
+}
+
 function VoiceButtonTooltip({
+  visible,
   onVoicePress,
   isDictationStartEnabled,
   showLabel,
@@ -705,6 +677,7 @@ function VoiceButtonTooltip({
   voiceMuteToggleKeys,
   dictationToggleKeys,
 }: {
+  visible: boolean;
   onVoicePress: () => void;
   isDictationStartEnabled: boolean;
   showLabel: boolean;
@@ -717,6 +690,7 @@ function VoiceButtonTooltip({
   dictationToggleKeys: ShortcutChord | null | undefined;
 }) {
   const shortcut = isRealtimeVoiceForCurrentAgent ? voiceMuteToggleKeys : dictationToggleKeys;
+  if (!visible) return null;
   return (
     <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger
@@ -750,7 +724,9 @@ function SendButtonTooltip({
   sendButtonCombinedStyle,
   isSubmitLoading,
   submitIcon,
+  submitLabel,
   submitButtonTestID,
+  buttonIconSize,
   sendKeys,
   sendTooltipLabel,
 }: {
@@ -763,7 +739,9 @@ function SendButtonTooltip({
   sendButtonCombinedStyle: React.ComponentProps<typeof TooltipTrigger>["style"];
   isSubmitLoading: boolean;
   submitIcon: "arrow" | "return";
+  submitLabel: string | undefined;
   submitButtonTestID: string | undefined;
+  buttonIconSize: number;
   sendKeys: ShortcutChord | null | undefined;
   sendTooltipLabel: string;
 }) {
@@ -778,7 +756,12 @@ function SendButtonTooltip({
         testID={submitButtonTestID}
         style={sendButtonCombinedStyle}
       >
-        <SendButtonContent isSubmitLoading={isSubmitLoading} submitIcon={submitIcon} />
+        <SendButtonContent
+          isSubmitLoading={isSubmitLoading}
+          submitIcon={submitIcon}
+          submitLabel={submitLabel}
+          buttonIconSize={buttonIconSize}
+        />
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
         <SendTooltipBody label={sendTooltipLabel} sendKeys={sendKeys} />
@@ -787,42 +770,40 @@ function SendButtonTooltip({
   );
 }
 
-interface DictationTranscriptContext {
+type PrimaryActionKind = "send" | "active" | "none";
+
+function hasSendableComposerContent(input: {
   value: string;
-  defaultSendBehavior: "interrupt" | "queue";
+  attachments: readonly ComposerAttachment[];
+  hasExternalContent: boolean;
+}): boolean {
+  return input.value.trim().length > 0 || input.attachments.length > 0 || input.hasExternalContent;
+}
+
+function resolvePrimaryActionKind(input: {
+  hasSendableContent: boolean;
+  allowEmptySubmit: boolean;
   isAgentRunning: boolean;
-  onQueue: ((payload: MessagePayload) => void) | undefined;
-  onSubmit: (payload: MessagePayload) => void;
-  onChangeText: (text: string) => void;
-  attachments: ComposerAttachment[];
-  cwd: string;
-  autoSend: boolean;
+  isSubmitLoading: boolean;
+}): PrimaryActionKind {
+  if (input.hasSendableContent || input.allowEmptySubmit) return "send";
+  if (input.isAgentRunning) return "active";
+  if (input.isSubmitLoading) return "send";
+  return "none";
 }
 
-function applyDictationTranscript(text: string, ctx: DictationTranscriptContext): void {
-  if (!text) return;
-  const shouldPad = ctx.value.length > 0 && !/\s$/.test(ctx.value);
-  const nextValue = `${ctx.value}${shouldPad ? " " : ""}${text}`;
-
-  if (!ctx.autoSend) {
-    ctx.onChangeText(nextValue);
-    return;
-  }
-
-  if (ctx.defaultSendBehavior === "queue" && ctx.isAgentRunning && ctx.onQueue) {
-    ctx.onQueue({ text: nextValue, attachments: ctx.attachments, cwd: ctx.cwd });
-    ctx.onChangeText("");
-    return;
-  }
-
-  ctx.onSubmit({
-    text: nextValue,
-    attachments: ctx.attachments,
-    cwd: ctx.cwd,
-    forceSend: ctx.isAgentRunning || undefined,
-  });
+function PrimaryAction({
+  kind,
+  activeActionContent,
+  ...sendButtonProps
+}: {
+  kind: PrimaryActionKind;
+  activeActionContent: React.ReactNode;
+} & React.ComponentProps<typeof SendButtonTooltip>) {
+  if (kind === "active") return activeActionContent;
+  if (kind === "send") return <SendButtonTooltip {...sendButtonProps} />;
+  return null;
 }
-
 interface ToggleRealtimeVoiceContext {
   voice:
     | {
@@ -972,30 +953,6 @@ function computeShouldShowDictationOverlay(
   return isDictating || isDictationProcessing || dictationStatus === "failed";
 }
 
-interface SendableContentInput {
-  value: string;
-  attachments: ComposerAttachment[];
-  hasExternalContent: boolean;
-  allowEmptySubmit: boolean;
-  isSubmitLoading: boolean;
-}
-
-interface SendableContentOutput {
-  hasAttachments: boolean;
-  hasRealContent: boolean;
-  hasSendableContent: boolean;
-  shouldShowSendButton: boolean;
-}
-
-function computeSendableContent(input: SendableContentInput): SendableContentOutput {
-  const hasAttachments = input.attachments.length > 0;
-  const hasRealContent = input.value.trim().length > 0 || hasAttachments;
-  const hasSendableContent = hasRealContent || input.hasExternalContent;
-  const shouldShowSendButton =
-    hasSendableContent || input.allowEmptySubmit || input.isSubmitLoading;
-  return { hasAttachments, hasRealContent, hasSendableContent, shouldShowSendButton };
-}
-
 function computeIsDictationStartEnabled(
   isReadyForDictation: boolean | undefined,
   isConnected: boolean,
@@ -1091,6 +1048,7 @@ interface ResolvedMessageInputProps {
   leftContent: React.ReactNode;
   beforeVoiceContent: React.ReactNode;
   rightContent: React.ReactNode;
+  activeActionContent: React.ReactNode;
   voiceServerId: string | undefined;
   voiceAgentId: string | undefined;
   isAgentRunning: boolean;
@@ -1105,6 +1063,9 @@ interface ResolvedMessageInputProps {
   attachmentSlot: React.ReactNode;
   compactInputMode: "voice" | "text";
   onCompactInputModeChange: ((mode: "voice" | "text") => void) | undefined;
+  inputMode: ComposerInputMode;
+  readOnly: boolean;
+  submitLabel: string | undefined;
 }
 
 function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInputProps {
@@ -1135,6 +1096,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     leftContent: props.leftContent,
     beforeVoiceContent: props.beforeVoiceContent,
     rightContent: props.rightContent,
+    activeActionContent: props.activeActionContent,
     voiceServerId: props.voiceServerId,
     voiceAgentId: props.voiceAgentId,
     isAgentRunning: props.isAgentRunning ?? false,
@@ -1149,6 +1111,9 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     attachmentSlot: props.attachmentSlot,
     compactInputMode: props.compactInputMode ?? "text",
     onCompactInputModeChange: props.onCompactInputModeChange,
+    inputMode: props.inputMode ?? "chat",
+    readOnly: props.readOnly ?? false,
+    submitLabel: props.submitLabel,
   };
 }
 
@@ -1188,6 +1153,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       leftContent,
       beforeVoiceContent,
       rightContent,
+      activeActionContent,
       voiceServerId,
       voiceAgentId,
       isAgentRunning,
@@ -1202,11 +1168,16 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       attachmentSlot,
       compactInputMode,
       onCompactInputModeChange,
+      inputMode,
+      readOnly,
+      submitLabel,
     } = resolveMessageInputProps(props);
+    const mode = resolveComposerInputMode(inputMode);
     const { t } = useTranslation();
     const isCompact = useIsCompactFormFactor();
     const { height: windowHeight } = useWindowDimensions();
     const maxInputHeight = resolveMaxInputHeight(windowHeight);
+    const buttonIconSize = isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
     const toast = useToast();
     const voice = useVoiceOptional();
     const voiceMuteToggleKeys = useShortcutKeys("voice-mute-toggle");
@@ -1615,11 +1586,14 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       });
     }
 
-    const { shouldShowSendButton } = computeSendableContent({
-      value,
-      attachments,
-      hasExternalContent,
+    const primaryActionKind = resolvePrimaryActionKind({
+      hasSendableContent: hasSendableComposerContent({
+        value,
+        attachments,
+        hasExternalContent,
+      }),
       allowEmptySubmit,
+      isAgentRunning,
       isSubmitLoading,
     });
     const { canPressLoadingButton, isSendButtonDisabled, defaultActionQueues } =
@@ -1722,23 +1696,44 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         styles.inputWrapper,
         isCompactVoiceInput && styles.inputWrapperVoice,
         useCompactNativeComposer && styles.inputWrapperCompact,
+        readOnly && styles.inputWrapperReadOnly,
         inputWrapperStyle,
         { opacity: surfacePresentation.input.opacity },
       ],
       [
         inputWrapperStyle,
         isCompactVoiceInput,
+        readOnly,
         surfacePresentation.input.opacity,
         useCompactNativeComposer,
       ],
     );
+    // `withUnistyles` maps this component's `style` into a `.hash > *` child
+    // rule, which ties on specificity with react-native-web's own
+    // `.css-textinput-*` class and loses on source order — so a themed
+    // `fontFamily` here is silently dropped while every other property lands.
+    // An inline style outranks both classes. See docs/unistyles.md.
     const textInputStyle = useMemo(
-      () => [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
-      [inputHeight, maxInputHeight],
+      () => [
+        styles.textInput,
+        mode.isMonospace && styles.textInputMonospace,
+        computeTextInputHeightStyle(inputHeight, maxInputHeight),
+      ],
+      [inputHeight, maxInputHeight, mode.isMonospace],
+    );
+    // Static content has no textarea to mirror, so it grows with its own text
+    // instead of the measured input height.
+    const readOnlyTextStyle = useMemo(
+      () => [styles.textInput, mode.isMonospace && styles.textInputMonospace, styles.readOnlyText],
+      [mode.isMonospace],
     );
     const sendButtonCombinedStyle = useMemo(
-      () => [styles.sendButton, isSendButtonDisabled && styles.buttonDisabled],
-      [isSendButtonDisabled],
+      () => [
+        styles.sendButton,
+        submitLabel ? styles.sendButtonLabeled : undefined,
+        isSendButtonDisabled && styles.buttonDisabled,
+      ],
+      [isSendButtonDisabled, submitLabel],
     );
     const overlayContainerStyle = useMemo(
       () => [styles.overlayContainer, { opacity: surfacePresentation.overlay.opacity }],
@@ -1816,6 +1811,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const modeSwitchButton = (
       <VoiceButtonTooltip
+        visible
         onVoicePress={handleCompactModeToggle}
         isDictationStartEnabled={!disabled}
         showLabel={false}
@@ -1831,6 +1827,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const attachmentButton = (
       <AttachmentDropdown
+        visible={mode.showAttachments}
         isConnected={isConnected}
         disabled={disabled}
         attachButtonStyle={attachButtonStyle}
@@ -1841,8 +1838,10 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     );
 
     const sendButton = (
-      <SendButtonTooltip
-        shouldShow={shouldShowSendButton}
+      <PrimaryAction
+        kind={primaryActionKind}
+        activeActionContent={activeActionContent}
+        shouldShow
         canPressLoadingButton={canPressLoadingButton}
         onSubmitLoadingPress={onSubmitLoadingPress}
         onDefaultSendAction={handleDefaultSendAction}
@@ -1851,7 +1850,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         sendButtonCombinedStyle={sendButtonCombinedStyle}
         isSubmitLoading={isSubmitLoading}
         submitIcon={submitIcon}
+        submitLabel={submitLabel}
         submitButtonTestID={submitButtonTestID}
+        buttonIconSize={buttonIconSize}
         sendKeys={DEFAULT_SEND_KEYS}
         sendTooltipLabel={sendTooltipLabel}
       />
@@ -1891,12 +1892,46 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             </>
           ) : (
             <>
-              {inputControl}
+              {/* Text input */}
+              <ComposerTextSurface
+                readOnly={readOnly}
+                value={value}
+                textInputRef={textInputRef}
+                textInputStyle={textInputStyle}
+                readOnlyTextStyle={readOnlyTextStyle}
+                placeholder={placeholder ?? t("composer.placeholders.fallback")}
+                accessibilityLabel={t(mode.accessibilityLabelKey)}
+                onChangeText={handleInputChange}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
+                editable={!isDictating && !isRealtimeVoiceForCurrentAgent && !disabled}
+                scrollEnabled={isWeb ? inputHeight >= maxInputHeight : true}
+                autoFocus={isWeb && autoFocus}
+                onContentSizeChange={handleContentSizeChange}
+                onKeyPress={shouldHandleWebKeyPress ? handleDesktopKeyPress : undefined}
+                onSelectionChange={handleSelectionChange}
+                focusHintVisible={isWeb && isPaneFocused && !isInputFocused && !value}
+                focusInputKeys={focusInputKeys}
+                focusHintLabel={t("composer.input.focusHint", {
+                  shortcut: focusInputKeys
+                    ? formatShortcut(focusInputKeys[0], getShortcutOs())
+                    : "",
+                })}
+              />
+
               {/* Button row */}
               <View style={styles.buttonRow}>
                 {/* Toolbar left: attachment button + agent controls */}
                 <View style={styles.leftButtonGroup}>
-                  {attachmentButton}
+                  <AttachmentDropdown
+                    visible={mode.showAttachments}
+                    isConnected={isConnected}
+                    disabled={disabled}
+                    attachButtonStyle={attachButtonStyle}
+                    renderAttachButtonIcon={renderAttachButtonIcon}
+                    attachmentMenuItems={attachmentMenuItems}
+                    addAttachmentLabel={t("composer.input.addAttachment")}
+                  />
                   {leftContent}
                 </View>
 
@@ -1904,9 +1939,10 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 <View style={styles.rightButtonGroup}>
                   {beforeVoiceContent}
                   <VoiceButtonTooltip
+                    visible={mode.showVoice}
+                    showLabel={isCompact}
                     onVoicePress={handleVoicePress}
                     isDictationStartEnabled={isDictationStartEnabled}
-                    showLabel={isCompact}
                     voiceButtonAccessibilityLabel={voiceButtonAccessibilityLabel}
                     voiceButtonStyle={voiceButtonStyle}
                     renderVoiceButtonIcon={renderVoiceButtonIcon}
@@ -1916,7 +1952,24 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                     dictationToggleKeys={dictationToggleKeys}
                   />
                   {rightContent}
-                  {sendButton}
+                  <PrimaryAction
+                    kind={primaryActionKind}
+                    activeActionContent={activeActionContent}
+                    shouldShow
+                    canPressLoadingButton={canPressLoadingButton}
+                    onSubmitLoadingPress={onSubmitLoadingPress}
+                    onDefaultSendAction={handleDefaultSendAction}
+                    isSendButtonDisabled={isSendButtonDisabled}
+                    submitAccessibilityLabel={submitAccessibilityLabel}
+                    sendButtonCombinedStyle={sendButtonCombinedStyle}
+                    isSubmitLoading={isSubmitLoading}
+                    submitIcon={submitIcon}
+                    submitLabel={submitLabel}
+                    submitButtonTestID={submitButtonTestID}
+                    buttonIconSize={buttonIconSize}
+                    sendKeys={DEFAULT_SEND_KEYS}
+                    sendTooltipLabel={sendTooltipLabel}
+                  />
                 </View>
               </View>
             </>
@@ -2010,6 +2063,11 @@ const styles = StyleSheet.create((theme: Theme) => ({
     fontWeight: theme.fontWeight.normal,
     textAlign: "center",
   },
+  // Dotted says "this surface is the same box, but there is nothing to type
+  // into it" without swapping the border colour, which reads as an error state.
+  inputWrapperReadOnly: {
+    borderStyle: "dotted",
+  },
   textInputScrollWrapper: {
     position: "relative",
     width: "100%",
@@ -2035,6 +2093,13 @@ const styles = StyleSheet.create((theme: Theme) => ({
           outlineColor: "transparent",
         } as object)
       : {}),
+  },
+  textInputMonospace: {
+    fontFamily: theme.fontFamily.mono,
+  },
+  readOnlyText: {
+    minHeight: MIN_INPUT_HEIGHT,
+    color: theme.colors.foregroundMuted,
   },
   buttonRow: {
     flexDirection: "row",
@@ -2123,6 +2188,17 @@ const styles = StyleSheet.create((theme: Theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  sendButtonLabeled: {
+    width: "auto",
+    minWidth: 28,
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.full,
+  },
+  sendButtonLabel: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.accentForeground,
+  },
   iconButtonHovered: {
     backgroundColor: theme.colors.surface2,
   },
@@ -2137,31 +2213,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   buttonDisabled: {
     opacity: 0.5,
-  },
-  attachmentSheetList: {
-    gap: theme.spacing[1],
-  },
-  attachmentSheetItem: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderRadius: theme.borderRadius.xl,
-  },
-  attachmentSheetItemPressed: {
-    backgroundColor: theme.colors.surface2,
-  },
-  attachmentSheetItemIcon: {
-    width: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  attachmentSheetItemText: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
   },
   overlayContainer: {
     position: "absolute",

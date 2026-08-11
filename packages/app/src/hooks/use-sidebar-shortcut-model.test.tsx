@@ -17,10 +17,11 @@ function workspace(projectKey: string, workspaceId: string): SidebarWorkspaceEnt
     workspaceKey: `srv:${workspaceId}`,
     serverId: "srv",
     workspaceId,
-    projectKey,
+    projectViewKey: projectKey,
     projectName: projectKey,
     projectRootPath: `/repo/${projectKey}`,
     workspaceDirectory: `/repo/${projectKey}/${workspaceId}`,
+    workspaceDirectoryLabel: `/repo/${projectKey}/${workspaceId}`,
     projectKind: "git",
     workspaceKind: "worktree",
     name: workspaceId,
@@ -41,7 +42,7 @@ function workspace(projectKey: string, workspaceId: string): SidebarWorkspaceEnt
 
 function project(projectKey: string): SidebarProjectEntry {
   return {
-    projectKey,
+    viewKey: projectKey,
     projectName: projectKey,
     projectKind: "git",
     iconWorkingDir: `/repo/${projectKey}`,

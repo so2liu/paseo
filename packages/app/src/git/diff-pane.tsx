@@ -26,7 +26,7 @@ import {
   type TextStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { BORDER_WIDTH, SPACING, type Theme } from "@/styles/theme";
+import { BORDER_WIDTH, ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import {
   getWorkspaceSecondaryHeaderHeight,
   scaleWorkspaceSecondaryHeaderGeometry,
@@ -34,22 +34,15 @@ import {
 } from "@/constants/layout";
 import {
   AlignJustify,
-  Archive,
-  ArrowDownUp,
   ChevronDown,
   Columns2,
-  Download,
   FolderTree,
-  GitCommitHorizontal,
-  GitMerge,
   List,
   ListChevronsDownUp,
   ListChevronsUpDown,
   Maximize2,
   Pilcrow,
-  RefreshCcw,
   RotateCw,
-  Upload,
   WrapText,
 } from "lucide-react-native";
 import { type ParsedDiffFile, type DiffLine, type HighlightToken } from "@/git/use-diff-query";
@@ -59,10 +52,13 @@ import { DiffFolderRow } from "@/git/diff-folder-row";
 import {
   TreeIndentGuides,
   treeRowPaddingLeft,
+  WORKSPACE_FILE_ROW_TRAILING_PADDING,
   WORKSPACE_FILE_ROW_VERTICAL_PADDING,
+  WORKSPACE_TREE_ICON_LABEL_GAP,
+  WORKSPACE_TREE_ICON_SIZE,
 } from "@/components/tree-primitives";
-import { SvgXml } from "react-native-svg";
-import { getFileIconSvg } from "@/components/material-file-icons";
+import { MaterialFileIcon } from "@/components/material-file-icon";
+import { FileChangeIcon } from "@/components/file-change-icon";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { CommitsSection } from "@/git/commits-section/commits-section";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
@@ -86,7 +82,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import * as Clipboard from "expo-clipboard";
-import { FILE_ACTIONS_MENU_WIDTH, FileActionsMenu } from "@/components/file-actions-menu";
+import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -94,6 +91,7 @@ import { lineNumberGutterWidth } from "@/components/code-insets";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { useGitActions } from "@/git/use-actions";
+import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { buildForgeSignInCommand, getForgePresentation, type Forge } from "@/git/forge";
 import { parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
 import type { ForgeAuthState } from "@getpaseo/protocol/messages";
@@ -101,6 +99,7 @@ import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { useToast } from "@/contexts/toast-context";
 import { useSessionStore } from "@/stores/session-store";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useOverlayFlatListScrollbar } from "@/components/ui/overlay-scrollbar/use-overlay-flat-list-scrollbar";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { usePanelStore } from "@/stores/panel-store";
 import { collectAllTabs, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
@@ -134,8 +133,11 @@ export function resolveDiffLayout(
   return canUseSplitLayout ? layout : "unified";
 }
 
-function fileHeaderPressableStyle({ pressed }: PressableStateCallbackType) {
-  return [styles.fileHeader, pressed && styles.fileHeaderPressed];
+function fileHeaderPressableStyle({
+  hovered,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [styles.fileHeader, (Boolean(hovered) || pressed) && styles.fileHeaderActive];
 }
 
 interface HighlightedTextProps {
@@ -929,7 +931,6 @@ const DiffFileHeader = memo(function DiffFileHeader({
   onHeaderHeightChange,
   testID,
 }: DiffFileSectionProps) {
-  const { t } = useTranslation();
   const dragSourceRef = useWorkspaceFileDragSource({
     enabled: interactive,
     disabled: file.isDeleted,
@@ -940,7 +941,6 @@ const DiffFileHeader = memo(function DiffFileHeader({
   const layoutYRef = useRef<number | null>(null);
   const pressHandledRef = useRef(false);
   const pressInRef = useRef<{ ts: number; pageX: number; pageY: number } | null>(null);
-  const [isActionsOpen, setIsActionsOpen] = useState(false);
 
   const toggleExpanded = useCallback(() => {
     if (!interactive) {
@@ -966,15 +966,6 @@ const DiffFileHeader = memo(function DiffFileHeader({
     onDownload?.(file.path);
   }, [file.path, onDownload]);
 
-  const handleContextMenu = useCallback(
-    (event: { preventDefault: () => void; stopPropagation: () => void }) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setIsActionsOpen(true);
-    },
-    [],
-  );
-
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
       layoutYRef.current = event.nativeEvent.layout.y;
@@ -990,6 +981,10 @@ const DiffFileHeader = memo(function DiffFileHeader({
       pageX: event.nativeEvent.pageX,
       pageY: event.nativeEvent.pageY,
     };
+  }, []);
+
+  const handleLongPress = useCallback(() => {
+    pressHandledRef.current = true;
   }, []);
 
   const handlePressOut = useCallback(
@@ -1032,10 +1027,13 @@ const DiffFileHeader = memo(function DiffFileHeader({
   const fileName = file.path.split("/").pop() ?? file.path;
   const headerContent = (
     <>
-      <View ref={dragSourceRef} style={styles.fileHeaderLeft}>
+      <View
+        ref={dragSourceRef}
+        style={showDir ? styles.fileHeaderLeft : [styles.fileHeaderLeft, styles.fileHeaderLeftTree]}
+      >
         {showDir ? null : (
           <View style={styles.fileIcon}>
-            <SvgXml xml={getFileIconSvg(fileName)} width={16} height={16} />
+            <MaterialFileIcon fileName={fileName} size={16} />
           </View>
         )}
         <Text style={styles.fileName} numberOfLines={1}>
@@ -1050,16 +1048,8 @@ const DiffFileHeader = memo(function DiffFileHeader({
           // stays right-aligned next to the diff stats, as in the flat list.
           <View style={styles.fileDirSpacer} />
         )}
-        {file.isNew && (
-          <View style={styles.newBadge}>
-            <Text style={styles.newBadgeText}>{t("workspace.git.diff.newFile")}</Text>
-          </View>
-        )}
-        {file.isDeleted && (
-          <View style={styles.deletedBadge}>
-            <Text style={styles.deletedBadgeText}>{t("workspace.git.diff.deletedFile")}</Text>
-          </View>
-        )}
+        {file.isNew && <FileChangeIcon change="added" />}
+        {file.isDeleted && <FileChangeIcon change="deleted" />}
       </View>
       <View style={styles.fileHeaderRight}>
         <DiffStat
@@ -1067,20 +1057,6 @@ const DiffFileHeader = memo(function DiffFileHeader({
           deletions={file.deletions}
           testID={testID ? `${testID}-stat` : undefined}
         />
-        {interactive ? (
-          <FileActionsMenu
-            fileKind="file"
-            fileExists={!file.isDeleted}
-            onOpenFile={onOpenFile ? handleOpenFile : undefined}
-            onCopyPath={onCopyPath ? handleCopyPath : undefined}
-            onDownload={onDownload ? handleDownload : undefined}
-            onAddToChat={onAddToChat ? handleAddToChat : undefined}
-            open={isActionsOpen}
-            onOpenChange={setIsActionsOpen}
-            accessibilityLabel={t("workspace.fileActions.moreActions")}
-            testIDPrefix={testID}
-          />
-        ) : null}
       </View>
     </>
   );
@@ -1092,31 +1068,43 @@ const DiffFileHeader = memo(function DiffFileHeader({
     );
   } else {
     trigger = (
-      <Pressable
+      <ContextMenuTrigger
         testID={testID ? `${testID}-toggle` : undefined}
         style={headerPressableStyle}
         // Android: prevent parent pan/scroll gestures from canceling the tap release.
         cancelable={false}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
+        onLongPress={handleLongPress}
         onPress={toggleExpanded}
-        // @ts-ignore - onContextMenu is web-only and not in RN types.
-        onContextMenu={handleContextMenu}
       >
         {headerContent}
-      </Pressable>
+      </ContextMenuTrigger>
     );
   }
 
   return (
     <View style={containerStyle} onLayout={handleLayout} testID={testID}>
       <TreeIndentGuides depth={depth} />
-      <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
-        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-        <TooltipContent side="bottom" align="start" offset={6} maxWidth={520}>
-          <Text style={styles.tooltipText}>{file.path}</Text>
-        </TooltipContent>
-      </Tooltip>
+      <ContextMenu>
+        <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+          <TooltipContent side="bottom" align="start" offset={6} maxWidth={520}>
+            <Text style={styles.tooltipText}>{file.path}</Text>
+          </TooltipContent>
+        </Tooltip>
+        {interactive ? (
+          <FileActionsContextMenuContent
+            fileKind="file"
+            fileExists={!file.isDeleted}
+            onOpenFile={onOpenFile ? handleOpenFile : undefined}
+            onCopyPath={onCopyPath ? handleCopyPath : undefined}
+            onDownload={onDownload ? handleDownload : undefined}
+            onAddToChat={onAddToChat ? handleAddToChat : undefined}
+            testIDPrefix={testID}
+          />
+        ) : null}
+      </ContextMenu>
     </View>
   );
 });
@@ -1346,13 +1334,6 @@ const ThemedListChevronsUpDown = withUnistyles(ListChevronsUpDown);
 const ThemedFolderTree = withUnistyles(FolderTree);
 const ThemedList = withUnistyles(List);
 const ThemedMaximize2 = withUnistyles(Maximize2);
-const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
-const ThemedDownload = withUnistyles(Download);
-const ThemedUpload = withUnistyles(Upload);
-const ThemedArrowDownUp = withUnistyles(ArrowDownUp);
-const ThemedGitMerge = withUnistyles(GitMerge);
-const ThemedRefreshCcw = withUnistyles(RefreshCcw);
-const ThemedArchive = withUnistyles(Archive);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
@@ -1879,6 +1860,7 @@ interface SharedDiffViewProps {
 }
 
 export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffViewProps) {
+  const isCompact = useIsCompactFormFactor();
   const { layout, wrapLines, codeFontSize, monoFontFamily } = displayPreferences;
   const diffBodyLineHeight = Math.round(codeFontSize * 1.5);
   const typographyKey = [monoFontFamily, codeFontSize, diffBodyLineHeight].join(":");
@@ -1924,6 +1906,8 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     [allFolderPathSet, collapsedFolders],
   );
   const diffListRef = useRef<FlatList<DiffFlatItem>>(null);
+  const scrollbar = useOverlayFlatListScrollbar(diffListRef, { enabled: !isCompact });
+  const { onLayout: updateScrollbarLayout, onScroll: updateScrollbarOffset } = scrollbar;
   const consumedFocusRequestRef = useRef<string | null>(null);
   const pendingFocusRequestRef = useRef<string | null>(null);
   const diffListScrollOffsetRef = useRef(0);
@@ -2073,17 +2057,25 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     [getBodyHeightKey, scheduleHeightVersionUpdate],
   );
 
-  const handleDiffListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    diffListScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
-  }, []);
+  const handleDiffListScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      diffListScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+      updateScrollbarOffset(event);
+    },
+    [updateScrollbarOffset],
+  );
 
-  const handleDiffListLayout = useCallback((event: LayoutChangeEvent) => {
-    const height = event.nativeEvent.layout.height;
-    if (!Number.isFinite(height) || height <= 0) {
-      return;
-    }
-    diffListViewportHeightRef.current = height;
-  }, []);
+  const handleDiffListLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const height = event.nativeEvent.layout.height;
+      if (!Number.isFinite(height) || height <= 0) {
+        return;
+      }
+      diffListViewportHeightRef.current = height;
+      updateScrollbarLayout(event);
+    },
+    [updateScrollbarLayout],
+  );
 
   const computeItemOffset = useCallback(
     (predicate: (item: DiffFlatItem) => boolean): number | null => {
@@ -2317,26 +2309,30 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   );
 
   return (
-    <FlatList
-      ref={diffListRef}
-      data={flatItems}
-      renderItem={renderFlatItem}
-      keyExtractor={flatKeyExtractor}
-      getItemLayout={getFlatItemLayout}
-      stickyHeaderIndices={stickyHeaderIndices}
-      extraData={flatExtraData}
-      style={styles.scrollView}
-      contentContainerStyle={styles.contentContainer}
-      testID="git-diff-scroll"
-      onLayout={handleDiffListLayout}
-      onScroll={handleDiffListScroll}
-      scrollEventThrottle={16}
-      showsVerticalScrollIndicator
-      removeClippedSubviews={false}
-      initialNumToRender={12}
-      maxToRenderPerBatch={12}
-      windowSize={10}
-    />
+    <View style={styles.scrollContainer}>
+      <FlatList
+        ref={diffListRef}
+        data={flatItems}
+        renderItem={renderFlatItem}
+        keyExtractor={flatKeyExtractor}
+        getItemLayout={getFlatItemLayout}
+        stickyHeaderIndices={stickyHeaderIndices}
+        extraData={flatExtraData}
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        testID="git-diff-scroll"
+        onLayout={handleDiffListLayout}
+        onScroll={handleDiffListScroll}
+        onContentSizeChange={scrollbar.onContentSizeChange}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={!scrollbar.enabled}
+        removeClippedSubviews={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={10}
+      />
+      {scrollbar.overlay}
+    </View>
   );
 }
 
@@ -2838,22 +2834,10 @@ export function GitDiffPane({
     () => computeBaseRefLabel(baseRef, t("workspace.git.diff.base")),
     [baseRef, t],
   );
-  const gitActionsIcons = useMemo(
-    () => ({
-      commit: <ThemedGitCommitHorizontal size={16} uniProps={foregroundMutedIconColorMapping} />,
-      pull: <ThemedDownload size={16} uniProps={foregroundMutedIconColorMapping} />,
-      push: <ThemedUpload size={16} uniProps={foregroundMutedIconColorMapping} />,
-      pullAndPush: <ThemedArrowDownUp size={16} uniProps={foregroundMutedIconColorMapping} />,
-      merge: <ThemedGitMerge size={16} uniProps={foregroundMutedIconColorMapping} />,
-      mergeFromBase: <ThemedRefreshCcw size={16} uniProps={foregroundMutedIconColorMapping} />,
-      archive: <ThemedArchive size={16} uniProps={foregroundMutedIconColorMapping} />,
-    }),
-    [],
-  );
   const { gitActions, branchLabel } = useGitActions({
     serverId,
     cwd,
-    icons: gitActionsIcons,
+    icons: GIT_ACTION_ICONS,
   });
   const committedDiffDescription = useMemo(
     () => computeCommittedDiffDescription(branchLabel, baseRefLabel),
@@ -3071,7 +3055,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   overflowButton: {
-    width: scaleWorkspaceSecondaryHeaderGeometry(theme, FILE_ACTIONS_MENU_WIDTH),
+    width: scaleWorkspaceSecondaryHeaderGeometry(theme, ICON_SIZE.sm + 2 * SPACING[1]),
     height: {
       xs: theme.controlHeight.compact,
       sm: theme.controlHeight.compact,
@@ -3109,6 +3093,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContainer: {
+    flex: 1,
+    minHeight: 0,
+    position: "relative",
   },
   contentContainer: {
     paddingBottom: theme.spacing[8],
@@ -3170,15 +3159,15 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     paddingLeft: theme.spacing[3],
-    paddingRight: theme.spacing[3],
+    paddingRight: WORKSPACE_FILE_ROW_TRAILING_PADDING,
     paddingVertical: WORKSPACE_FILE_ROW_VERTICAL_PADDING,
     gap: theme.spacing[1],
     minWidth: 0,
     zIndex: 2,
     elevation: 2,
   },
-  fileHeaderPressed: {
-    opacity: 0.7,
+  fileHeaderActive: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   fileHeaderLeft: {
     flexDirection: "row",
@@ -3187,6 +3176,9 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
   },
+  fileHeaderLeftTree: {
+    gap: WORKSPACE_TREE_ICON_LABEL_GAP,
+  },
   fileHeaderRight: {
     flexDirection: "row",
     alignItems: "center",
@@ -3194,6 +3186,8 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   fileIcon: {
+    width: WORKSPACE_TREE_ICON_SIZE,
+    height: WORKSPACE_TREE_ICON_SIZE,
     flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
@@ -3215,40 +3209,6 @@ const styles = StyleSheet.create((theme) => ({
   fileDirSpacer: {
     flex: 1,
     minWidth: 0,
-  },
-  newBadge: {
-    backgroundColor: "rgba(46, 160, 67, 0.2)",
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
-    flexShrink: 0,
-  },
-  newBadgeText: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.diffAddition,
-  },
-  deletedBadge: {
-    backgroundColor: "rgba(248, 81, 73, 0.2)",
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
-    flexShrink: 0,
-  },
-  deletedBadgeText: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.diffDeletion,
-  },
-  additions: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.diffAddition,
-  },
-  deletions: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.diffDeletion,
   },
   diffContent: {
     borderTopWidth: theme.borderWidth[1],

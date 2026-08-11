@@ -11,6 +11,7 @@ import {
 import {
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
+  selectAgentTimelineState,
   useSessionStore,
   type Agent,
   type SessionReplica,
@@ -18,22 +19,14 @@ import {
   type ProjectDescriptor,
   type WorkspaceDescriptor,
 } from "@/stores/session-store";
-import type { StreamItem } from "@/types/stream";
+import { isUnreconciledLocalUserMessage, type StreamItem } from "@/types/stream";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 
 const STORAGE_KEY = "@paseo:replica-cache";
-// v1 cached only the last focused agent. v2 caches a bounded set of recently
-// viewed agents so switching between conversations paints from cache too.
-// Bumping the version drops a v1 cache, which costs one uncached cold start.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const PERSIST_DELAY_MS = 750;
 const MAX_TIMELINE_ITEMS = 50;
-/**
- * How many recently viewed agents to keep per host. The byte budget is still
- * the hard limit; this just bounds the work before the budget is applied.
- */
-const MAX_CACHED_AGENTS_PER_HOST = 8;
-const MAX_CACHE_BYTES = 2 * 1024 * 1024;
+const MAX_CACHE_BYTES = 1024 * 1024;
 const DATE_TAG = "__paseoDate";
 
 const StoredAgentSchema = z.object({
@@ -45,14 +38,6 @@ const StoredAgentSchema = z.object({
 const StoredTimelineSchema = z.object({
   agentId: z.string(),
   items: z.unknown(),
-  cursor: z
-    .object({
-      epoch: z.string(),
-      startSeq: z.number().int().nonnegative(),
-      endSeq: z.number().int().nonnegative(),
-    })
-    .nullable(),
-  hasOlder: z.boolean(),
 });
 
 const StoredHostSchema = z.object({
@@ -61,8 +46,7 @@ const StoredHostSchema = z.object({
   workspaces: z.array(WorkspaceDescriptorPayloadSchema),
   projects: z.array(WorkspaceProjectDescriptorPayloadSchema).optional().default([]),
   emptyProjects: z.array(WorkspaceProjectDescriptorPayloadSchema),
-  /** Most recently viewed first; agent eviction drops from the end. */
-  timelines: z.array(StoredTimelineSchema),
+  timeline: StoredTimelineSchema.nullable(),
 });
 
 const StoredCacheSchema = z.object({
@@ -140,9 +124,10 @@ function decodeDates(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, decodeDates(entry)]));
 }
 
-function deserializeTimeline(
-  stored: StoredHost["timelines"][number],
-): SessionReplica["timelines"][number] | null {
+function deserializeTimeline(stored: StoredHost["timeline"]): SessionReplica["timeline"] {
+  if (!stored) {
+    return null;
+  }
   const decoded = decodeDates(stored.items);
   if (!Array.isArray(decoded) || !decoded.every(isStreamItem)) {
     return null;
@@ -150,8 +135,6 @@ function deserializeTimeline(
   return {
     agentId: stored.agentId,
     items: decoded,
-    cursor: stored.cursor,
-    hasOlder: stored.hasOlder,
   };
 }
 
@@ -204,13 +187,14 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): WorkspaceDescriptor
     projectId: workspace.projectId,
     projectDisplayName: workspace.projectDisplayName,
     projectCustomName: workspace.projectCustomName ?? null,
+    projectCustomIconRevision: workspace.projectCustomIconRevision ?? null,
     projectRootPath: workspace.projectRootPath,
     workspaceDirectory: workspace.workspaceDirectory,
+    worktreeSlug: workspace.worktreeSlug,
     projectKind: workspace.projectKind,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
     title: workspace.title ?? null,
-    createdAt: workspace.createdAt?.toISOString(),
     pinnedAt: workspace.pinnedAt ?? null,
     status: workspace.status,
     statusEnteredAt: workspace.statusEnteredAt?.toISOString() ?? null,
@@ -251,9 +235,7 @@ function deserializeHost(stored: StoredHost): SessionReplica {
     agents: new Map(agents.map((agent) => [agent.id, agent])),
     workspaces: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
     projects,
-    timelines: stored.timelines
-      .map(deserializeTimeline)
-      .filter((timeline): timeline is SessionReplica["timelines"][number] => timeline !== null),
+    timeline: deserializeTimeline(stored.timeline),
   };
 }
 
@@ -271,8 +253,7 @@ function legacyProjectDescriptorFromWorkspace(workspace: WorkspaceDescriptor): P
 export class ReplicaCache {
   private readonly activeServerIds = new Set<string>();
   private readonly storedHosts = new Map<string, StoredHost>();
-  /** Per host, the agents viewed most recently first. */
-  private readonly recentAgentIds = new Map<string, string[]>();
+  private readonly lastFocusedAgentIds = new Map<string, string>();
   private readonly capturedSessions = new Map<string, SessionState>();
   private readonly maxBytes: number;
   private needsPersist = false;
@@ -302,8 +283,8 @@ export class ReplicaCache {
         removedStoredHost = true;
       }
     }
-    for (const serverId of this.recentAgentIds.keys()) {
-      if (!next.has(serverId)) this.recentAgentIds.delete(serverId);
+    for (const serverId of this.lastFocusedAgentIds.keys()) {
+      if (!next.has(serverId)) this.lastFocusedAgentIds.delete(serverId);
     }
     for (const serverId of this.capturedSessions.keys()) {
       if (!next.has(serverId)) this.capturedSessions.delete(serverId);
@@ -334,12 +315,7 @@ export class ReplicaCache {
         continue;
       }
       this.storedHosts.set(host.serverId, host);
-      if (host.timelines.length > 0) {
-        this.recentAgentIds.set(
-          host.serverId,
-          host.timelines.map((timeline) => timeline.agentId),
-        );
-      }
+      if (host.timeline) this.lastFocusedAgentIds.set(host.serverId, host.timeline.agentId);
     }
     if (this.buildBoundedPayload().evicted) this.needsPersist = true;
     for (const host of this.storedHosts.values()) {
@@ -355,20 +331,11 @@ export class ReplicaCache {
       if (this.activeServerIds.size === 0) return;
       for (const serverId of this.activeServerIds) {
         const focusedAgentId = state.sessions[serverId]?.focusedAgentId;
-        if (focusedAgentId) this.touchAgent(serverId, focusedAgentId);
+        if (focusedAgentId) this.lastFocusedAgentIds.set(serverId, focusedAgentId);
       }
       this.schedulePersist();
     });
     if (this.needsPersist) this.schedulePersist();
-  }
-
-  stop(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
-    if (this.persistTimer) {
-      clearTimeout(this.persistTimer);
-      this.persistTimer = null;
-    }
   }
 
   reconcileServerId(oldServerId: string, newServerId: string): void {
@@ -377,10 +344,10 @@ export class ReplicaCache {
       this.storedHosts.delete(oldServerId);
       this.storedHosts.set(newServerId, { ...stored, serverId: newServerId });
     }
-    const recentAgentIds = this.recentAgentIds.get(oldServerId);
-    if (recentAgentIds) {
-      this.recentAgentIds.delete(oldServerId);
-      this.recentAgentIds.set(newServerId, recentAgentIds);
+    const focusedAgentId = this.lastFocusedAgentIds.get(oldServerId);
+    if (focusedAgentId) {
+      this.lastFocusedAgentIds.delete(oldServerId);
+      this.lastFocusedAgentIds.set(newServerId, focusedAgentId);
     }
     const capturedSession = this.capturedSessions.get(oldServerId);
     if (capturedSession) {
@@ -407,14 +374,6 @@ export class ReplicaCache {
     await write.catch(() => undefined);
   }
 
-  /** Move an agent to the front of its host's recency list. */
-  private touchAgent(serverId: string, agentId: string): void {
-    const previous = this.recentAgentIds.get(serverId) ?? [];
-    if (previous[0] === agentId) return;
-    const next = [agentId, ...previous.filter((id) => id !== agentId)];
-    this.recentAgentIds.set(serverId, next.slice(0, MAX_CACHED_AGENTS_PER_HOST));
-  }
-
   private captureSessions(): void {
     const sessions = useSessionStore.getState().sessions;
     for (const serverId of this.activeServerIds) {
@@ -423,49 +382,45 @@ export class ReplicaCache {
       if (this.capturedSessions.get(serverId) === session) continue;
       this.capturedSessions.set(serverId, session);
       if (session.focusedAgentId) {
-        this.touchAgent(serverId, session.focusedAgentId);
+        this.lastFocusedAgentIds.set(serverId, session.focusedAgentId);
       }
-
-      const agents: StoredAgent[] = [];
-      const workspaces = new Map<string, WorkspaceDescriptorPayload>();
-      const projects = new Map<string, ReturnType<typeof serializeProject>>();
-      const timelines: StoredHost["timelines"] = [];
-      const stillPresent: string[] = [];
-
-      for (const agentId of this.recentAgentIds.get(serverId) ?? []) {
-        const agent = session.agents.get(agentId);
-        const items = session.agentStreamTail.get(agentId);
-        // An agent that is gone from the session, or that has nothing worth
-        // painting, drops out of the recency list rather than pinning a slot.
-        if (!agent || !items?.length) continue;
-        stillPresent.push(agentId);
-        agents.push(serializeAgent(agent));
-        timelines.push({
-          agentId,
-          items: encodeDates(items.slice(-MAX_TIMELINE_ITEMS)),
-          cursor: session.agentTimelineCursor.get(agentId) ?? null,
-          hasOlder: session.agentTimelineHasOlder.get(agentId) ?? false,
-        });
-        const workspace =
-          (agent.workspaceId ? session.workspaces.get(agent.workspaceId) : undefined) ??
+      const focusedAgentId = this.lastFocusedAgentIds.get(serverId) ?? null;
+      const focusedAgent = focusedAgentId ? session.agents.get(focusedAgentId) : undefined;
+      const focusedWorkspace = focusedAgent
+        ? ((focusedAgent.workspaceId
+            ? session.workspaces.get(focusedAgent.workspaceId)
+            : undefined) ??
           Array.from(session.workspaces.values()).find(
-            (candidate) => candidate.workspaceDirectory === agent.cwd,
-          );
-        if (workspace && !workspaces.has(workspace.id)) {
-          workspaces.set(workspace.id, serializeWorkspace(workspace));
-          const project = session.projects.get(workspace.projectId);
-          if (project) projects.set(project.projectId, serializeProject(project));
-        }
-      }
-      this.recentAgentIds.set(serverId, stillPresent);
-
+            (workspace) => workspace.workspaceDirectory === focusedAgent.cwd,
+          ))
+        : undefined;
+      const timelineState = focusedAgentId
+        ? selectAgentTimelineState(session, focusedAgentId)
+        : { status: "cold" as const };
+      const items =
+        timelineState.status === "cold"
+          ? undefined
+          : timelineState.items.filter(
+              (item) => item.kind !== "user_message" || !isUnreconciledLocalUserMessage(item),
+            );
+      const timeline =
+        focusedAgent && items
+          ? {
+              agentId: focusedAgent.id,
+              items: encodeDates(items.slice(-MAX_TIMELINE_ITEMS)),
+            }
+          : null;
       const stored: StoredHost = {
         serverId,
-        agents,
-        workspaces: Array.from(workspaces.values()),
-        projects: Array.from(projects.values()),
+        agents: focusedAgent ? [serializeAgent(focusedAgent)] : [],
+        workspaces: focusedWorkspace ? [serializeWorkspace(focusedWorkspace)] : [],
+        projects: focusedWorkspace
+          ? [session.projects.get(focusedWorkspace.projectId)].flatMap((project) =>
+              project ? [serializeProject(project)] : [],
+            )
+          : [],
         emptyProjects: [],
-        timelines,
+        timeline,
       };
       this.storedHosts.delete(serverId);
       this.storedHosts.set(serverId, stored);
@@ -476,13 +431,6 @@ export class ReplicaCache {
     let evicted = false;
     let payload = this.serialize();
     while (Buffer.byteLength(payload, "utf8") > this.maxBytes && this.storedHosts.size > 0) {
-      // Shed the least recently viewed agent first: losing the oldest tab of a
-      // host beats losing the host's whole cached view.
-      if (this.dropLeastRecentAgent()) {
-        evicted = true;
-        payload = this.serialize();
-        continue;
-      }
       const oldestServerId = this.storedHosts.keys().next().value;
       if (oldestServerId === undefined) break;
       this.storedHosts.delete(oldestServerId);
@@ -490,36 +438,6 @@ export class ReplicaCache {
       payload = this.serialize();
     }
     return { payload, evicted };
-  }
-
-  /**
-   * Drop one trailing agent from whichever host still caches more than one.
-   * Returns false once every host is down to a single agent, which hands the
-   * budget back to whole-host eviction.
-   */
-  private dropLeastRecentAgent(): boolean {
-    let target: StoredHost | null = null;
-    for (const host of this.storedHosts.values()) {
-      if (
-        host.timelines.length > 1 &&
-        (!target || host.timelines.length > target.timelines.length)
-      ) {
-        target = host;
-      }
-    }
-    if (!target) return false;
-
-    const dropped = target.timelines.pop();
-    if (!dropped) return false;
-    target.agents = target.agents.filter((entry) => entry.snapshot.id !== dropped.agentId);
-    // Workspaces are left alone: they are small next to a timeline, and an
-    // agent may be matched to one by cwd rather than by workspaceId, so pruning
-    // by id here could strip a descriptor a kept agent still needs.
-    this.recentAgentIds.set(
-      target.serverId,
-      target.timelines.map((timeline) => timeline.agentId),
-    );
-    return true;
   }
 
   private serialize(): string {
