@@ -67,7 +67,9 @@ export async function expectAgentSurfacesIdle(page: Page, title: string): Promis
 }
 
 export async function expectTurnCopyButton(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Copy turn" }).first()).toBeVisible({
+  // The fork splits upstream's single "Copy turn" control into "Copy conclusion" and
+  // "Copy full response", so the turn footer is identified by the conclusion button.
+  await expect(page.getByTestId("assistant-copy-conclusion").first()).toBeVisible({
     timeout: 30_000,
   });
 }

@@ -13,6 +13,10 @@ const { runtime, theme } = vi.hoisted(() => ({
     fontFamily: { ui: "system-ui", mono: "monospace" },
     fontSize: { xs: 11, code: 12, sm: 13, base: 15, xl: 20 },
     fontWeight: { normal: "400", medium: "500", semibold: "600" },
+    // The fork derives control geometry from the icon and control scales so controls grow
+    // with the user's font size; see components/ui/control-geometry.ts.
+    iconSize: { xs: 12, sm: 14, md: 16, lg: 20 },
+    controlHeight: { tight: 28, compact: 32, field: 44 },
     colors: {
       accent: "#369",
       accentForeground: "#fff",

@@ -70,6 +70,7 @@ describe("host transfer", () => {
         serverId: "srv_second",
         label: "srv_second",
         lifecycle: {},
+        appearance: defaultHostAppearance(),
         connections: [
           {
             id: "relay:relay.example.com:443",

@@ -79,10 +79,28 @@ const ThemedChevronRight = withUnistyles(ChevronRight, (theme) => ({
 const COMMAND_CENTER_SNAP_POINTS = ["60%", "90%"];
 const KEYBOARD_SHOULD_PERSIST_TAPS = "always" as const;
 
+// Line heights are the default ones scaled by the user's font size rather than a fixed
+// multiplier: at the default size the row keeps upstream's tight two-line spacing, and the
+// text stops clipping once the user enlarges it.
+const TITLE_LINE_HEIGHT_AT_DEFAULT = 18;
+const SUBTITLE_LINE_HEIGHT_AT_DEFAULT = 16;
+
+function scaleLineHeight(fontSize: number, baseFontSize: number, baseLineHeight: number): number {
+  return Math.round((fontSize / baseFontSize) * baseLineHeight);
+}
+
 function commandCenterRowMetrics(uiFontSize: number): CommandCenterRowMetrics {
   const scale = uiFontSize / FONT_SIZE.base;
-  const titleLineHeight = Math.round(Math.round(FONT_SIZE.sm * scale) * 1.4);
-  const subtitleLineHeight = Math.round(Math.round(FONT_SIZE.xs * scale) * 1.5);
+  const titleLineHeight = scaleLineHeight(
+    Math.round(FONT_SIZE.sm * scale),
+    FONT_SIZE.sm,
+    TITLE_LINE_HEIGHT_AT_DEFAULT,
+  );
+  const subtitleLineHeight = scaleLineHeight(
+    Math.round(FONT_SIZE.xs * scale),
+    FONT_SIZE.xs,
+    SUBTITLE_LINE_HEIGHT_AT_DEFAULT,
+  );
   const verticalPadding = SPACING[2] * 2;
   const sectionGrowth = Math.max(0, subtitleLineHeight - 18);
 
@@ -741,13 +759,13 @@ const styles = StyleSheet.create((theme) => ({
   title: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
-    lineHeight: Math.round(theme.fontSize.sm * 1.4),
+    lineHeight: scaleLineHeight(theme.fontSize.sm, FONT_SIZE.sm, TITLE_LINE_HEIGHT_AT_DEFAULT),
     flexShrink: 1,
   },
   subtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    lineHeight: Math.round(theme.fontSize.xs * 1.5),
+    lineHeight: scaleLineHeight(theme.fontSize.xs, FONT_SIZE.xs, SUBTITLE_LINE_HEIGHT_AT_DEFAULT),
   },
   iconSlot: { width: 16, height: 20, alignItems: "center", justifyContent: "center" },
   rowShortcut: { flexShrink: 0 },
@@ -767,7 +785,7 @@ const styles = StyleSheet.create((theme) => ({
   breadcrumbGroup: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    lineHeight: Math.round(theme.fontSize.sm * 1.4),
+    lineHeight: scaleLineHeight(theme.fontSize.sm, FONT_SIZE.sm, TITLE_LINE_HEIGHT_AT_DEFAULT),
     flexShrink: 0,
   },
   emptyText: {
