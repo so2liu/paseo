@@ -558,9 +558,13 @@ export async function scrollTimelineUntilOlderHistoryIsReachable(
     }
     const previousHeight = await readTimelineViewport(page);
     await userScrollsTimelineToHistoryStart(page);
+    // Upstream waits for the box to get taller. This fork collapses a completed turn's
+    // execution steps behind a toggle, so a page of older history can arrive and leave the
+    // timeline *shorter* than it was. Any change in height means the page landed; if nothing
+    // moves at all, the loop scrolls again and the prompt check above ends it.
     await expect
       .poll(async () => (await readTimelineViewport(page)).scrollHeight)
-      .toBeGreaterThan(previousHeight.scrollHeight);
+      .not.toBe(previousHeight.scrollHeight);
     await waitForTimelineGeometryToSettle(page);
   }
   await expect(prompt).toBeVisible();
