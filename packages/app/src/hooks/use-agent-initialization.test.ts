@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useSessionStore } from "@/stores/session-store";
-import { TIMELINE_FETCH_PAGE_SIZE } from "@/timeline/timeline-fetch-policy";
+import { TIMELINE_INITIAL_TAIL_PAGE_SIZE } from "@/timeline/timeline-fetch-policy";
 import type { HostRuntimeStore } from "@/runtime/host-runtime";
 import { getInitDeferred, getInitKey, resolveInitDeferred } from "@/utils/agent-initialization";
 import {
@@ -75,7 +75,7 @@ describe("ensureAgentIsInitialized", () => {
         agentId,
         request: {
           direction: "tail",
-          limit: TIMELINE_FETCH_PAGE_SIZE,
+          limit: TIMELINE_INITIAL_TAIL_PAGE_SIZE,
           projection: "projected",
         },
       },
@@ -102,7 +102,7 @@ describe("ensureAgentIsInitialized", () => {
         agentId,
         request: {
           direction: "tail",
-          limit: TIMELINE_FETCH_PAGE_SIZE,
+          limit: TIMELINE_INITIAL_TAIL_PAGE_SIZE,
           projection: "projected",
         },
       },
@@ -144,7 +144,7 @@ describe("ensureAgentIsInitialized", () => {
         agentId,
         request: {
           direction: "tail",
-          limit: TIMELINE_FETCH_PAGE_SIZE,
+          limit: TIMELINE_INITIAL_TAIL_PAGE_SIZE,
           projection: "projected",
         },
       },
@@ -234,7 +234,7 @@ describe("refreshAgent", () => {
         agentId,
         request: {
           direction: "tail",
-          limit: TIMELINE_FETCH_PAGE_SIZE,
+          limit: TIMELINE_INITIAL_TAIL_PAGE_SIZE,
           projection: "projected",
         },
       },

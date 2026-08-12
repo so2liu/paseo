@@ -140,7 +140,16 @@ function segmentByPromptIndex(input: {
   isRunning: boolean;
   promptSeqs: readonly number[];
 }): TurnSegment[] {
-  const orderedPromptSeqs = [...input.promptSeqs].sort((left, right) => left - right);
+  // A prompt that is already loaded but not yet in the index would otherwise be filed under the
+  // preceding turn, letting buildGroup swallow both it and the previous conclusion into that
+  // older group — and the index refresh is not guaranteed to arrive, so that state can persist.
+  // Loaded prompts are boundaries in their own right, so the two sources are unioned.
+  const loadedPromptSeqs = input.items.flatMap((item) =>
+    item.kind === "user_message" && item.timelineCursor ? [item.timelineCursor.seq] : [],
+  );
+  const orderedPromptSeqs = [...new Set([...input.promptSeqs, ...loadedPromptSeqs])].sort(
+    (left, right) => left - right,
+  );
   const newestPromptSeq = orderedPromptSeqs.at(-1);
   const segmentsBySeq = new Map<number, TurnSegmentAccumulator>();
 

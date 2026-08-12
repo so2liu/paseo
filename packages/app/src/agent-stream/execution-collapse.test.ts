@@ -341,6 +341,30 @@ describe("按提问清单切分（daemon 提供索引时）", () => {
     expect(Array.from(projection.groups[0].itemIds)).toEqual(["t1"]);
   });
 
+  it("已加载但索引还没跟上的提问，自己也算边界", () => {
+    // 索引刷新可能还在路上、甚至失败。此时新提问若被归到上一轮，
+    // 它和上一轮的结论会一起被折进那个旧分组。
+    const projection = buildExecutionCollapseProjection({
+      items: [
+        at(toolCall("a1"), 11),
+        at(assistant("finalA"), 12),
+        at(user("u2"), 20),
+        at(toolCall("b1"), 21),
+        at(assistant("finalB"), 22),
+      ],
+      isRunning: false,
+      promptSeqs: [10],
+    });
+
+    expect(projection.groupByItemId.has("u2")).toBe(false);
+    expect(projection.groupByItemId.has("finalA")).toBe(false);
+    expect(projection.groupByItemId.has("finalB")).toBe(false);
+    expect(projection.groups.map((group) => group.id)).toEqual([
+      "execution-collapse:prompt:10",
+      "execution-collapse:prompt:20",
+    ]);
+  });
+
   it("没有索引时退回按已加载提问切分", () => {
     const projection = buildExecutionCollapseProjection({
       items: [user("u1"), toolCall("t1"), assistant("final")],
