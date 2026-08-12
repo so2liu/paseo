@@ -1,0 +1,231 @@
+import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  View,
+  Text,
+  type GestureResponderEvent,
+  type LayoutChangeEvent,
+  type AccessibilityActionEvent,
+} from "react-native";
+import { StyleSheet } from "react-native-unistyles";
+import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
+import { resolvePromptIndexAtOffset, type ChatOutlineRailProps } from "./model";
+
+// Native has no hover, and a long conversation squeezes the slots well below a tap-sized
+// target, so the rail is a scrubber rather than a column of buttons: press anywhere on it
+// to preview the prompt under your finger, slide to hunt, lift to jump. Tapping is the
+// degenerate case of the same gesture, so a confident tap still lands in one touch.
+const RAIL_WIDTH = 28;
+const SLOT_HEIGHT = 8;
+const RESTING_PILL_HEIGHT = 2;
+const RESTING_PILL_WIDTH = 10;
+const ACTIVE_PILL_WIDTH = 18;
+const SCRUBBED_PILL_WIDTH = 24;
+const SCRUBBED_PILL_HEIGHT = 4;
+const PREVIEW_WIDTH = 220;
+const PREVIEW_HEIGHT = 48;
+
+export const ChatOutlineRail = memo(function ChatOutlineRail({
+  prompts,
+  activePrompt,
+  onJumpToPrompt,
+}: ChatOutlineRailProps) {
+  const activeSeq = useSyncExternalStore(activePrompt.subscribe, activePrompt.getActiveSeq);
+  const [scrubbedIndex, setScrubbedIndex] = useState<number | null>(null);
+  // The native transcript does not report a reading position, so nothing publishes an
+  // active prompt here. Remembering the last jump keeps assistive stepping moving forward
+  // instead of restarting from the first prompt every time.
+  const [steppedIndex, setSteppedIndex] = useState<number | null>(null);
+  const railHeightRef = useRef(0);
+
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    railHeightRef.current = event.nativeEvent.layout.height;
+  }, []);
+
+  const resolveIndex = useCallback(
+    (event: GestureResponderEvent) =>
+      resolvePromptIndexAtOffset({
+        offsetY: event.nativeEvent.locationY,
+        railHeight: railHeightRef.current,
+        promptCount: prompts.length,
+      }),
+    [prompts.length],
+  );
+
+  const claimResponder = useCallback(() => true, []);
+  const handleResponderMove = useCallback(
+    (event: GestureResponderEvent) => setScrubbedIndex(resolveIndex(event)),
+    [resolveIndex],
+  );
+  const handleResponderRelease = useCallback(
+    (event: GestureResponderEvent) => {
+      const index = resolveIndex(event);
+      setScrubbedIndex(null);
+      const prompt = index === null ? undefined : prompts[index];
+      if (prompt && index !== null) {
+        setSteppedIndex(index);
+        onJumpToPrompt(prompt.seq);
+      }
+    },
+    [onJumpToPrompt, prompts, resolveIndex],
+  );
+  const handleResponderTerminate = useCallback(() => setScrubbedIndex(null), []);
+
+  const activeIndex = useMemo(
+    () => prompts.findIndex((prompt) => prompt.seq === activeSeq),
+    [activeSeq, prompts],
+  );
+  const cursorIndex = activeIndex === -1 ? steppedIndex : activeIndex;
+  // VoiceOver cannot scrub, so the rail exposes the same navigation as an adjustable
+  // control: swipe up/down steps one prompt at a time from wherever the reader is.
+  const handleAccessibilityAction = useCallback(
+    (event: AccessibilityActionEvent) => {
+      const step = event.nativeEvent.actionName === "increment" ? 1 : -1;
+      const from = cursorIndex ?? (step === 1 ? -1 : prompts.length);
+      const nextIndex = Math.min(prompts.length - 1, Math.max(0, from + step));
+      const prompt = prompts[nextIndex];
+      if (prompt) {
+        setSteppedIndex(nextIndex);
+        onJumpToPrompt(prompt.seq);
+      }
+    },
+    [cursorIndex, onJumpToPrompt, prompts],
+  );
+
+  const accessibilityValue = useMemo(
+    () =>
+      cursorIndex === null ? undefined : { now: cursorIndex + 1, min: 1, max: prompts.length },
+    [cursorIndex, prompts.length],
+  );
+
+  if (prompts.length < 2) {
+    return null;
+  }
+
+  return (
+    <View
+      style={styles.rail}
+      testID="chat-outline-rail"
+      onLayout={handleLayout}
+      onStartShouldSetResponder={claimResponder}
+      onMoveShouldSetResponder={claimResponder}
+      onResponderGrant={handleResponderMove}
+      onResponderMove={handleResponderMove}
+      onResponderRelease={handleResponderRelease}
+      onResponderTerminate={handleResponderTerminate}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel="Chat outline"
+      accessibilityValue={accessibilityValue}
+      accessibilityActions={ACCESSIBILITY_ACTIONS}
+      onAccessibilityAction={handleAccessibilityAction}
+    >
+      {prompts.map((prompt, index) => (
+        <ChatOutlineTick
+          key={prompt.seq}
+          seq={prompt.seq}
+          preview={prompt.preview}
+          isActive={index === cursorIndex}
+          isScrubbed={index === scrubbedIndex}
+        />
+      ))}
+    </View>
+  );
+});
+
+function resolvePillWidth(input: { isScrubbed: boolean; isActive: boolean }): number {
+  if (input.isScrubbed) {
+    return SCRUBBED_PILL_WIDTH;
+  }
+  return input.isActive ? ACTIVE_PILL_WIDTH : RESTING_PILL_WIDTH;
+}
+
+const ChatOutlineTick = memo(function ChatOutlineTick({
+  seq,
+  preview,
+  isActive,
+  isScrubbed,
+}: {
+  seq: number;
+  preview: string;
+  isActive: boolean;
+  isScrubbed: boolean;
+}) {
+  const pillStyle = useMemo(
+    () => [
+      styles.pill,
+      isActive && styles.pillActive,
+      isScrubbed && styles.pillScrubbed,
+      inlineUnistylesStyle({
+        width: resolvePillWidth({ isScrubbed, isActive }),
+        height: isScrubbed ? SCRUBBED_PILL_HEIGHT : RESTING_PILL_HEIGHT,
+      }),
+    ],
+    [isActive, isScrubbed],
+  );
+  return (
+    <View style={styles.slot}>
+      <View style={pillStyle} testID={`chat-outline-tick-${seq}`} />
+      {isScrubbed ? (
+        <View style={styles.preview} pointerEvents="none" testID="chat-outline-preview">
+          <Text style={styles.previewText} numberOfLines={2}>
+            {preview}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+});
+
+const ACCESSIBILITY_ACTIONS = [{ name: "increment" as const }, { name: "decrement" as const }];
+
+const styles = StyleSheet.create((theme) => ({
+  // The rail stays mounted at every width. A phone is exactly where scrolling a long
+  // transcript hurts most, so this is not a wide-layout-only affordance.
+  rail: {
+    position: "absolute",
+    left: theme.spacing[1],
+    top: "10%",
+    bottom: "10%",
+    width: RAIL_WIDTH,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+  },
+  slot: {
+    width: RAIL_WIDTH,
+    flexBasis: SLOT_HEIGHT,
+    flexShrink: 1,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    paddingLeft: theme.spacing[1],
+  },
+  pill: {
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.borderAccent,
+  },
+  pillActive: {
+    backgroundColor: theme.colors.foregroundExtraMuted,
+  },
+  pillScrubbed: {
+    backgroundColor: theme.colors.foreground,
+  },
+  preview: {
+    position: "absolute",
+    left: RAIL_WIDTH,
+    top: "50%",
+    marginTop: -PREVIEW_HEIGHT / 2,
+    width: PREVIEW_WIDTH,
+    height: PREVIEW_HEIGHT,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+    ...theme.shadow.md,
+  },
+  previewText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foreground,
+  },
+}));

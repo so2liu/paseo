@@ -4,6 +4,7 @@ import {
   shouldAcceptPromptIndexEpoch,
   promptTickMagnification,
   resolveActivePromptSeq,
+  resolvePromptIndexAtOffset,
   OUTLINE_MAGNIFY_RADIUS,
   type ChatOutlinePrompt,
 } from "./model";
@@ -69,5 +70,28 @@ describe("createActivePromptPublisher", () => {
 
     expect(notifications).toBe(2);
     expect(publisher.getActiveSeq()).toBeNull();
+  });
+});
+
+describe("resolvePromptIndexAtOffset", () => {
+  it("maps a touch to the slot that owns that band of the rail", () => {
+    const railHeight = 100;
+    const promptCount = 4;
+    expect(resolvePromptIndexAtOffset({ offsetY: 0, railHeight, promptCount })).toBe(0);
+    expect(resolvePromptIndexAtOffset({ offsetY: 24, railHeight, promptCount })).toBe(0);
+    expect(resolvePromptIndexAtOffset({ offsetY: 25, railHeight, promptCount })).toBe(1);
+    expect(resolvePromptIndexAtOffset({ offsetY: 99, railHeight, promptCount })).toBe(3);
+  });
+
+  it("clamps a drag that runs off either end onto the first or last prompt", () => {
+    const railHeight = 100;
+    const promptCount = 4;
+    expect(resolvePromptIndexAtOffset({ offsetY: -40, railHeight, promptCount })).toBe(0);
+    expect(resolvePromptIndexAtOffset({ offsetY: 400, railHeight, promptCount })).toBe(3);
+  });
+
+  it("has no answer before the rail is measured or when there is nothing to point at", () => {
+    expect(resolvePromptIndexAtOffset({ offsetY: 10, railHeight: 0, promptCount: 4 })).toBeNull();
+    expect(resolvePromptIndexAtOffset({ offsetY: 10, railHeight: 100, promptCount: 0 })).toBeNull();
   });
 });

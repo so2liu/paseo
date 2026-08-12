@@ -119,6 +119,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     contentMeasuredForKey: null as string | null,
   });
   const scrollOffsetYRef = useRef(0);
+  const scrollToIndexRetriesRef = useRef(0);
   const isUserScrollActiveRef = useRef(false);
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
   const userScrollEndFrameIdRef = useRef<number | null>(null);
@@ -368,6 +369,46 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     bottomAnchorController.prepareForStickyContentChange();
   }, [bottomAnchorController, historyRows, segments.liveHead]);
 
+  // The list is inverted, so `viewPosition: 1` in the list's own coordinates lands the row
+  // at the visual top — which is what a prompt jump wants, since the turn it opens renders
+  // below it on screen.
+  const scrollToHistoryIndex = useStableEvent((index: number, animated: boolean) => {
+    scrollToIndexRetriesRef.current = 0;
+    programmaticScrollEventBudgetRef.current = 3;
+    markNativeViewportSettling();
+    flatListRef.current?.scrollToIndex({ index, animated, viewPosition: 1 });
+  });
+
+  const scrollToMessage = useStableEvent((itemId: string) => {
+    const index = historyRows.findIndex((item) => item.id === itemId);
+    if (index === -1) {
+      // Live-turn rows render in the inverted list's header, which sits at the visual
+      // bottom, so the bottom anchor is the only way to reach them.
+      bottomAnchorController.requestLocalAnchor({ agentId, reason: "jump-to-bottom" });
+      return;
+    }
+    scrollToHistoryIndex(index, true);
+  });
+
+  // A row outside the rendered window has no measured offset yet. Jumping to the estimated
+  // offset gives the list a window to render, and one retry lands on the row exactly.
+  const handleScrollToIndexFailed = useCallback(
+    (info: { index: number; averageItemLength: number }) => {
+      flatListRef.current?.scrollToOffset({
+        offset: info.averageItemLength * info.index,
+        animated: false,
+      });
+      if (scrollToIndexRetriesRef.current >= 1) {
+        return;
+      }
+      scrollToIndexRetriesRef.current += 1;
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 1 });
+      });
+    },
+    [],
+  );
+
   useEffect(() => {
     const handle: StreamViewportHandle = {
       scrollToBottom: (reason = "jump-to-bottom") => {
@@ -380,6 +421,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
         bottomAnchorController.prepareForStickyViewportChange();
         markNativeViewportSettling();
       },
+      scrollToMessage,
     };
     viewportRef.current = handle;
     return () => {
@@ -387,7 +429,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
         viewportRef.current = null;
       }
     };
-  }, [agentId, bottomAnchorController, markNativeViewportSettling, viewportRef]);
+  }, [agentId, bottomAnchorController, markNativeViewportSettling, scrollToMessage, viewportRef]);
 
   const isScrollEventNearBottom = useStableEvent(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -616,6 +658,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       onMomentumScrollEnd={handleMomentumScrollEnd}
       scrollEventThrottle={16}
       onContentSizeChange={handleContentSizeChange}
+      onScrollToIndexFailed={handleScrollToIndexFailed}
       maintainVisibleContentPosition={maintainVisibleContentPosition}
       initialNumToRender={40}
       maxToRenderPerBatch={40}

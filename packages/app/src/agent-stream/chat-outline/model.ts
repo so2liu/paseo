@@ -55,6 +55,30 @@ export interface ActivePromptSource {
   getActiveSeq: () => number | null;
 }
 
+/**
+ * Which prompt a touch at `offsetY` is asking for. The rail tiles its height evenly across
+ * the prompts, so the slot under the finger is a plain proportion — and clamping means a
+ * drag that runs off either end keeps scrubbing the first or last prompt instead of
+ * dropping the gesture.
+ */
+export function resolvePromptIndexAtOffset(input: {
+  offsetY: number;
+  railHeight: number;
+  promptCount: number;
+}): number | null {
+  if (input.promptCount <= 0 || input.railHeight <= 0) {
+    return null;
+  }
+  const slot = Math.floor((input.offsetY / input.railHeight) * input.promptCount);
+  return Math.min(input.promptCount - 1, Math.max(0, slot));
+}
+
+export interface ChatOutlineRailProps {
+  prompts: ChatOutlinePrompt[];
+  activePrompt: ActivePromptSource;
+  onJumpToPrompt: (seq: number) => void;
+}
+
 export interface ActivePromptPublisher extends ActivePromptSource {
   publish: (seq: number | null) => void;
 }

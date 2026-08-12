@@ -4,8 +4,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { useReducedMotion } from "react-native-reanimated";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { createChatOutlineHoverIntent } from "./hover-intent";
-import { promptTickMagnification } from "./model";
-import type { ChatOutlineRailProps } from "./rail";
+import { promptTickMagnification, type ChatOutlineRailProps } from "./model";
 
 // Hover tracking lives on the rail and the slots, never on the Pressable inside them:
 // magnifying a slot must not move the box the pointer is resting on. See docs/hover.md.
