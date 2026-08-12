@@ -3,14 +3,25 @@ import { existsSync, readFileSync } from "node:fs";
 
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "../private-files.js";
 
+interface PushTokenEntry {
+  token: string;
+  deviceId: string | null;
+}
+
 /**
  * Store for Expo push tokens.
  *
  * Tokens are persisted to disk so pushes still work after daemon restarts.
+ *
+ * A device gets a new Expo token whenever the app is rebuilt or reinstalled, and the old one
+ * stays deliverable for a while, so a store keyed only by token accumulates several live
+ * tokens for one phone and pushes the same notification to it once per token. Clients that
+ * send a device id therefore replace their own previous token instead of adding to it.
+ * Clients that don't (older builds) keep the original add-only behaviour.
  */
 export class PushTokenStore {
   private readonly logger: pino.Logger;
-  private tokens: Set<string> = new Set();
+  private entries: Map<string, PushTokenEntry> = new Map();
   private readonly filePath: string;
 
   constructor(logger: pino.Logger, filePath: string) {
@@ -19,27 +30,49 @@ export class PushTokenStore {
     this.loadFromDisk();
   }
 
-  addToken(token: string): void {
+  addToken(token: string, deviceId?: string | null): void {
     const normalized = token.trim();
     if (!normalized) return;
-    if (this.tokens.has(normalized)) return;
-    this.tokens.add(normalized);
+    const normalizedDeviceId = deviceId?.trim() || null;
+
+    const supersededTokens = normalizedDeviceId
+      ? [...this.entries.values()]
+          .filter((entry) => entry.deviceId === normalizedDeviceId && entry.token !== normalized)
+          .map((entry) => entry.token)
+      : [];
+
+    const existing = this.entries.get(normalized);
+    // A client that does not identify its device must not erase an association we already have.
+    // Downgrading the app re-registers the same token without a device id, and overwriting the
+    // entry with null would leave the next upgrade unable to evict this token again.
+    const effectiveDeviceId = normalizedDeviceId ?? existing?.deviceId ?? null;
+    if (existing && existing.deviceId === effectiveDeviceId && supersededTokens.length === 0) {
+      return;
+    }
+
+    for (const superseded of supersededTokens) {
+      this.entries.delete(superseded);
+    }
+    this.entries.set(normalized, { token: normalized, deviceId: effectiveDeviceId });
     this.persist();
-    this.logger.debug({ total: this.tokens.size }, "Added token");
+    this.logger.debug(
+      { total: this.entries.size, superseded: supersededTokens.length },
+      "Added token",
+    );
   }
 
   removeToken(token: string): void {
     const normalized = token.trim();
     if (!normalized) return;
-    const deleted = this.tokens.delete(normalized);
+    const deleted = this.entries.delete(normalized);
     if (deleted) {
       this.persist();
-      this.logger.debug({ total: this.tokens.size }, "Removed token");
+      this.logger.debug({ total: this.entries.size }, "Removed token");
     }
   }
 
   getAllTokens(): string[] {
-    return Array.from(this.tokens);
+    return [...this.entries.keys()];
   }
 
   private loadFromDisk(): void {
@@ -49,12 +82,11 @@ export class PushTokenStore {
       }
       ensurePrivateFile(this.filePath);
       const raw = readFileSync(this.filePath, "utf-8");
-      const parsed = JSON.parse(raw) as { tokens?: unknown };
-      const tokens = Array.isArray(parsed.tokens)
-        ? parsed.tokens.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
-        : [];
-      this.tokens = new Set(tokens.map((t) => t.trim()));
-      this.logger.info({ total: this.tokens.size }, "Loaded push tokens");
+      const parsed = JSON.parse(raw) as { tokens?: unknown; entries?: unknown };
+      this.entries = new Map(
+        readPersistedEntries(parsed).map((entry) => [entry.token, entry] as const),
+      );
+      this.logger.info({ total: this.entries.size }, "Loaded push tokens");
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.warn({ err }, "Failed to load push tokens");
@@ -63,11 +95,37 @@ export class PushTokenStore {
 
   private persist(): void {
     try {
-      const payload = JSON.stringify({ tokens: Array.from(this.tokens) }, null, 2) + "\n";
+      const entries = [...this.entries.values()];
+      // `tokens` is still written as a plain array so rolling the daemon back to a build that
+      // predates device ids keeps working instead of silently losing every registration.
+      const payload =
+        JSON.stringify({ tokens: entries.map((entry) => entry.token), entries }, null, 2) + "\n";
       writePrivateFileAtomicSync(this.filePath, payload);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.warn({ err }, "Failed to persist push tokens");
     }
   }
+}
+
+function readPersistedEntries(parsed: { tokens?: unknown; entries?: unknown }): PushTokenEntry[] {
+  if (Array.isArray(parsed.entries)) {
+    return parsed.entries.flatMap((value) => {
+      if (typeof value !== "object" || value === null) return [];
+      const { token, deviceId } = value as { token?: unknown; deviceId?: unknown };
+      if (typeof token !== "string" || !token.trim()) return [];
+      return [
+        {
+          token: token.trim(),
+          deviceId: typeof deviceId === "string" && deviceId.trim() ? deviceId.trim() : null,
+        },
+      ];
+    });
+  }
+  if (Array.isArray(parsed.tokens)) {
+    return parsed.tokens.flatMap((value) =>
+      typeof value === "string" && value.trim() ? [{ token: value.trim(), deviceId: null }] : [],
+    );
+  }
+  return [];
 }

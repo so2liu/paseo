@@ -1923,10 +1923,11 @@ export class DaemonClient {
     });
   }
 
-  registerPushToken(token: string): void {
+  registerPushToken(token: string, deviceId?: string): void {
     this.sendSessionMessage({
       type: "register_push_token",
       token,
+      deviceId,
     });
   }
 
