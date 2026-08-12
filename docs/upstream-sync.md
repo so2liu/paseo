@@ -183,19 +183,26 @@ git log --oneline <上次基线>..<同步前的 main> --full-history -- $(cat /t
 ### 机械核对：导出符号与新增文件
 
 上面那份提交清单要人逐条回忆"这个提交的行为还在不在"，很容易看漏。补一道机械检查，
-把 fork 引入的**导出符号**和**新增文件**全部拉出来，逐个确认还在合并结果里：
+把 fork 引入的**导出符号**和**新增文件**全部拉出来，逐个确认还在合并结果里。
+
+**被查的那个 ref 必须是合并结果，也就是同步分支上的 `HEAD`。** 复查是在同步 PR 合并
+*之前*做的，这时候 `origin/main` 恰恰是同步前的 fork 状态——每个符号在那里当然都还在，
+两条命令会全部通过，而它们本该抓的丢失一个都抓不到。下面用 `HEAD` 表示合并结果，在
+同步分支上直接跑即可；如果是事后复查已经合掉的同步，把 `HEAD` 换成那个 merge commit。
 
 ```bash
+MERGED=HEAD   # 同步分支上的合并结果；事后复查就写那个 merge commit 的 SHA
+
 # 新增文件
 git diff --name-status --no-renames <上次基线> <同步前的 main> -- 'packages/*' \
   | awk '$1=="A"{print $2}' | grep -vE '\.(md|json|lock)$' \
-  | while read -r f; do git cat-file -e "origin/main:$f" 2>/dev/null || echo "MISSING: $f"; done
+  | while read -r f; do git cat-file -e "$MERGED:$f" 2>/dev/null || echo "MISSING: $f"; done
 
 # 导出符号
 git diff -U0 <上次基线> <同步前的 main> -- 'packages/*/src/*' | grep -E '^\+' \
   | grep -oE '^\+export (async )?function [A-Za-z0-9_]+|^\+export (const|class|interface|type) [A-Za-z0-9_]+' \
   | grep -oE '[A-Za-z0-9_]+$' | sort -u \
-  | while read -r s; do git grep -qw "$s" origin/main -- packages || echo "$s"; done
+  | while read -r s; do git grep -qw "$s" "$MERGED" -- packages || echo "$s"; done
 ```
 
 `git grep` 的 pathspec 用 `-- packages`，**不要写 `-- 'packages/*/src'`**：后者匹配不到
