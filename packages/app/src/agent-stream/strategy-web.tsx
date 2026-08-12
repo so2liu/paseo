@@ -232,6 +232,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     olderHistoryProgressKey,
     scrollEnabled,
     isMobileBreakpoint,
+    contentLeftGutter = 0,
   } = props;
   const isActive = useRetainedPanelActive();
   const isActiveRef = useRef(isActive);
@@ -1020,11 +1021,11 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       minHeight: "100%",
       paddingTop: CONTENT_PADDING_TOP_PX,
       paddingBottom: 16,
-      paddingLeft: isMobileBreakpoint ? 8 : 16,
+      paddingLeft: Math.max(isMobileBreakpoint ? 8 : 16, contentLeftGutter),
       paddingRight: isMobileBreakpoint ? 8 : 16,
       boxSizing: "border-box",
     };
-  }, [isMobileBreakpoint]);
+  }, [contentLeftGutter, isMobileBreakpoint]);
   const scrollContainerStyle = useMemo((): CSSProperties => {
     return {
       flex: 1,

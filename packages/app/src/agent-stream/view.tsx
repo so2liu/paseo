@@ -662,14 +662,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     // the rail's column or the rail sits on top of assistant text and eats taps.
     const { onLayout: onSurfaceLayout, isBelow: hasNoNaturalOutlineGutter } =
       useContainerWidthBelow(CHAT_OUTLINE_NATURAL_GUTTER_WIDTH);
-    const needsOutlineGutter = hasNoNaturalOutlineGutter && chatOutline.prompts.length >= 2;
-    const listContentContainerStyle = useMemo(
-      () =>
-        needsOutlineGutter
-          ? [stylesheet.listContentContainer, stylesheet.listContentOutlineGutter]
-          : stylesheet.listContentContainer,
-      [needsOutlineGutter],
-    );
+    const contentLeftGutter =
+      hasNoNaturalOutlineGutter && chatOutline.prompts.length >= 2 ? CHAT_OUTLINE_RAIL_GUTTER : 0;
 
     useImperativeHandle(
       ref,
@@ -1171,11 +1165,16 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               olderHistoryProgressKey: progressKey,
               scrollEnabled: streamScrollEnabled,
               listStyle: stylesheet.list,
-              baseListContentContainerStyle: listContentContainerStyle,
+              baseListContentContainerStyle: stylesheet.listContentContainer,
+              contentLeftGutter,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
             })}
           </MessageOuterSpacingProvider>
           <ChatOutlineRail
+            // Prompt sequences are agent- and epoch-local, both starting at 1, so outline
+            // state from the previous conversation would silently look valid in the next
+            // one. Remounting on identity change drops it instead.
+            key={`${agentId}:${timelineEpoch ?? ""}`}
             prompts={chatOutline.prompts}
             activePrompt={chatOutline.activePrompt}
             onJumpToPrompt={chatOutline.jumpToPrompt}
@@ -1642,9 +1641,6 @@ const stylesheet = StyleSheet.create((theme) => ({
       xs: theme.spacing[3],
       md: theme.spacing[4],
     },
-  },
-  listContentOutlineGutter: {
-    paddingLeft: CHAT_OUTLINE_RAIL_GUTTER,
   },
   forwardListContentContainer: {
     paddingTop: theme.spacing[4],

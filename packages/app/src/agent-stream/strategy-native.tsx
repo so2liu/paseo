@@ -106,6 +106,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     scrollEnabled,
     listStyle,
     baseListContentContainerStyle,
+    contentLeftGutter = 0,
     strategy,
   } = props;
   const { renderHistoryMountedRow, renderLiveHeadRow, renderLiveAuxiliary } = renderers;
@@ -626,6 +627,14 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     segments.liveHead,
   ]);
 
+  const listContentContainerStyle = useMemo(
+    () =>
+      contentLeftGutter > 0
+        ? [baseListContentContainerStyle, { paddingLeft: contentLeftGutter }]
+        : baseListContentContainerStyle,
+    [baseListContentContainerStyle, contentLeftGutter],
+  );
+
   const historyFooterContent = useMemo(() => {
     const isLoadingOperation = isHistoryStartLoadingOperation(historyStartPaginationState);
     return (
@@ -652,7 +661,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       nativeID="agent-chat-scroll-native-virtualized"
       ListHeaderComponent={liveHeaderContent ?? undefined}
       ListFooterComponent={historyFooterContent ?? undefined}
-      contentContainerStyle={baseListContentContainerStyle}
+      contentContainerStyle={listContentContainerStyle}
       style={listStyle}
       onLayout={handleListLayout}
       onScroll={handleScroll}

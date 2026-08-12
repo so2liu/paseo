@@ -185,17 +185,6 @@ const ChatOutlineTick = memo(function ChatOutlineTick({
 
 const ACCESSIBILITY_ACTIONS = [{ name: "increment" as const }, { name: "decrement" as const }];
 
-const PREVIEW_LINE_HEIGHT_RATIO = 1.4;
-const PREVIEW_LINES = 2;
-
-function previewLineHeight(fontSize: number): number {
-  return Math.round(fontSize * PREVIEW_LINE_HEIGHT_RATIO);
-}
-
-function previewHeight(fontSize: number, verticalPadding: number): number {
-  return previewLineHeight(fontSize) * PREVIEW_LINES + verticalPadding * 2;
-}
-
 const styles = StyleSheet.create((theme) => ({
   // The rail stays mounted at every width. A phone is exactly where scrolling a long
   // transcript hurts most, so this is not a wide-layout-only affordance.
@@ -232,17 +221,18 @@ const styles = StyleSheet.create((theme) => ({
   pillScrubbed: {
     backgroundColor: theme.colors.foreground,
   },
-  // Sized from the rendered text rather than a fixed box: the appearance setting scales
-  // `fontSize.xs` (12 at the default interface size, 24 at the largest), and a fixed height
-  // would clip the second preview line exactly where large text matters most.
+  // The bubble takes its height from the text it renders. Two things scale that text and
+  // only one of them is knowable here: the appearance setting drives `fontSize.xs` (12 at
+  // the default interface size, 24 at the largest), while system Dynamic Type scales it
+  // again at render. Any height computed from the token alone clips the second line, so the
+  // box is sized by its content and centred with a percentage translation instead.
   preview: {
     position: "absolute",
     left: RAIL_WIDTH,
     top: "50%",
-    marginTop: -previewHeight(theme.fontSize.xs, theme.spacing[2]) / 2,
+    transform: [{ translateY: "-50%" }],
     width: PREVIEW_WIDTH,
-    height: previewHeight(theme.fontSize.xs, theme.spacing[2]),
-    justifyContent: "center",
+    paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.lg,
     borderWidth: theme.borderWidth[1],
@@ -252,7 +242,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   previewText: {
     fontSize: theme.fontSize.xs,
-    lineHeight: previewLineHeight(theme.fontSize.xs),
     color: theme.colors.foreground,
   },
 }));
