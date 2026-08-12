@@ -121,6 +121,24 @@ describe("PushTokenStore device identity", () => {
     }
   });
 
+  test("keeps a known device association when a downgraded client re-registers", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
+    const tokenPath = path.join(home, "push-tokens.json");
+    try {
+      const store = new PushTokenStore(createLogger(), tokenPath);
+      store.addToken("ExponentPushToken[old]", "device-a");
+
+      // A build without device ids re-registers the same token.
+      store.addToken("ExponentPushToken[old]");
+      // Upgrading again rotates the token; the association must still be there to evict it.
+      store.addToken("ExponentPushToken[new]", "device-a");
+
+      expect(store.getAllTokens()).toEqual(["ExponentPushToken[new]"]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test("reads token files written before device ids existed", () => {
     const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
     const tokenPath = path.join(home, "push-tokens.json");

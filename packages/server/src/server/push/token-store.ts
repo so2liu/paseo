@@ -42,14 +42,18 @@ export class PushTokenStore {
       : [];
 
     const existing = this.entries.get(normalized);
-    if (existing && existing.deviceId === normalizedDeviceId && supersededTokens.length === 0) {
+    // A client that does not identify its device must not erase an association we already have.
+    // Downgrading the app re-registers the same token without a device id, and overwriting the
+    // entry with null would leave the next upgrade unable to evict this token again.
+    const effectiveDeviceId = normalizedDeviceId ?? existing?.deviceId ?? null;
+    if (existing && existing.deviceId === effectiveDeviceId && supersededTokens.length === 0) {
       return;
     }
 
     for (const superseded of supersededTokens) {
       this.entries.delete(superseded);
     }
-    this.entries.set(normalized, { token: normalized, deviceId: normalizedDeviceId });
+    this.entries.set(normalized, { token: normalized, deviceId: effectiveDeviceId });
     this.persist();
     this.logger.debug(
       { total: this.entries.size, superseded: supersededTokens.length },
