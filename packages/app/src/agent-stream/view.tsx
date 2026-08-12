@@ -560,16 +560,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           : (effectiveStreamHead ?? EMPTY_STREAM_HEAD),
       [effectiveStreamHead],
     );
-    const executionCollapseProjection = useMemo(
-      () =>
-        isMobileLiteMode
-          ? EMPTY_EXECUTION_COLLAPSE_PROJECTION
-          : buildExecutionCollapseProjection({
-              items: [...visibleStreamItems, ...visibleStreamHead],
-              isRunning: context.status === "running",
-            }),
-      [context.status, visibleStreamHead, visibleStreamItems],
-    );
     const toggleExecutionGroup = useCallback((groupId: string) => {
       setExpandedExecutionGroupIds((previous) => {
         const next = new Set(previous);
@@ -653,6 +643,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       timelineEpoch,
       tail: effectiveStreamItems,
       head: effectiveStreamHead,
+      // Also gates execution collapse's turn boundaries. The index endpoint runs
+      // `ensureAgentLoaded` server-side, whose cold path resumes the provider and replays its
+      // transcript, so it must not fire for every opened agent — turning the outline off
+      // therefore also drops collapse back to window-derived boundaries.
       enabled: supportsChatOutline && chatOutlineEnabled,
       viewportRef,
       onJumpError: handleTimelineHistoryLoadError,
@@ -662,6 +656,24 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     // the rail's column or the rail sits on top of assistant text and eats taps.
     const { onLayout: onSurfaceLayout, isBelow: hasNoNaturalOutlineGutter } =
       useContainerWidthBelow(CHAT_OUTLINE_NATURAL_GUTTER_WIDTH);
+    // Turn boundaries come from the daemon's prompt index, not from the prompts that happen to
+    // be loaded: paging backwards delivers a turn's prompt last, so window-derived boundaries
+    // leave the rows a reader lands on ungrouped until they scroll past all of them.
+    const executionCollapsePromptSeqs = useMemo(
+      () => chatOutline.prompts.map((prompt) => prompt.seq),
+      [chatOutline.prompts],
+    );
+    const executionCollapseProjection = useMemo(
+      () =>
+        isMobileLiteMode
+          ? EMPTY_EXECUTION_COLLAPSE_PROJECTION
+          : buildExecutionCollapseProjection({
+              items: [...visibleStreamItems, ...visibleStreamHead],
+              isRunning: context.status === "running",
+              promptSeqs: executionCollapsePromptSeqs,
+            }),
+      [context.status, executionCollapsePromptSeqs, visibleStreamHead, visibleStreamItems],
+    );
     const contentLeftGutter =
       hasNoNaturalOutlineGutter && chatOutline.prompts.length >= 2 ? CHAT_OUTLINE_RAIL_GUTTER : 0;
 
