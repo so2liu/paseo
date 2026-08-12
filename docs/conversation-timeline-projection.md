@@ -38,14 +38,6 @@ provider 进程并重放它的历史。若对每个打开的 agent 都拉索引�
 所以拉取仍然是 `supportsChatOutline && chatOutlineEnabled`：**关掉聊天大纲，折叠也会退回按
 已加载提问切分**。要解除这个耦合，得先把索引接口改成只读持久化存储、不加载 agent。
 
-### 3. 首屏加载量单独调大
-
-`TIMELINE_INITIAL_TAIL_PAGE_SIZE = 200`，增量分页仍是 `TIMELINE_FETCH_PAGE_SIZE = 40`。
-daemon 对 tail 请求默认就给 200，所以没有要求它做新的事。
-
-**不要用 `limit: 0`** —— sqlite store 会翻译成无 LIMIT，超长会话会通过 relay 推一个巨大的
-加密帧。
-
 ## 为什么没有做「服务端只发对话行」
 
 最初的方案是给时间线拉取的 `projection` 参数加一个 `conversation` 值，让服务端过滤掉

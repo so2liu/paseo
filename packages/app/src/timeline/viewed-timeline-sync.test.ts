@@ -1,4 +1,3 @@
-import { TIMELINE_INITIAL_TAIL_PAGE_SIZE } from "@/timeline/timeline-fetch-policy";
 import { expect, test, vi } from "vitest";
 import type { ProjectedTimelineForwardFetchPlan } from "./timeline-sync-plan";
 import { createViewedTimelineSync } from "./viewed-timeline-sync";
@@ -163,11 +162,7 @@ test("uses a tail fetch when an agent becomes visible", async () => {
   membership.succeed();
 
   const fetch = await world.nextFetch("agent-a");
-  expect(fetch.request).toEqual({
-    direction: "tail",
-    limit: TIMELINE_INITIAL_TAIL_PAGE_SIZE,
-    projection: "projected",
-  });
+  expect(fetch.request).toEqual({ direction: "tail", limit: 40, projection: "projected" });
   fetch.respond({ hasNewer: false });
 });
 
