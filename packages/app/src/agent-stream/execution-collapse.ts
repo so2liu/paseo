@@ -86,16 +86,15 @@ function countLogicalItems(items: readonly StreamItem[]): number {
 }
 
 /**
- * The turn whose opening prompt has not been paged in yet. Opening a long conversation on a
- * second device loads the newest rows first, so the prompt that starts the visible turn is
- * the last thing to arrive — and until it does, keying groups off prompts alone would leave
- * every intermediate row expanded. That is the state a reader actually lands in, so the
- * leading run gets collapsed on its own and simply grows as older pages arrive.
- *
- * The id is a constant rather than a row id: the run's first row changes with every page, and
- * an id that moved with it would drop the reader's expand state on each load.
+ * Identifies the turn whose opening prompt has not been paged in yet, used only when the host
+ * is too old to serve a prompt index. It is keyed on the run's *last* row rather than its first
+ * or a bare constant: the first row changes with every page that prepends, so an id following it
+ * would drop the reader's expand state on each load, while a constant would carry that state
+ * across a rewind or epoch change onto an unrelated turn.
  */
-const LEADING_TURN_GROUP_ID = "execution-collapse:leading";
+function leadingTurnGroupId(turnItems: readonly StreamItem[]): string {
+  return `execution-collapse:leading:${turnItems.at(-1)?.id ?? ""}`;
+}
 
 function buildGroup(input: {
   id: string;
@@ -190,10 +189,11 @@ function segmentByLoadedPrompts(input: {
   );
 
   const leadingEnd = userIndexes[0] ?? input.items.length;
-  if (leadingEnd > 0) {
+  const leadingItems = input.items.slice(0, leadingEnd);
+  if (leadingItems.length > 0) {
     segments.push({
-      id: LEADING_TURN_GROUP_ID,
-      turnItems: input.items.slice(0, leadingEnd),
+      id: leadingTurnGroupId(leadingItems),
+      turnItems: leadingItems,
       isCompleted: userIndexes.length > 0 || !input.isRunning,
     });
   }
