@@ -69,7 +69,6 @@ import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./mode
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
-import type { ChatOutlinePrompt } from "@/agent-stream/chat-outline/model";
 import {
   CHAT_OUTLINE_NATURAL_GUTTER_WIDTH,
   CHAT_OUTLINE_RAIL_GUTTER,
@@ -122,7 +121,6 @@ const EMPTY_EXECUTION_COLLAPSE_PROJECTION: ExecutionCollapseProjection = {
   groups: [],
 };
 const EMPTY_TOOL_CALL_GROUPS = new Map();
-const EMPTY_CHAT_OUTLINE_PROMPTS: ChatOutlinePrompt[] = [];
 
 const executionToggleStyle = ({ pressed }: PressableStateCallbackType) => [
   stylesheet.executionToggle,
@@ -645,10 +643,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       timelineEpoch,
       tail: effectiveStreamItems,
       head: effectiveStreamHead,
-      // The prompt index feeds two features now: the outline rail and execution collapse.
-      // Collapse needs real turn boundaries even when the reader has hidden the rail, so the
-      // fetch follows host support and only the rail follows the setting.
-      enabled: supportsChatOutline,
+      // Also gates execution collapse's turn boundaries. The index endpoint runs
+      // `ensureAgentLoaded` server-side, whose cold path resumes the provider and replays its
+      // transcript, so it must not fire for every opened agent — turning the outline off
+      // therefore also drops collapse back to window-derived boundaries.
+      enabled: supportsChatOutline && chatOutlineEnabled,
       viewportRef,
       onJumpError: handleTimelineHistoryLoadError,
     });
@@ -675,9 +674,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             }),
       [context.status, executionCollapsePromptSeqs, visibleStreamHead, visibleStreamItems],
     );
-    const outlinePrompts = chatOutlineEnabled ? chatOutline.prompts : EMPTY_CHAT_OUTLINE_PROMPTS;
     const contentLeftGutter =
-      hasNoNaturalOutlineGutter && outlinePrompts.length >= 2 ? CHAT_OUTLINE_RAIL_GUTTER : 0;
+      hasNoNaturalOutlineGutter && chatOutline.prompts.length >= 2 ? CHAT_OUTLINE_RAIL_GUTTER : 0;
 
     useImperativeHandle(
       ref,
@@ -1189,7 +1187,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             // state from the previous conversation would silently look valid in the next
             // one. Remounting on identity change drops it instead.
             key={`${agentId}:${timelineEpoch ?? ""}`}
-            prompts={outlinePrompts}
+            prompts={chatOutline.prompts}
             activePrompt={chatOutline.activePrompt}
             onJumpToPrompt={chatOutline.jumpToPrompt}
           />

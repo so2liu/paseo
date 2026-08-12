@@ -269,7 +269,7 @@ describe("按提问清单切分（daemon 提供索引时）", () => {
     });
 
     expect(projection.groups).toHaveLength(1);
-    expect(projection.groups[0].id).toBe("execution-collapse:prompt:10");
+    expect(projection.groups[0].id).toBe("execution-collapse:prompt:e1:10");
     expect(Array.from(projection.groups[0].itemIds)).toEqual(["t1", "t2"]);
     expect(projection.groupByItemId.has("final")).toBe(false);
   });
@@ -308,8 +308,8 @@ describe("按提问清单切分（daemon 提供索引时）", () => {
     });
 
     expect(projection.groups.map((group) => group.id)).toEqual([
-      "execution-collapse:prompt:10",
-      "execution-collapse:prompt:20",
+      "execution-collapse:prompt:e1:10",
+      "execution-collapse:prompt:e1:20",
     ]);
     expect(projection.groupByItemId.has("finalA")).toBe(false);
     expect(projection.groupByItemId.has("finalB")).toBe(false);
@@ -327,7 +327,7 @@ describe("按提问清单切分（daemon 提供索引时）", () => {
       promptSeqs: [10, 20],
     });
 
-    expect(projection.groups.map((group) => group.id)).toEqual(["execution-collapse:prompt:10"]);
+    expect(projection.groups.map((group) => group.id)).toEqual(["execution-collapse:prompt:e1:10"]);
   });
 
   it("提问那一行本身不会被折进去", () => {
@@ -360,8 +360,8 @@ describe("按提问清单切分（daemon 提供索引时）", () => {
     expect(projection.groupByItemId.has("finalA")).toBe(false);
     expect(projection.groupByItemId.has("finalB")).toBe(false);
     expect(projection.groups.map((group) => group.id)).toEqual([
-      "execution-collapse:prompt:10",
-      "execution-collapse:prompt:20",
+      "execution-collapse:prompt:e1:10",
+      "execution-collapse:prompt:e1:20",
     ]);
   });
 
@@ -375,6 +375,24 @@ describe("按提问清单切分（daemon 提供索引时）", () => {
     expect(projection.groups[0].id).toBe("u1");
   });
 
+  it("epoch 变了（rewind/替换）之后，同样的 seq 不再共用展开状态", () => {
+    const oldEpoch = buildExecutionCollapseProjection({
+      items: [at(toolCall("t1"), 11), at(assistant("final"), 12)],
+      isRunning: false,
+      promptSeqs: [10],
+    });
+    const replaced = buildExecutionCollapseProjection({
+      items: [
+        { ...toolCall("t1b"), timelineCursor: { epoch: "e2", seq: 11 } },
+        { ...assistant("finalB"), timelineCursor: { epoch: "e2", seq: 12 } },
+      ],
+      isRunning: false,
+      promptSeqs: [10],
+    });
+
+    expect(oldEpoch.groups[0].id).not.toBe(replaced.groups[0].id);
+  });
+
   it("索引异步到达前后，已加载提问那一轮的分组 id 不变", () => {
     // 首帧 promptSeqs 还是空的（列表在拉），随后索引到达。
     const items = [at(user("u1"), 10), at(toolCall("t1"), 11), at(assistant("final"), 12)];
@@ -385,7 +403,7 @@ describe("按提问清单切分（daemon 提供索引时）", () => {
       promptSeqs: [10],
     });
 
-    expect(beforeIndex.groups[0].id).toBe("execution-collapse:prompt:10");
+    expect(beforeIndex.groups[0].id).toBe("execution-collapse:prompt:e1:10");
     expect(afterIndex.groups[0].id).toBe(beforeIndex.groups[0].id);
   });
 });

@@ -150,6 +150,7 @@ function segmentByPromptIndex(input: {
   const orderedPromptSeqs = [...new Set([...input.promptSeqs, ...loadedPromptSeqs])].sort(
     (left, right) => left - right,
   );
+  const epoch = input.items.find((item) => item.timelineCursor)?.timelineCursor?.epoch ?? "";
   const newestPromptSeq = orderedPromptSeqs.at(-1);
   const segmentsBySeq = new Map<number, TurnSegmentAccumulator>();
 
@@ -165,7 +166,7 @@ function segmentByPromptIndex(input: {
     let segment = segmentsBySeq.get(promptSeq);
     if (!segment) {
       segment = {
-        id: promptTurnGroupId(promptSeq),
+        id: promptTurnGroupId(epoch, promptSeq),
         turnItems: [],
         isCompleted: promptSeq !== newestPromptSeq || !input.isRunning,
       };
@@ -195,8 +196,11 @@ function findOwningPromptSeq(orderedPromptSeqs: readonly number[], seq: number):
  * state survives that swap. Only the leading run — which by definition has no prompt loaded —
  * still changes identity when its prompt finally arrives.
  */
-function promptTurnGroupId(promptSeq: number): string {
-  return `execution-collapse:prompt:${promptSeq}`;
+function promptTurnGroupId(epoch: string, promptSeq: number): string {
+  // The epoch is part of the identity because prompt sequences restart after a rewind or an
+  // epoch replacement, and `expandedExecutionGroupIds` outlives that swap — without it, an
+  // expanded group would hand its state to an unrelated turn in the replacement.
+  return `execution-collapse:prompt:${epoch}:${promptSeq}`;
 }
 
 function segmentByLoadedPrompts(input: {
@@ -224,7 +228,7 @@ function segmentByLoadedPrompts(input: {
     const promptItem = input.items[userIndex];
     segments.push({
       id: promptItem.timelineCursor
-        ? promptTurnGroupId(promptItem.timelineCursor.seq)
+        ? promptTurnGroupId(promptItem.timelineCursor.epoch, promptItem.timelineCursor.seq)
         : promptItem.id,
       turnItems: input.items.slice(userIndex + 1, nextUserIndex),
       isCompleted: turnIndex < userIndexes.length - 1 || !input.isRunning,

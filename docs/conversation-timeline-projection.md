@@ -28,10 +28,15 @@
 - 分组 id 变成 `execution-collapse:prompt:<seq>`，**翻页时不变**，展开状态不再被每次加载清掉
 - 「这一轮是否已结束」由索引里有没有更晚的提问决定，比只看窗口准确
 
-### 2. 索引获取与「聊天大纲」开关解耦
+### 2. 索引仍然跟随「聊天大纲」开关
 
-索引现在服务两个功能。拉取跟随 `supportsChatOutline`（host 能力），只有**大纲条的渲染**
-跟随 `chatOutlineEnabled` 设置。否则关掉大纲会连带让折叠退回老样子。
+索引现在服务两个功能，一度想让拉取只跟随 host 能力、把设置留给大纲条的渲染。**这条不能做**：
+服务端的 `agent.timeline.list_prompts` 处理器无条件调用 `ensureAgentLoaded`，冷路径会恢复
+provider 进程并重放它的历史。若对每个打开的 agent 都拉索引，仅仅查看一段已缓存的对话就可能
+拉起一个 provider。
+
+所以拉取仍然是 `supportsChatOutline && chatOutlineEnabled`：**关掉聊天大纲，折叠也会退回按
+已加载提问切分**。要解除这个耦合，得先把索引接口改成只读持久化存储、不加载 agent。
 
 ### 3. 首屏加载量单独调大
 
