@@ -62,6 +62,7 @@ const historyStartSlotStyle: ViewStyle = {
   flexShrink: 0,
 };
 const HISTORY_START_SETTLE_FRAMES = 2;
+const SCROLL_TO_INDEX_RETRY_BUDGET = 4;
 
 interface HistoryRowDisplayVariants {
   regular?: StreamItem;
@@ -391,14 +392,17 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   });
 
   // A row outside the rendered window has no measured offset yet. Jumping to the estimated
-  // offset gives the list a window to render, and one retry lands on the row exactly.
+  // offset gives the list a window to render, then the retry lands on the row exactly. One
+  // retry is not always enough: with variably sized turns the estimate can be far off, so
+  // each attempt walks closer and re-enters here until the row is measured. The budget only
+  // exists so an unreachable index cannot spin forever.
   const handleScrollToIndexFailed = useCallback(
     (info: { index: number; averageItemLength: number }) => {
       flatListRef.current?.scrollToOffset({
         offset: info.averageItemLength * info.index,
         animated: false,
       });
-      if (scrollToIndexRetriesRef.current >= 1) {
+      if (scrollToIndexRetriesRef.current >= SCROLL_TO_INDEX_RETRY_BUDGET) {
         return;
       }
       scrollToIndexRetriesRef.current += 1;

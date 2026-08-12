@@ -33,8 +33,10 @@ export const ChatOutlineRail = memo(function ChatOutlineRail({
   const [scrubbedIndex, setScrubbedIndex] = useState<number | null>(null);
   // The native transcript does not report a reading position, so nothing publishes an
   // active prompt here. Remembering the last jump keeps assistive stepping moving forward
-  // instead of restarting from the first prompt every time.
-  const [steppedIndex, setSteppedIndex] = useState<number | null>(null);
+  // instead of restarting from the first prompt every time. It is stored by sequence, not
+  // by index, so switching agents or timeline epochs drops it instead of pointing the mark
+  // and the accessibility value at an unrelated prompt in the new conversation.
+  const [steppedSeq, setSteppedSeq] = useState<number | null>(null);
   const railHeightRef = useRef(0);
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
@@ -61,8 +63,8 @@ export const ChatOutlineRail = memo(function ChatOutlineRail({
       const index = resolveIndex(event);
       setScrubbedIndex(null);
       const prompt = index === null ? undefined : prompts[index];
-      if (prompt && index !== null) {
-        setSteppedIndex(index);
+      if (prompt) {
+        setSteppedSeq(prompt.seq);
         onJumpToPrompt(prompt.seq);
       }
     },
@@ -74,7 +76,12 @@ export const ChatOutlineRail = memo(function ChatOutlineRail({
     () => prompts.findIndex((prompt) => prompt.seq === activeSeq),
     [activeSeq, prompts],
   );
-  const cursorIndex = activeIndex === -1 ? steppedIndex : activeIndex;
+  const steppedIndex = useMemo(
+    () => prompts.findIndex((prompt) => prompt.seq === steppedSeq),
+    [prompts, steppedSeq],
+  );
+  const resolvedIndex = activeIndex === -1 ? steppedIndex : activeIndex;
+  const cursorIndex = resolvedIndex === -1 ? null : resolvedIndex;
   // VoiceOver cannot scrub, so the rail exposes the same navigation as an adjustable
   // control: swipe up/down steps one prompt at a time from wherever the reader is.
   const handleAccessibilityAction = useCallback(
@@ -84,7 +91,7 @@ export const ChatOutlineRail = memo(function ChatOutlineRail({
       const nextIndex = Math.min(prompts.length - 1, Math.max(0, from + step));
       const prompt = prompts[nextIndex];
       if (prompt) {
-        setSteppedIndex(nextIndex);
+        setSteppedSeq(prompt.seq);
         onJumpToPrompt(prompt.seq);
       }
     },
