@@ -119,49 +119,127 @@ function buildGroup(input: {
   };
 }
 
-export function buildExecutionCollapseProjection(input: {
+interface TurnSegment {
+  id: string;
+  turnItems: readonly StreamItem[];
+  isCompleted: boolean;
+}
+
+interface TurnSegmentAccumulator extends Omit<TurnSegment, "turnItems"> {
+  turnItems: StreamItem[];
+}
+
+/**
+ * Turn boundaries taken from the daemon's prompt index rather than from the rows that happen
+ * to be loaded. Paging backwards delivers a turn's opening prompt last, so window-derived
+ * boundaries leave exactly the rows a reader lands on — the newest turn's execution — ungrouped
+ * until they have scrolled past all of it. The index names every prompt up front, so a partly
+ * loaded turn is grouped correctly from the first frame, and its id stays put across pages.
+ */
+function segmentByPromptIndex(input: {
   items: readonly StreamItem[];
   isRunning: boolean;
-}): ExecutionCollapseProjection {
-  const groups: ExecutionCollapseGroup[] = [];
-  const groupByItemId = new Map<string, ExecutionCollapseGroup>();
+  promptSeqs: readonly number[];
+}): TurnSegment[] {
+  const orderedPromptSeqs = [...input.promptSeqs].sort((left, right) => left - right);
+  const newestPromptSeq = orderedPromptSeqs.at(-1);
+  const segmentsBySeq = new Map<number, TurnSegmentAccumulator>();
+
+  for (const item of input.items) {
+    const seq = item.timelineCursor?.seq;
+    if (seq === undefined) continue;
+    // The newest prompt owns rows the index has not caught up with yet, which is where live
+    // rows land; `isCompleted` still keeps a running turn out of the projection.
+    const promptSeq = findOwningPromptSeq(orderedPromptSeqs, seq);
+    if (promptSeq === null) continue;
+    if (seq === promptSeq) continue;
+
+    let segment = segmentsBySeq.get(promptSeq);
+    if (!segment) {
+      segment = {
+        id: `execution-collapse:prompt:${promptSeq}`,
+        turnItems: [],
+        isCompleted: promptSeq !== newestPromptSeq || !input.isRunning,
+      };
+      segmentsBySeq.set(promptSeq, segment);
+    }
+    segment.turnItems.push(item);
+  }
+
+  return [...segmentsBySeq.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, segment]) => segment);
+}
+
+function findOwningPromptSeq(orderedPromptSeqs: readonly number[], seq: number): number | null {
+  let owning: number | null = null;
+  for (const promptSeq of orderedPromptSeqs) {
+    if (promptSeq > seq) break;
+    owning = promptSeq;
+  }
+  return owning;
+}
+
+function segmentByLoadedPrompts(input: {
+  items: readonly StreamItem[];
+  isRunning: boolean;
+}): TurnSegment[] {
+  const segments: TurnSegment[] = [];
   const userIndexes = input.items.flatMap((item, index) =>
     item.kind === "user_message" ? [index] : [],
   );
 
-  const addGroup = (group: ExecutionCollapseGroup | null) => {
-    if (!group) return;
-    groups.push(group);
-    for (const itemId of group.itemIds) {
-      groupByItemId.set(itemId, group);
-    }
-  };
-
-  // A later prompt proves the leading run is a finished turn. With no prompt loaded at all the
-  // run may still be the live one, so it waits for the agent to stop.
   const leadingEnd = userIndexes[0] ?? input.items.length;
-  const isLeadingCompleted = userIndexes.length > 0 || !input.isRunning;
-  if (leadingEnd > 0 && isLeadingCompleted) {
-    addGroup(
-      buildGroup({
-        id: LEADING_TURN_GROUP_ID,
-        turnItems: input.items.slice(0, leadingEnd),
-      }),
-    );
+  if (leadingEnd > 0) {
+    segments.push({
+      id: LEADING_TURN_GROUP_ID,
+      turnItems: input.items.slice(0, leadingEnd),
+      isCompleted: userIndexes.length > 0 || !input.isRunning,
+    });
   }
 
   for (let turnIndex = 0; turnIndex < userIndexes.length; turnIndex += 1) {
     const userIndex = userIndexes[turnIndex];
     const nextUserIndex = userIndexes[turnIndex + 1] ?? input.items.length;
-    const isCompleted = turnIndex < userIndexes.length - 1 || !input.isRunning;
-    if (!isCompleted) continue;
+    segments.push({
+      id: input.items[userIndex].id,
+      turnItems: input.items.slice(userIndex + 1, nextUserIndex),
+      isCompleted: turnIndex < userIndexes.length - 1 || !input.isRunning,
+    });
+  }
 
-    addGroup(
-      buildGroup({
-        id: input.items[userIndex].id,
-        turnItems: input.items.slice(userIndex + 1, nextUserIndex),
-      }),
-    );
+  return segments;
+}
+
+export function buildExecutionCollapseProjection(input: {
+  items: readonly StreamItem[];
+  isRunning: boolean;
+  /**
+   * Every prompt's timeline seq, from the daemon's prompt index. Omitted when the host is too
+   * old to serve the index; grouping then falls back to the prompts present in the window.
+   */
+  promptSeqs?: readonly number[];
+}): ExecutionCollapseProjection {
+  const groups: ExecutionCollapseGroup[] = [];
+  const groupByItemId = new Map<string, ExecutionCollapseGroup>();
+
+  const segments =
+    input.promptSeqs && input.promptSeqs.length > 0
+      ? segmentByPromptIndex({
+          items: input.items,
+          isRunning: input.isRunning,
+          promptSeqs: input.promptSeqs,
+        })
+      : segmentByLoadedPrompts({ items: input.items, isRunning: input.isRunning });
+
+  for (const segment of segments) {
+    if (!segment.isCompleted) continue;
+    const group = buildGroup({ id: segment.id, turnItems: segment.turnItems });
+    if (!group) continue;
+    groups.push(group);
+    for (const itemId of group.itemIds) {
+      groupByItemId.set(itemId, group);
+    }
   }
 
   return { groups, groupByItemId };

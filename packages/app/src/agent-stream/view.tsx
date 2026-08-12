@@ -69,6 +69,7 @@ import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./mode
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
+import type { ChatOutlinePrompt } from "@/agent-stream/chat-outline/model";
 import {
   CHAT_OUTLINE_NATURAL_GUTTER_WIDTH,
   CHAT_OUTLINE_RAIL_GUTTER,
@@ -121,6 +122,7 @@ const EMPTY_EXECUTION_COLLAPSE_PROJECTION: ExecutionCollapseProjection = {
   groups: [],
 };
 const EMPTY_TOOL_CALL_GROUPS = new Map();
+const EMPTY_CHAT_OUTLINE_PROMPTS: ChatOutlinePrompt[] = [];
 
 const executionToggleStyle = ({ pressed }: PressableStateCallbackType) => [
   stylesheet.executionToggle,
@@ -560,16 +562,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           : (effectiveStreamHead ?? EMPTY_STREAM_HEAD),
       [effectiveStreamHead],
     );
-    const executionCollapseProjection = useMemo(
-      () =>
-        isMobileLiteMode
-          ? EMPTY_EXECUTION_COLLAPSE_PROJECTION
-          : buildExecutionCollapseProjection({
-              items: [...visibleStreamItems, ...visibleStreamHead],
-              isRunning: context.status === "running",
-            }),
-      [context.status, visibleStreamHead, visibleStreamItems],
-    );
     const toggleExecutionGroup = useCallback((groupId: string) => {
       setExpandedExecutionGroupIds((previous) => {
         const next = new Set(previous);
@@ -653,7 +645,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       timelineEpoch,
       tail: effectiveStreamItems,
       head: effectiveStreamHead,
-      enabled: supportsChatOutline && chatOutlineEnabled,
+      // The prompt index feeds two features now: the outline rail and execution collapse.
+      // Collapse needs real turn boundaries even when the reader has hidden the rail, so the
+      // fetch follows host support and only the rail follows the setting.
+      enabled: supportsChatOutline,
       viewportRef,
       onJumpError: handleTimelineHistoryLoadError,
     });
@@ -662,8 +657,27 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     // the rail's column or the rail sits on top of assistant text and eats taps.
     const { onLayout: onSurfaceLayout, isBelow: hasNoNaturalOutlineGutter } =
       useContainerWidthBelow(CHAT_OUTLINE_NATURAL_GUTTER_WIDTH);
+    // Turn boundaries come from the daemon's prompt index, not from the prompts that happen to
+    // be loaded: paging backwards delivers a turn's prompt last, so window-derived boundaries
+    // leave the rows a reader lands on ungrouped until they scroll past all of them.
+    const executionCollapsePromptSeqs = useMemo(
+      () => chatOutline.prompts.map((prompt) => prompt.seq),
+      [chatOutline.prompts],
+    );
+    const executionCollapseProjection = useMemo(
+      () =>
+        isMobileLiteMode
+          ? EMPTY_EXECUTION_COLLAPSE_PROJECTION
+          : buildExecutionCollapseProjection({
+              items: [...visibleStreamItems, ...visibleStreamHead],
+              isRunning: context.status === "running",
+              promptSeqs: executionCollapsePromptSeqs,
+            }),
+      [context.status, executionCollapsePromptSeqs, visibleStreamHead, visibleStreamItems],
+    );
+    const outlinePrompts = chatOutlineEnabled ? chatOutline.prompts : EMPTY_CHAT_OUTLINE_PROMPTS;
     const contentLeftGutter =
-      hasNoNaturalOutlineGutter && chatOutline.prompts.length >= 2 ? CHAT_OUTLINE_RAIL_GUTTER : 0;
+      hasNoNaturalOutlineGutter && outlinePrompts.length >= 2 ? CHAT_OUTLINE_RAIL_GUTTER : 0;
 
     useImperativeHandle(
       ref,
@@ -1175,7 +1189,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             // state from the previous conversation would silently look valid in the next
             // one. Remounting on identity change drops it instead.
             key={`${agentId}:${timelineEpoch ?? ""}`}
-            prompts={chatOutline.prompts}
+            prompts={outlinePrompts}
             activePrompt={chatOutline.activePrompt}
             onJumpToPrompt={chatOutline.jumpToPrompt}
           />

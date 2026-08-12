@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { TIMELINE_FETCH_PAGE_SIZE } from "@/timeline/timeline-fetch-policy";
+import {
+  TIMELINE_FETCH_PAGE_SIZE,
+  TIMELINE_INITIAL_TAIL_PAGE_SIZE,
+} from "@/timeline/timeline-fetch-policy";
 import {
   isTimelineCatchUpComplete,
   isTimelineResumeSnapshotAuthoritative,
@@ -9,12 +12,14 @@ import {
 } from "./timeline-sync-plan";
 
 describe("timeline sync planning", () => {
-  test("agent synchronization checks a bounded tail page", () => {
+  test("the opening tail page is larger than incremental pages but still bounded", () => {
     const plan = planTimelineTailFetch();
 
+    expect(TIMELINE_INITIAL_TAIL_PAGE_SIZE).toBeGreaterThan(TIMELINE_FETCH_PAGE_SIZE);
+    expect(TIMELINE_INITIAL_TAIL_PAGE_SIZE).toBeGreaterThan(0);
     expect(plan).toEqual({
       direction: "tail",
-      limit: TIMELINE_FETCH_PAGE_SIZE,
+      limit: TIMELINE_INITIAL_TAIL_PAGE_SIZE,
       projection: "projected",
     });
   });

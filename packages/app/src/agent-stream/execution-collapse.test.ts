@@ -254,3 +254,100 @@ describe("裁决者提出的指控：leading 组会不会卷进多轮并折掉�
     expect([...projection.groups[0].itemIds]).toEqual(["t1", "t2"]);
   });
 });
+
+function at(item: StreamItem, seq: number): StreamItem {
+  return { ...item, timelineCursor: { epoch: "e1", seq } };
+}
+
+describe("按提问清单切分（daemon 提供索引时）", () => {
+  it("提问那一行还没加载，也能按真实 turn 边界折叠", () => {
+    // 读者在第二台设备上落地时看到的：某一轮的尾巴，提问在更早的分页里。
+    const projection = buildExecutionCollapseProjection({
+      items: [at(toolCall("t1"), 11), at(toolCall("t2"), 12), at(assistant("final"), 13)],
+      isRunning: false,
+      promptSeqs: [10],
+    });
+
+    expect(projection.groups).toHaveLength(1);
+    expect(projection.groups[0].id).toBe("execution-collapse:prompt:10");
+    expect(Array.from(projection.groups[0].itemIds)).toEqual(["t1", "t2"]);
+    expect(projection.groupByItemId.has("final")).toBe(false);
+  });
+
+  it("翻出更早的页时分组 id 不变，只是变大", () => {
+    const firstPage = buildExecutionCollapseProjection({
+      items: [at(toolCall("t3"), 13), at(assistant("final"), 14)],
+      isRunning: false,
+      promptSeqs: [10],
+    });
+    const secondPage = buildExecutionCollapseProjection({
+      items: [
+        at(toolCall("t1"), 11),
+        at(toolCall("t2"), 12),
+        at(toolCall("t3"), 13),
+        at(assistant("final"), 14),
+      ],
+      isRunning: false,
+      promptSeqs: [10],
+    });
+
+    expect(secondPage.groups[0].id).toBe(firstPage.groups[0].id);
+    expect(secondPage.groups[0].itemCount).toBe(3);
+  });
+
+  it("多轮各自成组，即使这些轮的提问都没加载", () => {
+    const projection = buildExecutionCollapseProjection({
+      items: [
+        at(toolCall("a1"), 11),
+        at(assistant("finalA"), 12),
+        at(toolCall("b1"), 21),
+        at(assistant("finalB"), 22),
+      ],
+      isRunning: false,
+      promptSeqs: [10, 20],
+    });
+
+    expect(projection.groups.map((group) => group.id)).toEqual([
+      "execution-collapse:prompt:10",
+      "execution-collapse:prompt:20",
+    ]);
+    expect(projection.groupByItemId.has("finalA")).toBe(false);
+    expect(projection.groupByItemId.has("finalB")).toBe(false);
+  });
+
+  it("正在跑的是最新一轮，它不折叠，更早的轮照折", () => {
+    const projection = buildExecutionCollapseProjection({
+      items: [
+        at(toolCall("a1"), 11),
+        at(assistant("finalA"), 12),
+        at(toolCall("b1"), 21),
+        at(assistant("liveB"), 22),
+      ],
+      isRunning: true,
+      promptSeqs: [10, 20],
+    });
+
+    expect(projection.groups.map((group) => group.id)).toEqual(["execution-collapse:prompt:10"]);
+  });
+
+  it("提问那一行本身不会被折进去", () => {
+    const projection = buildExecutionCollapseProjection({
+      items: [at(user("u1"), 10), at(toolCall("t1"), 11), at(assistant("final"), 12)],
+      isRunning: false,
+      promptSeqs: [10],
+    });
+
+    expect(projection.groupByItemId.has("u1")).toBe(false);
+    expect(Array.from(projection.groups[0].itemIds)).toEqual(["t1"]);
+  });
+
+  it("没有索引时退回按已加载提问切分", () => {
+    const projection = buildExecutionCollapseProjection({
+      items: [user("u1"), toolCall("t1"), assistant("final")],
+      isRunning: false,
+      promptSeqs: [],
+    });
+
+    expect(projection.groups[0].id).toBe("u1");
+  });
+});
