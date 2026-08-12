@@ -216,3 +216,41 @@ describe("execution collapse before the opening prompt is paged in", () => {
     expect(projection.groups.map((group) => group.hostItemId)).toEqual(["t1"]);
   });
 });
+
+describe("裁决者提出的指控：leading 组会不会卷进多轮并折掉它们的结论", () => {
+  it("窗口里出现更晚的提问时，leading 段只覆盖那一个未完整的 turn", () => {
+    // 行是按 seq 连续到达的，所以只要某一轮的行在窗口里，它的提问也在窗口里。
+    // 于是第一条已加载提问之前的内容，最多只是"上一轮的尾巴"。
+    const projection = buildExecutionCollapseProjection({
+      items: [
+        toolCall("t_prev"),
+        assistant("conclusion_prev"),
+        user("u_next"),
+        toolCall("t_next"),
+        assistant("conclusion_next"),
+      ],
+      isRunning: false,
+    });
+
+    // 上一轮的结论必须仍然可见，不能被卷进折叠块
+    expect(projection.groupByItemId.has("conclusion_prev")).toBe(false);
+    expect(projection.groupByItemId.has("conclusion_next")).toBe(false);
+    expect(projection.groups.map((group) => Array.from(group.itemIds))).toEqual([
+      ["t_prev"],
+      ["t_next"],
+    ]);
+  });
+
+  it("未完整的 turn 里，结论和最后一段工具调用前的开场白都保持可见", () => {
+    // 可见性规则是既有的：最终结论 + 最后一段连续工具调用之前的那条助手消息。
+    // leading 段沿用同一套规则，不会把它们折进去。
+    const projection = buildExecutionCollapseProjection({
+      items: [assistant("opening"), toolCall("t1"), toolCall("t2"), assistant("conclusion")],
+      isRunning: false,
+    });
+
+    expect(projection.groupByItemId.has("conclusion")).toBe(false);
+    expect(projection.groupByItemId.has("opening")).toBe(false);
+    expect([...projection.groups[0].itemIds]).toEqual(["t1", "t2"]);
+  });
+});
