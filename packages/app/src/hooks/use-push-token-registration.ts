@@ -19,7 +19,7 @@ const DEVICE_ID_STORAGE_KEY = "@paseo:push-device-id";
  * accumulate tokens. A full delete-and-reinstall starts a new id, and the token it abandons
  * dies the normal way once Expo reports it unregistered.
  */
-async function getOrCreateDeviceId(): Promise<string> {
+async function loadOrCreateDeviceId(): Promise<string> {
   const existing = await AsyncStorage.getItem(DEVICE_ID_STORAGE_KEY);
   if (typeof existing === "string" && existing.trim()) {
     return existing.trim();
@@ -27,6 +27,25 @@ async function getOrCreateDeviceId(): Promise<string> {
   const created = Crypto.randomUUID();
   await AsyncStorage.setItem(DEVICE_ID_STORAGE_KEY, created);
   return created;
+}
+
+let deviceIdPromise: Promise<string> | null = null;
+
+/**
+ * The hook runs once per configured host, so on a fresh install every instance would race to
+ * read the missing id, mint a different UUID, and register it with its own daemon while
+ * storage kept only the last one. Each daemon would then hold an id nobody sends again, and
+ * the next token change could not evict the old token — exactly the duplicate notifications
+ * this is meant to stop. One shared in-flight promise gives every host the same id.
+ */
+function getOrCreateDeviceId(): Promise<string> {
+  deviceIdPromise ??= loadOrCreateDeviceId().catch((error: unknown) => {
+    // Don't cache the failure: a transient storage error would otherwise leave every host
+    // without a device id for the rest of the session.
+    deviceIdPromise = null;
+    throw error;
+  });
+  return deviceIdPromise;
 }
 
 function getExpoProjectId(): string | null {
