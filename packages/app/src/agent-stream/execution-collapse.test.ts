@@ -374,4 +374,18 @@ describe("按提问清单切分（daemon 提供索引时）", () => {
 
     expect(projection.groups[0].id).toBe("u1");
   });
+
+  it("索引异步到达前后，已加载提问那一轮的分组 id 不变", () => {
+    // 首帧 promptSeqs 还是空的（列表在拉），随后索引到达。
+    const items = [at(user("u1"), 10), at(toolCall("t1"), 11), at(assistant("final"), 12)];
+    const beforeIndex = buildExecutionCollapseProjection({ items, isRunning: false });
+    const afterIndex = buildExecutionCollapseProjection({
+      items,
+      isRunning: false,
+      promptSeqs: [10],
+    });
+
+    expect(beforeIndex.groups[0].id).toBe("execution-collapse:prompt:10");
+    expect(afterIndex.groups[0].id).toBe(beforeIndex.groups[0].id);
+  });
 });

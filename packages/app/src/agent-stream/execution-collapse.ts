@@ -165,7 +165,7 @@ function segmentByPromptIndex(input: {
     let segment = segmentsBySeq.get(promptSeq);
     if (!segment) {
       segment = {
-        id: `execution-collapse:prompt:${promptSeq}`,
+        id: promptTurnGroupId(promptSeq),
         turnItems: [],
         isCompleted: promptSeq !== newestPromptSeq || !input.isRunning,
       };
@@ -186,6 +186,17 @@ function findOwningPromptSeq(orderedPromptSeqs: readonly number[], seq: number):
     owning = promptSeq;
   }
   return owning;
+}
+
+/**
+ * The id a turn gets once its prompt is on screen. Both segmentation paths use it, so the ids
+ * do not churn when the asynchronously fetched prompt index replaces the fallback: a turn whose
+ * prompt is loaded is already keyed the way the index would key it, and the reader's expand
+ * state survives that swap. Only the leading run — which by definition has no prompt loaded —
+ * still changes identity when its prompt finally arrives.
+ */
+function promptTurnGroupId(promptSeq: number): string {
+  return `execution-collapse:prompt:${promptSeq}`;
 }
 
 function segmentByLoadedPrompts(input: {
@@ -210,8 +221,11 @@ function segmentByLoadedPrompts(input: {
   for (let turnIndex = 0; turnIndex < userIndexes.length; turnIndex += 1) {
     const userIndex = userIndexes[turnIndex];
     const nextUserIndex = userIndexes[turnIndex + 1] ?? input.items.length;
+    const promptItem = input.items[userIndex];
     segments.push({
-      id: input.items[userIndex].id,
+      id: promptItem.timelineCursor
+        ? promptTurnGroupId(promptItem.timelineCursor.seq)
+        : promptItem.id,
       turnItems: input.items.slice(userIndex + 1, nextUserIndex),
       isCompleted: turnIndex < userIndexes.length - 1 || !input.isRunning,
     });

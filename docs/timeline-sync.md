@@ -247,3 +247,9 @@ canonical assistant prefix, it stays in the head lane. No row may be returned in
 - App viewed-agent synchronization: `packages/app/src/timeline/viewed-timeline-sync.ts`
 - App stream/timeline reducer: `packages/app/src/timeline/session-stream-reducers.ts`
 - Session wiring: `packages/app/src/contexts/session-context.tsx`
+
+## 相关文档
+
+时间线**读起来**是什么样，由折叠决定：一个 turn 的执行过程如何被收成一块、首屏拉多少行，
+以及为什么没有让服务端只发对话行——见
+[docs/conversation-timeline-projection.md](conversation-timeline-projection.md)。
