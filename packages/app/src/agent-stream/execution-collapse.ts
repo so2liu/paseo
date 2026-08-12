@@ -85,6 +85,40 @@ function countLogicalItems(items: readonly StreamItem[]): number {
   return logicalItemIds.size;
 }
 
+/**
+ * The turn whose opening prompt has not been paged in yet. Opening a long conversation on a
+ * second device loads the newest rows first, so the prompt that starts the visible turn is
+ * the last thing to arrive — and until it does, keying groups off prompts alone would leave
+ * every intermediate row expanded. That is the state a reader actually lands in, so the
+ * leading run gets collapsed on its own and simply grows as older pages arrive.
+ *
+ * The id is a constant rather than a row id: the run's first row changes with every page, and
+ * an id that moved with it would drop the reader's expand state on each load.
+ */
+const LEADING_TURN_GROUP_ID = "execution-collapse:leading";
+
+function buildGroup(input: {
+  id: string;
+  turnItems: readonly StreamItem[];
+}): ExecutionCollapseGroup | null {
+  const finalAssistant = findFinalAssistant(input.turnItems);
+  if (!finalAssistant) return null;
+  const lastToolCallAssistant = findLastToolCallAssistant(input.turnItems);
+  const visibleItemIds = new Set([
+    ...collectLogicalAssistantItemIds(input.turnItems, finalAssistant),
+    ...collectLogicalAssistantItemIds(input.turnItems, lastToolCallAssistant),
+  ]);
+  const collapsibleItems = input.turnItems.filter((item) => !visibleItemIds.has(item.id));
+  if (collapsibleItems.length === 0) return null;
+
+  return {
+    id: input.id,
+    hostItemId: collapsibleItems[0].id,
+    itemIds: new Set(collapsibleItems.map((item) => item.id)),
+    itemCount: countLogicalItems(collapsibleItems),
+  };
+}
+
 export function buildExecutionCollapseProjection(input: {
   items: readonly StreamItem[];
   isRunning: boolean;
@@ -95,33 +129,39 @@ export function buildExecutionCollapseProjection(input: {
     item.kind === "user_message" ? [index] : [],
   );
 
+  const addGroup = (group: ExecutionCollapseGroup | null) => {
+    if (!group) return;
+    groups.push(group);
+    for (const itemId of group.itemIds) {
+      groupByItemId.set(itemId, group);
+    }
+  };
+
+  // A later prompt proves the leading run is a finished turn. With no prompt loaded at all the
+  // run may still be the live one, so it waits for the agent to stop.
+  const leadingEnd = userIndexes[0] ?? input.items.length;
+  const isLeadingCompleted = userIndexes.length > 0 || !input.isRunning;
+  if (leadingEnd > 0 && isLeadingCompleted) {
+    addGroup(
+      buildGroup({
+        id: LEADING_TURN_GROUP_ID,
+        turnItems: input.items.slice(0, leadingEnd),
+      }),
+    );
+  }
+
   for (let turnIndex = 0; turnIndex < userIndexes.length; turnIndex += 1) {
     const userIndex = userIndexes[turnIndex];
     const nextUserIndex = userIndexes[turnIndex + 1] ?? input.items.length;
     const isCompleted = turnIndex < userIndexes.length - 1 || !input.isRunning;
     if (!isCompleted) continue;
 
-    const turnItems = input.items.slice(userIndex + 1, nextUserIndex);
-    const finalAssistant = findFinalAssistant(turnItems);
-    if (!finalAssistant) continue;
-    const lastToolCallAssistant = findLastToolCallAssistant(turnItems);
-    const visibleItemIds = new Set([
-      ...collectLogicalAssistantItemIds(turnItems, finalAssistant),
-      ...collectLogicalAssistantItemIds(turnItems, lastToolCallAssistant),
-    ]);
-    const collapsibleItems = turnItems.filter((item) => !visibleItemIds.has(item.id));
-    if (collapsibleItems.length === 0) continue;
-
-    const group: ExecutionCollapseGroup = {
-      id: input.items[userIndex].id,
-      hostItemId: collapsibleItems[0].id,
-      itemIds: new Set(collapsibleItems.map((item) => item.id)),
-      itemCount: countLogicalItems(collapsibleItems),
-    };
-    groups.push(group);
-    for (const item of collapsibleItems) {
-      groupByItemId.set(item.id, group);
-    }
+    addGroup(
+      buildGroup({
+        id: input.items[userIndex].id,
+        turnItems: input.items.slice(userIndex + 1, nextUserIndex),
+      }),
+    );
   }
 
   return { groups, groupByItemId };

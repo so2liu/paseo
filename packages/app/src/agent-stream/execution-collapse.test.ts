@@ -160,3 +160,59 @@ describe("execution collapse projection", () => {
     expect(projection.groupByItemId.has("final:block:1")).toBe(false);
   });
 });
+
+describe("execution collapse before the opening prompt is paged in", () => {
+  it("collapses the leading run so a second device does not land on raw tool calls", () => {
+    // What a reader sees first on another device: the tail of a turn, newest rows only.
+    const projection = buildExecutionCollapseProjection({
+      items: [toolCall("t1"), toolCall("t2"), toolCall("t3"), assistant("final")],
+      isRunning: false,
+    });
+
+    expect(projection.groups).toHaveLength(1);
+    expect(projection.groups[0].hostItemId).toBe("t1");
+    expect([...projection.groups[0].itemIds]).toEqual(["t1", "t2", "t3"]);
+    expect(projection.groupByItemId.has("final")).toBe(false);
+  });
+
+  it("keeps the same group id as older pages arrive so expand state survives", () => {
+    const firstPage = buildExecutionCollapseProjection({
+      items: [toolCall("t2"), toolCall("t3"), assistant("final")],
+      isRunning: false,
+    });
+    const secondPage = buildExecutionCollapseProjection({
+      items: [toolCall("t0"), toolCall("t1"), toolCall("t2"), toolCall("t3"), assistant("final")],
+      isRunning: false,
+    });
+
+    expect(secondPage.groups[0].id).toBe(firstPage.groups[0].id);
+    expect(secondPage.groups[0].itemCount).toBe(4);
+  });
+
+  it("still collapses the leading run once a later prompt is loaded", () => {
+    const projection = buildExecutionCollapseProjection({
+      items: [toolCall("t1"), assistant("final1"), user("u2"), toolCall("t2"), assistant("final2")],
+      isRunning: false,
+    });
+
+    expect(projection.groups.map((group) => group.hostItemId)).toEqual(["t1", "t2"]);
+  });
+
+  it("leaves the leading run alone while it may still be the live turn", () => {
+    const projection = buildExecutionCollapseProjection({
+      items: [toolCall("t1"), toolCall("t2"), assistant("final")],
+      isRunning: true,
+    });
+
+    expect(projection.groups).toHaveLength(0);
+  });
+
+  it("collapses a leading run that is provably finished even while the agent runs", () => {
+    const projection = buildExecutionCollapseProjection({
+      items: [toolCall("t1"), assistant("final1"), user("u2"), toolCall("t2")],
+      isRunning: true,
+    });
+
+    expect(projection.groups.map((group) => group.hostItemId)).toEqual(["t1"]);
+  });
+});
