@@ -31,6 +31,8 @@ import {
 // screen, the project icon preselects the right project across the reused 'new'
 // screen, and non-git projects never offer the worktree Isolation control.
 
+const COMPACT_VIEWPORT = { width: 390, height: 844 };
+
 function projectRow(page: import("@playwright/test").Page, projectKey: string) {
   return page.getByTestId(`sidebar-project-row-${projectEquivalenceViewKey(projectKey)}`);
 }
@@ -135,6 +137,32 @@ test.describe("New workspace entry points", () => {
     });
 
     await expectNewWorkspaceControlsEnabled(page);
+  });
+
+  // The compact stack is a separate branch from the desktop row, so a project picker that
+  // is visible on desktop proves nothing about the phone. An upstream sync once dropped the
+  // compact row while the desktop one kept working, leaving phones able to pick a host but
+  // not a project.
+  test("the New Workspace screen offers the project picker on a phone-sized viewport", async ({
+    page,
+  }) => {
+    const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-compact-" });
+
+    try {
+      await page.setViewportSize(COMPACT_VIEWPORT);
+      await gotoAppShell(page);
+      // The global New workspace button lives inside the compact sidebar overlay, which
+      // starts closed. Route straight to the screen so this stays a test of the form stack
+      // rather than of the panel gestures.
+      await page.goto("/new");
+      await expect(page).toHaveURL(/\/new(?:\?.*)?$/, { timeout: 30_000 });
+
+      await expect(page.getByTestId("new-workspace-project-picker-trigger")).toBeVisible({
+        timeout: 30_000,
+      });
+    } finally {
+      await seeded.cleanup();
+    }
   });
 
   test("Ctrl+P opens the project picker with search focused", async ({ page }) => {

@@ -1562,6 +1562,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   return isCompact ? (
     <View testID="new-workspace-ref-picker-row" style={styles.formStack}>
       {hostControl ? <FormRow>{hostControl}</FormRow> : null}
+      <FormRow>{projectControl}</FormRow>
       {isolationControl ? <FormRow>{isolationControl}</FormRow> : null}
       {baseControl ? <FormRow>{baseControl}</FormRow> : null}
       <FormRow>{launchControl}</FormRow>

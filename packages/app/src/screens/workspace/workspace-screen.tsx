@@ -4124,30 +4124,6 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
     flexShrink: 0,
   },
-  headerContextRow: {
-    minWidth: 0,
-    flexShrink: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  headerContextSeparator: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-  },
-  headerHostContext: {
-    minWidth: 0,
-    flexShrink: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  headerHostLabel: {
-    minWidth: 0,
-    flexShrink: 1,
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-  },
   headerTitleSkeleton: {
     width: 220,
     maxWidth: "100%",
