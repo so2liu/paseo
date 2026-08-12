@@ -622,11 +622,24 @@ than treating it as valid.
 
 ```json
 {
-  "tokens": ["ExponentPushToken[...]", ...]
+  "tokens": ["ExponentPushToken[...]", ...],
+  "entries": [{ "token": "ExponentPushToken[...]", "deviceId": "uuid-or-null" }, ...]
 }
 ```
 
-Simple set of Expo push notification tokens. Loaded with permissive parsing (filters non-string entries). Persisted with atomic temp-file rename.
+Expo push notification tokens, keyed by token. `entries` is authoritative and carries the
+registering device; `tokens` repeats the same tokens as a plain array so rolling the daemon back
+to a build that predates device ids keeps every registration instead of silently dropping them.
+Loading prefers `entries` and falls back to `tokens` (as entries with no device).
+
+**Invariant: at most one token per `deviceId`.** A device gets a fresh Expo token on every
+rebuild or reinstall and the old one stays deliverable for a while, so a store keyed only by
+token accumulates several live tokens for one phone and pushes each notification to it once per
+token. Registering a token with a `deviceId` therefore evicts that device's previous token.
+Clients that send no `deviceId` keep the original add-only behaviour. Tokens are also removed
+when Expo reports them `DeviceNotRegistered` or `InvalidCredentials`.
+
+Loaded with permissive parsing (filters malformed entries). Persisted with atomic temp-file rename.
 
 ---
 
