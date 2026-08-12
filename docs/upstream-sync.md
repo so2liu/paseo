@@ -180,6 +180,61 @@ git log --oneline <上次基线>..<同步前的 main> --full-history -- $(cat /t
 - 默认排队消息（`cd38ba86b`）、native mobile lite 模式（`d137fe81e`）、
   混合项目 push token 重试（`0fe522848`）
 
+### 机械核对：导出符号与新增文件
+
+上面那份提交清单要人逐条回忆"这个提交的行为还在不在"，很容易看漏。补一道机械检查，
+把 fork 引入的**导出符号**和**新增文件**全部拉出来，逐个确认还在合并结果里。
+
+**被查的那个 ref 必须是合并结果，也就是同步分支上的 `HEAD`。** 复查是在同步 PR 合并
+*之前*做的，这时候 `origin/main` 恰恰是同步前的 fork 状态——每个符号在那里当然都还在，
+两条命令会全部通过，而它们本该抓的丢失一个都抓不到。下面用 `HEAD` 表示合并结果，在
+同步分支上直接跑即可；如果是事后复查已经合掉的同步，把 `HEAD` 换成那个 merge commit。
+
+```bash
+MERGED=HEAD   # 同步分支上的合并结果；事后复查就写那个 merge commit 的 SHA
+
+# 新增文件
+git diff --name-status --no-renames <上次基线> <同步前的 main> -- 'packages/*' \
+  | awk '$1=="A"{print $2}' | grep -vE '\.(md|json|lock)$' \
+  | while read -r f; do git cat-file -e "$MERGED:$f" 2>/dev/null || echo "MISSING: $f"; done
+
+# 导出符号
+git diff -U0 <上次基线> <同步前的 main> -- 'packages/*/src/*' | grep -E '^\+' \
+  | grep -oE '^\+export (async )?function [A-Za-z0-9_]+|^\+export (const|class|interface|type) [A-Za-z0-9_]+' \
+  | grep -oE '[A-Za-z0-9_]+$' | sort -u \
+  | while read -r s; do git grep -qw "$s" "$MERGED" -- packages || echo "$s"; done
+```
+
+`git grep` 的 pathspec 用 `-- packages`，**不要写 `-- 'packages/*/src'`**：后者匹配不到
+任何东西，会把每一个符号都报成缺失，看起来像天塌了。
+
+新增文件那一步会把**重命名**报成缺失（上游 `v0.3.1` 把 e2e 目录整个挪进了
+`e2e/browser/` 和 `e2e/support/helpers/`）。逐个确认新路径下是否存在同名文件再下结论。
+
+**这道检查有明确盲区：它只认符号和文件名，认不出"函数体内改了一行"的定制。**
+`v0.3.1` 丢掉的移动端项目选择器就是这类——一行 JSX，没有任何新符号。值类定制
+（默认值、上限、开关）只能靠上面那份手写清单和人工核对。
+
+### `v0.3.1` 那次的实际结果
+
+按上面两道检查跑完：上游改了 1557 个文件，交集 fork 提交 87 个，fork 引入 159 个
+导出符号 / 75 个新增文件。丢了两处：
+
+1. **移动端新建工作区的项目选择器**（一行 JSX）。合并前两边都有这一行，解冲突时取了
+   上游新增的 `launchControl`、保住了 fork 的"主机在前"顺序，唯独把项目那一行漏掉。
+   桌面端分支不受影响，所以在 Mac 上完全看不出来，一路走到了发版。已在 `#42` 修复，
+   并补了手机尺寸视口的 e2e——**移动端和桌面端是 `isCompact ? ... : ...` 两个独立分支，
+   桌面端的断言证明不了移动端**。
+2. **原生聊天记录的手势/滚动模块**（`native-history-scroll-intent`、
+   `native-history-layout-invalidation`，及 `disarmHistoryStartPagination`、
+   `planResumeTimelineSync`）。这块**决定不恢复**：上游在 `v0.3.1` 把
+   `history-start-pagination` 换成了 `dormant/ready/loading/settling/latched` 状态机，
+   fork 那些补丁是在旧地基上修出来的，硬贴回去等于跟上游对着干。这一块以上游为准。
+   web 侧的 `web-history-input.ts` 一行没丢，不受影响。
+
+从这两处得到的判断口径：**丢了"我们加的功能"要补回来；丢了"我们在旧实现上打的补丁"、
+而上游已经重写了那块实现，就以上游为准。**
+
 ## 合并同步 PR
 
 **必须用 merge commit，绝对不能 squash。** 这是整个流程里最容易一键毁掉、而且当场
