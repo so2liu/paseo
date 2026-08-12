@@ -5,10 +5,11 @@ import { useReducedMotion } from "react-native-reanimated";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { createChatOutlineHoverIntent } from "./hover-intent";
 import { promptTickMagnification, type ChatOutlineRailProps } from "./model";
+import { CHAT_OUTLINE_RAIL_OFFSET, CHAT_OUTLINE_RAIL_WIDTH } from "./layout";
 
 // Hover tracking lives on the rail and the slots, never on the Pressable inside them:
 // magnifying a slot must not move the box the pointer is resting on. See docs/hover.md.
-const RAIL_WIDTH = 36;
+const RAIL_WIDTH = CHAT_OUTLINE_RAIL_WIDTH;
 const SLOT_HEIGHT = 8;
 const RESTING_PILL_HEIGHT = 2;
 const MAGNIFIED_PILL_HEIGHT = 4;
@@ -178,7 +179,7 @@ const styles = StyleSheet.create((theme) => ({
   // scrolling a long transcript is most painful, so it is not a wide-layout-only affordance.
   rail: {
     position: "absolute",
-    left: theme.spacing[2],
+    left: CHAT_OUTLINE_RAIL_OFFSET,
     top: "10%",
     bottom: "10%",
     width: RAIL_WIDTH,

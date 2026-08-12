@@ -9,12 +9,13 @@ import {
 import { StyleSheet } from "react-native-unistyles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { resolvePromptIndexAtOffset, type ChatOutlineRailProps } from "./model";
+import { CHAT_OUTLINE_RAIL_OFFSET, CHAT_OUTLINE_RAIL_WIDTH } from "./layout";
 
 // Native has no hover, and a long conversation squeezes the slots well below a tap-sized
 // target, so the rail is a scrubber rather than a column of buttons: press anywhere on it
 // to preview the prompt under your finger, slide to hunt, lift to jump. Tapping is the
 // degenerate case of the same gesture, so a confident tap still lands in one touch.
-const RAIL_WIDTH = 28;
+const RAIL_WIDTH = CHAT_OUTLINE_RAIL_WIDTH;
 const SLOT_HEIGHT = 8;
 const RESTING_PILL_HEIGHT = 2;
 const RESTING_PILL_WIDTH = 10;
@@ -183,7 +184,7 @@ const styles = StyleSheet.create((theme) => ({
   // transcript hurts most, so this is not a wide-layout-only affordance.
   rail: {
     position: "absolute",
-    left: theme.spacing[1],
+    left: CHAT_OUTLINE_RAIL_OFFSET,
     top: "10%",
     bottom: "10%",
     width: RAIL_WIDTH,

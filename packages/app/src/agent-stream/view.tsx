@@ -69,6 +69,11 @@ import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./mode
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
+import {
+  CHAT_OUTLINE_NATURAL_GUTTER_WIDTH,
+  CHAT_OUTLINE_RAIL_GUTTER,
+} from "@/agent-stream/chat-outline/layout";
+import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
@@ -652,6 +657,19 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       viewportRef,
       onJumpError: handleTimelineHistoryLoadError,
     });
+    // The outline rail floats over the transcript. Once the pane is too narrow for the
+    // centred content to leave a margin of its own, the transcript has to pad itself out of
+    // the rail's column or the rail sits on top of assistant text and eats taps.
+    const { onLayout: onSurfaceLayout, isBelow: hasNoNaturalOutlineGutter } =
+      useContainerWidthBelow(CHAT_OUTLINE_NATURAL_GUTTER_WIDTH);
+    const needsOutlineGutter = hasNoNaturalOutlineGutter && chatOutline.prompts.length >= 2;
+    const listContentContainerStyle = useMemo(
+      () =>
+        needsOutlineGutter
+          ? [stylesheet.listContentContainer, stylesheet.listContentOutlineGutter]
+          : stylesheet.listContentContainer,
+      [needsOutlineGutter],
+    );
 
     useImperativeHandle(
       ref,
@@ -1132,7 +1150,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     return (
       <ToolCallSheetProvider>
-        <AssistantSelectionCopySurface style={stylesheet.container}>
+        <AssistantSelectionCopySurface style={stylesheet.container} onLayout={onSurfaceLayout}>
           <MessageOuterSpacingProvider disableOuterSpacing>
             {streamRenderStrategy.render({
               agentId,
@@ -1153,7 +1171,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               olderHistoryProgressKey: progressKey,
               scrollEnabled: streamScrollEnabled,
               listStyle: stylesheet.list,
-              baseListContentContainerStyle: stylesheet.listContentContainer,
+              baseListContentContainerStyle: listContentContainerStyle,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
             })}
           </MessageOuterSpacingProvider>
@@ -1624,6 +1642,9 @@ const stylesheet = StyleSheet.create((theme) => ({
       xs: theme.spacing[3],
       md: theme.spacing[4],
     },
+  },
+  listContentOutlineGutter: {
+    paddingLeft: CHAT_OUTLINE_RAIL_GUTTER,
   },
   forwardListContentContainer: {
     paddingTop: theme.spacing[4],

@@ -6,6 +6,7 @@ import {
   expectActiveChatOutlinePrompt,
   expectChatOutlinePreview,
   expectChatOutlinePrompts,
+  expectChatOutlineClearOfTranscript,
   expectChatOutlinePromptToRemainBare,
   expectLiveTurnPromptAboveFoldAndActive,
   expectNoChatOutlinePreviewWhileCrossingToSidebar,
@@ -208,7 +209,9 @@ test.describe("desktop chat outline", () => {
     });
   });
 
-  test("keeps the rail when a split makes its panel narrow", async ({ page }) => {
+  test("keeps the rail clear of the transcript when a split makes its panel narrow", async ({
+    page,
+  }) => {
     const agent = await seedLongMockAgentTimeline({ turns: 2 });
     try {
       await page.setViewportSize(WIDE_VIEWPORT);
@@ -217,6 +220,7 @@ test.describe("desktop chat outline", () => {
       await splitCurrentPanelRight(page);
 
       await expect(chatOutlineRail(page).first()).toBeVisible();
+      await expectChatOutlineClearOfTranscript(page);
     } finally {
       await agent.cleanup();
     }
