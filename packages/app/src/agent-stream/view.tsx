@@ -69,6 +69,11 @@ import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./mode
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
+import {
+  CHAT_OUTLINE_NATURAL_GUTTER_WIDTH,
+  CHAT_OUTLINE_RAIL_GUTTER,
+} from "@/agent-stream/chat-outline/layout";
+import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
@@ -287,7 +292,6 @@ function renderLiveHeadStreamItem(input: {
 
 export interface AgentStreamViewHandle {
   scrollToBottom(reason?: BottomAnchorLocalRequest["reason"]): void;
-  scrollToMessage(messageId: string): void;
   prepareForViewportChange(): void;
 }
 
@@ -336,61 +340,6 @@ function useRetainedValue<T>(value: T, active: boolean): T {
 }
 const EMPTY_PENDING_MESSAGE_SUBMISSIONS: readonly PendingMessageSubmission[] = [];
 const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
-
-function UserMessageLocatorTick({
-  message,
-  index,
-  count,
-  onSelect,
-}: {
-  message: Extract<StreamItem, { kind: "user_message" }>;
-  index: number;
-  count: number;
-  onSelect: (messageId: string) => void;
-}) {
-  const handlePress = useCallback(() => onSelect(message.id), [message.id, onSelect]);
-  const positionStyle = useMemo(
-    () => [stylesheet.messageLocatorHit, { top: `${(index / (count - 1)) * 100}%` as const }],
-    [count, index],
-  );
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={message.text.trim().slice(0, 80)}
-      onPress={handlePress}
-      hitSlop={6}
-      style={positionStyle}
-      testID={`user-message-locator-${message.id}`}
-    >
-      <View style={stylesheet.messageLocatorTick} />
-    </Pressable>
-  );
-}
-
-function UserMessageLocator({
-  messages,
-  onSelect,
-}: {
-  messages: readonly Extract<StreamItem, { kind: "user_message" }>[];
-  onSelect: (messageId: string) => void;
-}) {
-  if (messages.length < 2) {
-    return null;
-  }
-  return (
-    <View style={stylesheet.messageLocator} pointerEvents="box-none">
-      {messages.map((message, index) => (
-        <UserMessageLocatorTick
-          key={message.id}
-          message={message}
-          index={index}
-          count={messages.length}
-          onSelect={onSelect}
-        />
-      ))}
-    </View>
-  );
-}
 
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
   function AgentStreamView(
@@ -611,14 +560,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           : (effectiveStreamHead ?? EMPTY_STREAM_HEAD),
       [effectiveStreamHead],
     );
-    const userMessages = useMemo(
-      () =>
-        [...visibleStreamItems, ...visibleStreamHead].filter(
-          (item): item is Extract<StreamItem, { kind: "user_message" }> =>
-            item.kind === "user_message",
-        ),
-      [visibleStreamHead, visibleStreamItems],
-    );
     const executionCollapseProjection = useMemo(
       () =>
         isMobileLiteMode
@@ -716,15 +657,19 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       viewportRef,
       onJumpError: handleTimelineHistoryLoadError,
     });
+    // The outline rail floats over the transcript. Once the pane is too narrow for the
+    // centred content to leave a margin of its own, the transcript has to pad itself out of
+    // the rail's column or the rail sits on top of assistant text and eats taps.
+    const { onLayout: onSurfaceLayout, isBelow: hasNoNaturalOutlineGutter } =
+      useContainerWidthBelow(CHAT_OUTLINE_NATURAL_GUTTER_WIDTH);
+    const contentLeftGutter =
+      hasNoNaturalOutlineGutter && chatOutline.prompts.length >= 2 ? CHAT_OUTLINE_RAIL_GUTTER : 0;
 
     useImperativeHandle(
       ref,
       () => ({
         scrollToBottom(reason = "jump-to-bottom") {
           viewportRef.current?.scrollToBottom(reason);
-        },
-        scrollToMessage(messageId) {
-          viewportRef.current?.scrollToMessage?.(messageId);
         },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
@@ -747,9 +692,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         onError: handleTimelineHistoryLoadError,
       });
     }, [agentId, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId]);
-    const scrollToMessage = useCallback((messageId: string) => {
-      viewportRef.current?.scrollToMessage?.(messageId);
-    }, []);
 
     const setInlineDetailsExpanded = useCallback(
       (itemId: string, expanded: boolean) => {
@@ -1202,7 +1144,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     return (
       <ToolCallSheetProvider>
-        <AssistantSelectionCopySurface style={stylesheet.container}>
+        <AssistantSelectionCopySurface style={stylesheet.container} onLayout={onSurfaceLayout}>
           <MessageOuterSpacingProvider disableOuterSpacing>
             {streamRenderStrategy.render({
               agentId,
@@ -1224,10 +1166,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               scrollEnabled: streamScrollEnabled,
               listStyle: stylesheet.list,
               baseListContentContainerStyle: stylesheet.listContentContainer,
+              contentLeftGutter,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
             })}
           </MessageOuterSpacingProvider>
           <ChatOutlineRail
+            // Prompt sequences are agent- and epoch-local, both starting at 1, so outline
+            // state from the previous conversation would silently look valid in the next
+            // one. Remounting on identity change drops it instead.
+            key={`${agentId}:${timelineEpoch ?? ""}`}
             prompts={chatOutline.prompts}
             activePrompt={chatOutline.activePrompt}
             onJumpToPrompt={chatOutline.jumpToPrompt}
@@ -1247,7 +1194,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               </Animated.View>
             </View>
           )}
-          <UserMessageLocator messages={userMessages} onSelect={scrollToMessage} />
         </AssistantSelectionCopySurface>
       </ToolCallSheetProvider>
     );
@@ -1757,30 +1703,6 @@ const stylesheet = StyleSheet.create((theme) => ({
   executionToggleText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-  },
-  messageLocator: {
-    position: "absolute",
-    top: 24,
-    right: 2,
-    bottom: 88,
-    width: 24,
-    zIndex: 3,
-  },
-  messageLocatorHit: {
-    position: "absolute",
-    right: 0,
-    width: 24,
-    height: 14,
-    marginTop: -7,
-    alignItems: "flex-end",
-    justifyContent: "center",
-    paddingRight: 4,
-  },
-  messageLocatorTick: {
-    width: 10,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: theme.colors.foregroundMuted,
   },
   scrollToBottomContainer: {
     position: "absolute",

@@ -26,6 +26,15 @@ configuration data.
 The native composer keeps model and thinking strength visible as separate controls beside the input.
 Lower-frequency mode and feature controls remain in the model sheet.
 
+The chat outline rail also renders on native, as a touch scrubber rather than the web rail's hover
+column (`chat-outline/rail.native.tsx`). Press the rail to preview the prompt under your finger,
+slide to hunt, lift to jump. It reads the same daemon prompt index as the web rail, so it can jump
+to prompts that are not in the loaded window. Two web-only behaviors do not carry over: hover
+magnification, and the active-prompt marker — the native transcript does not report a reading
+position, so the rail marks the last prompt you jumped to instead. Adding a reading position would
+mean putting viewability tracking on the transcript's `FlatList`, which is not worth the per-scroll
+cost for a marker.
+
 ## Background and notifications
 
 When the app backgrounds, selective timeline membership is cleared immediately. Agent attention

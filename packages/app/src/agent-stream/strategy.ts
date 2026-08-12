@@ -78,6 +78,11 @@ export interface StreamRenderInput {
   hasOlderHistory: boolean;
   olderHistoryProgressKey: string | null;
   scrollEnabled: boolean;
+  // Minimum left padding for the transcript, so the floating chat outline rail has a column
+  // of its own. Both viewports build their content padding differently — the web one in CSS,
+  // the native one from a Unistyles sheet — so the gutter travels as a number rather than a
+  // style, and each applies it as a floor over its own padding.
+  contentLeftGutter?: number;
   listStyle: StyleProp<ViewStyle>;
   baseListContentContainerStyle: StyleProp<ViewStyle>;
   forwardListContentContainerStyle: StyleProp<ViewStyle>;

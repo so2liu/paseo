@@ -631,12 +631,7 @@ export function AppearanceSection() {
             value={settings.toolCallDetailLevel}
             onChange={handleToolCallDetailLevelChange}
           />
-          {!isNative ? (
-            <ChatOutlineRow
-              value={settings.chatOutlineEnabled}
-              onChange={handleChatOutlineChange}
-            />
-          ) : null}
+          <ChatOutlineRow value={settings.chatOutlineEnabled} onChange={handleChatOutlineChange} />
         </View>
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.fonts.title")}>

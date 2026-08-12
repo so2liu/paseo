@@ -21,6 +21,29 @@ export async function expectNoChatOutline(page: Page): Promise<void> {
   await expect(chatOutlineRail(page)).toBeHidden();
 }
 
+/**
+ * The rail floats above the transcript, so keeping it mounted on a narrow panel is only safe
+ * while the transcript pads itself out of the rail's column. If they ever overlap the rail
+ * silently swallows taps and text selection over the left edge of every message.
+ */
+export async function expectChatOutlineClearOfTranscript(page: Page): Promise<void> {
+  const rail = chatOutlineRail(page).first();
+  const message = page
+    .locator('[data-testid="agent-chat-scroll"]:visible')
+    .first()
+    .getByTestId("user-message")
+    .first();
+  await expect
+    .poll(async () => {
+      const [railBox, messageBox] = await Promise.all([
+        requireBoundingBox(rail),
+        requireBoundingBox(message),
+      ]);
+      return messageBox.x - (railBox.x + railBox.width);
+    })
+    .toBeGreaterThanOrEqual(0);
+}
+
 export async function hoverChatOutlinePrompt(page: Page, position: number): Promise<void> {
   await chatOutlinePrompt(page, position).hover();
 }
