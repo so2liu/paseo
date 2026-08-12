@@ -287,7 +287,6 @@ function renderLiveHeadStreamItem(input: {
 
 export interface AgentStreamViewHandle {
   scrollToBottom(reason?: BottomAnchorLocalRequest["reason"]): void;
-  scrollToMessage(messageId: string): void;
   prepareForViewportChange(): void;
 }
 
@@ -336,61 +335,6 @@ function useRetainedValue<T>(value: T, active: boolean): T {
 }
 const EMPTY_PENDING_MESSAGE_SUBMISSIONS: readonly PendingMessageSubmission[] = [];
 const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
-
-function UserMessageLocatorTick({
-  message,
-  index,
-  count,
-  onSelect,
-}: {
-  message: Extract<StreamItem, { kind: "user_message" }>;
-  index: number;
-  count: number;
-  onSelect: (messageId: string) => void;
-}) {
-  const handlePress = useCallback(() => onSelect(message.id), [message.id, onSelect]);
-  const positionStyle = useMemo(
-    () => [stylesheet.messageLocatorHit, { top: `${(index / (count - 1)) * 100}%` as const }],
-    [count, index],
-  );
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={message.text.trim().slice(0, 80)}
-      onPress={handlePress}
-      hitSlop={6}
-      style={positionStyle}
-      testID={`user-message-locator-${message.id}`}
-    >
-      <View style={stylesheet.messageLocatorTick} />
-    </Pressable>
-  );
-}
-
-function UserMessageLocator({
-  messages,
-  onSelect,
-}: {
-  messages: readonly Extract<StreamItem, { kind: "user_message" }>[];
-  onSelect: (messageId: string) => void;
-}) {
-  if (messages.length < 2) {
-    return null;
-  }
-  return (
-    <View style={stylesheet.messageLocator} pointerEvents="box-none">
-      {messages.map((message, index) => (
-        <UserMessageLocatorTick
-          key={message.id}
-          message={message}
-          index={index}
-          count={messages.length}
-          onSelect={onSelect}
-        />
-      ))}
-    </View>
-  );
-}
 
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
   function AgentStreamView(
@@ -611,14 +555,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           : (effectiveStreamHead ?? EMPTY_STREAM_HEAD),
       [effectiveStreamHead],
     );
-    const userMessages = useMemo(
-      () =>
-        [...visibleStreamItems, ...visibleStreamHead].filter(
-          (item): item is Extract<StreamItem, { kind: "user_message" }> =>
-            item.kind === "user_message",
-        ),
-      [visibleStreamHead, visibleStreamItems],
-    );
     const executionCollapseProjection = useMemo(
       () =>
         isMobileLiteMode
@@ -723,9 +659,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         scrollToBottom(reason = "jump-to-bottom") {
           viewportRef.current?.scrollToBottom(reason);
         },
-        scrollToMessage(messageId) {
-          viewportRef.current?.scrollToMessage?.(messageId);
-        },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
         },
@@ -747,9 +680,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         onError: handleTimelineHistoryLoadError,
       });
     }, [agentId, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId]);
-    const scrollToMessage = useCallback((messageId: string) => {
-      viewportRef.current?.scrollToMessage?.(messageId);
-    }, []);
 
     const setInlineDetailsExpanded = useCallback(
       (itemId: string, expanded: boolean) => {
@@ -1247,7 +1177,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               </Animated.View>
             </View>
           )}
-          <UserMessageLocator messages={userMessages} onSelect={scrollToMessage} />
         </AssistantSelectionCopySurface>
       </ToolCallSheetProvider>
     );
@@ -1757,30 +1686,6 @@ const stylesheet = StyleSheet.create((theme) => ({
   executionToggleText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-  },
-  messageLocator: {
-    position: "absolute",
-    top: 24,
-    right: 2,
-    bottom: 88,
-    width: 24,
-    zIndex: 3,
-  },
-  messageLocatorHit: {
-    position: "absolute",
-    right: 0,
-    width: 24,
-    height: 14,
-    marginTop: -7,
-    alignItems: "flex-end",
-    justifyContent: "center",
-    paddingRight: 4,
-  },
-  messageLocatorTick: {
-    width: 10,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: theme.colors.foregroundMuted,
   },
   scrollToBottomContainer: {
     position: "absolute",

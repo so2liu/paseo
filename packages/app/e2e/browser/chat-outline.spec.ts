@@ -34,9 +34,8 @@ import {
   type LongTimelineAgent,
 } from "../support/helpers/timeline-pagination";
 
-// Wide enough that the timeline panel clears the rail's MIN_PANEL_WIDTH with room
-// to spare. At 1280 the panel measures 960, which sits too close to the threshold
-// for chrome-width changes elsewhere to stay out of these tests.
+// Wide enough that the rail, its hover preview, and the transcript all have room, so
+// pointer tests are not fighting the panel edge.
 const WIDE_VIEWPORT = { width: 1440, height: 900 };
 const LOADED_TURNS = 16;
 
@@ -209,7 +208,7 @@ test.describe("desktop chat outline", () => {
     });
   });
 
-  test("hides the rail when a split makes its panel narrow", async ({ page }) => {
+  test("keeps the rail when a split makes its panel narrow", async ({ page }) => {
     const agent = await seedLongMockAgentTimeline({ turns: 2 });
     try {
       await page.setViewportSize(WIDE_VIEWPORT);
@@ -217,7 +216,7 @@ test.describe("desktop chat outline", () => {
 
       await splitCurrentPanelRight(page);
 
-      await expectNoChatOutline(page);
+      await expect(chatOutlineRail(page).first()).toBeVisible();
     } finally {
       await agent.cleanup();
     }
