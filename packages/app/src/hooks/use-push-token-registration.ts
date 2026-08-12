@@ -2,11 +2,32 @@ import { useCallback, useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
+import * as Crypto from "expo-crypto";
 import Constants from "expo-constants";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { isWeb } from "@/constants/platform";
 
 const STORAGE_PREFIX = "@paseo:expo-push-token:";
+const DEVICE_ID_STORAGE_KEY = "@paseo:push-device-id";
+
+/**
+ * Identifies this install to every daemon it registers with, so a rebuild that hands out a
+ * fresh Expo token replaces the previous registration instead of adding a second live token
+ * for the same phone. It is not per-server: one install is one device everywhere.
+ *
+ * Installing over an existing app keeps its storage, which is exactly the case that used to
+ * accumulate tokens. A full delete-and-reinstall starts a new id, and the token it abandons
+ * dies the normal way once Expo reports it unregistered.
+ */
+async function getOrCreateDeviceId(): Promise<string> {
+  const existing = await AsyncStorage.getItem(DEVICE_ID_STORAGE_KEY);
+  if (typeof existing === "string" && existing.trim()) {
+    return existing.trim();
+  }
+  const created = Crypto.randomUUID();
+  await AsyncStorage.setItem(DEVICE_ID_STORAGE_KEY, created);
+  return created;
+}
 
 function getExpoProjectId(): string | null {
   const constants = Constants as unknown as {
@@ -33,6 +54,7 @@ async function ensurePushPermission(): Promise<boolean> {
 export function usePushTokenRegistration(params: { client: DaemonClient; serverId: string }): void {
   const { client, serverId } = params;
   const tokenRef = useRef<string | null>(null);
+  const deviceIdRef = useRef<string | null>(null);
   const lastSentTokenRef = useRef<string | null>(null);
 
   const registerIfPossible = useCallback(async () => {
@@ -42,7 +64,7 @@ export function usePushTokenRegistration(params: { client: DaemonClient; serverI
     if (!token) return;
     if (lastSentTokenRef.current === token) return;
     lastSentTokenRef.current = token;
-    client.registerPushToken(token);
+    client.registerPushToken(token, deviceIdRef.current ?? undefined);
   }, [client]);
 
   useEffect(() => {
@@ -52,6 +74,8 @@ export function usePushTokenRegistration(params: { client: DaemonClient; serverI
     let cancelled = false;
 
     const run = async () => {
+      deviceIdRef.current = await getOrCreateDeviceId();
+      if (cancelled) return;
       const cached = await AsyncStorage.getItem(storageKey);
       if (cancelled) return;
       if (cached && typeof cached === "string") {

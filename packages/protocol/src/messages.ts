@@ -2413,6 +2413,9 @@ export const ListCommandsRequestSchema = z.object({
 export const RegisterPushTokenMessageSchema = z.object({
   type: z.literal("register_push_token"),
   token: z.string(),
+  // Stable per app install. Lets the daemon replace this device's previous token instead of
+  // accumulating one live token per rebuild and pushing the same notification several times.
+  deviceId: z.string().optional(),
 });
 
 // ============================================================================

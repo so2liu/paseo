@@ -2370,7 +2370,7 @@ export class Session {
         await this.handleListCommandsRequest(msg);
         return;
       case "register_push_token":
-        this.handleRegisterPushToken(msg.token);
+        this.handleRegisterPushToken(msg.token, msg.deviceId);
         return;
     }
   }
@@ -3872,8 +3872,8 @@ export class Session {
   /**
    * Handle push token registration
    */
-  private handleRegisterPushToken(token: string): void {
-    this.pushTokenStore.addToken(token);
+  private handleRegisterPushToken(token: string, deviceId?: string): void {
+    this.pushTokenStore.addToken(token, deviceId);
     this.sessionLogger.info("Registered push token");
   }
 
