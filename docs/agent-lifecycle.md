@@ -122,11 +122,9 @@ Running provider-native subagents contribute `running` to the workspace owned by
 
 When a root agent transitions from `running` to `idle`, the daemon persists finished attention.
 That attention keeps the owning workspace under **Ready to review** until the user explicitly marks
-it done. The client separately persists whether it has displayed that specific attention generation.
-Displaying the workspace while the app is active clears only the local green unread dot; it does not
-clear daemon attention or move the workspace to **Done**. The unread generation uses the newest root
-agent `attentionTimestamp` (falling back to workspace `statusEnteredAt` for older daemons), so another
-finished result becomes unread even while the workspace remains in the same status bucket.
+it done. Opening or viewing the workspace must not acknowledge it or hide its attention indicator.
+Focusing the composer, sending another prompt, switching tabs, or leaving the workspace must not clear
+the daemon's attention.
 
 Attention is an edge-triggered unread signal. Repeated state broadcasts preserve its original
 timestamp and do not send duplicate notifications. The one automatic replacement is recovery from
