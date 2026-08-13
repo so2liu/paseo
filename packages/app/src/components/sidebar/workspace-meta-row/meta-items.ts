@@ -10,6 +10,7 @@ import type { WorkspaceServiceSummary } from "./service-summary";
  * running. Identity first, then the work, then the work's state.
  */
 export type MetaRowItem =
+  | { kind: "project"; name: string }
   | { kind: "host" }
   | { kind: "changeRequest"; hint: PrHint }
   | { kind: "checks"; summary: CheckSummary; label: boolean }
@@ -26,15 +27,19 @@ export type MetaRowItem =
  * has no badge to hand down, so by the time a row sees one it is meant to be drawn.
  */
 export function selectMetaRowItems(input: {
+  projectName: string | null;
   hasHostBadge: boolean;
   prHint: PrHint | null;
   serviceSummary: WorkspaceServiceSummary | null;
   visible: SidebarRowItems;
   checksDisplay: SidebarChecksDisplay;
 }): MetaRowItem[] {
-  const { hasHostBadge, prHint, serviceSummary, visible, checksDisplay } = input;
+  const { projectName, hasHostBadge, prHint, serviceSummary, visible, checksDisplay } = input;
   const items: MetaRowItem[] = [];
 
+  if (projectName) {
+    items.push({ kind: "project", name: projectName });
+  }
   if (hasHostBadge) {
     items.push({ kind: "host" });
   }

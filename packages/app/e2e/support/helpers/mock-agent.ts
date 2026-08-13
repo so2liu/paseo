@@ -6,6 +6,8 @@ import { buildHostAgentDetailRoute } from "../../../src/utils/host-routes";
 export interface MockAgentWorkspace {
   agentId: string;
   workspaceId: string;
+  workspaceName: string;
+  projectDisplayName: string;
   cwd: string;
   client: SeedDaemonClient;
   cleanup(): Promise<void>;
@@ -44,6 +46,8 @@ export async function seedMockAgentWorkspace(
     return {
       agentId: agent.id,
       workspaceId: workspace.workspaceId,
+      workspaceName: workspace.workspaceName,
+      projectDisplayName: workspace.projectDisplayName,
       cwd: workspace.repoPath,
       client: workspace.client,
       cleanup: workspace.cleanup,
