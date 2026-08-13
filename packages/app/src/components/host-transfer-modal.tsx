@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,23 @@ export function HostTransferModal({ visible, onClose }: { visible: boolean; onCl
       visible={visible}
       onClose={close}
       testID="host-transfer-modal"
+      footer={
+        <>
+          <Button style={FLEX_ONE_STYLE} variant="secondary" onPress={close} disabled={isImporting}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            style={FLEX_ONE_STYLE}
+            onPress={handleImportPress}
+            disabled={isImporting || !value.trim()}
+            testID="host-transfer-submit"
+          >
+            {isImporting
+              ? t("settings.serverMigration.importing")
+              : t("settings.serverMigration.importAction")}
+          </Button>
+        </>
+      }
     >
       <Text style={styles.helper}>{t("settings.serverMigration.importHelp")}</Text>
       <AdaptiveTextInput
@@ -62,21 +79,6 @@ export function HostTransferModal({ visible, onClose }: { visible: boolean; onCl
         testID="host-transfer-input"
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <View style={styles.actions}>
-        <Button style={FLEX_ONE_STYLE} variant="secondary" onPress={close} disabled={isImporting}>
-          {t("common.cancel")}
-        </Button>
-        <Button
-          style={FLEX_ONE_STYLE}
-          onPress={handleImportPress}
-          disabled={isImporting || !value.trim()}
-          testID="host-transfer-submit"
-        >
-          {isImporting
-            ? t("settings.serverMigration.importing")
-            : t("settings.serverMigration.importAction")}
-        </Button>
-      </View>
     </AdaptiveModalSheet>
   );
 }
@@ -95,5 +97,4 @@ const styles = StyleSheet.create((theme) => ({
     fontFamily: "monospace",
   },
   error: { color: theme.colors.destructive, fontSize: theme.fontSize.sm },
-  actions: { flexDirection: "row", gap: theme.spacing[3] },
 }));
