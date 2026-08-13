@@ -4,6 +4,7 @@ import { Pressable, Text, View, type GestureResponderEvent } from "react-native"
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   ExternalLink,
+  Folder,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
@@ -35,6 +36,7 @@ export {
 const META_ICON_SIZE = HOST_BADGE_ICON_SIZE;
 
 const ThemedExternalLink = withUnistyles(ExternalLink);
+const ThemedFolder = withUnistyles(Folder);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedGitMerge = withUnistyles(GitMerge);
 const ThemedGitPullRequestClosed = withUnistyles(GitPullRequestClosed);
@@ -55,16 +57,20 @@ const dangerMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
  * leaves color to mean status.
  */
 export function WorkspaceMetaRow({
+  projectName,
   hostBadge,
   prHint,
   serviceSummary,
 }: {
+  /** Hoisted rows need their project identity because no project header contains them. */
+  projectName: string | null;
   hostBadge: HostBadgeModel | null;
   prHint: PrHint | null;
   serviceSummary: WorkspaceServiceSummary | null;
 }) {
   const { rowItems, checksDisplay } = useSidebarMetaPreferences();
   const items = selectMetaRowItems({
+    projectName,
     hasHostBadge: hostBadge !== null,
     prHint,
     serviceSummary,
@@ -93,6 +99,9 @@ function MetaItemNode({
   item: MetaRowItem;
   hostBadge: HostBadgeModel | null;
 }): ReactNode {
+  if (item.kind === "project") {
+    return <ProjectItem name={item.name} />;
+  }
   if (item.kind === "host") {
     return hostBadge ? <HostBadge badge={hostBadge} /> : null;
   }
@@ -115,6 +124,19 @@ function MetaItemNode({
  * inside it, so there is no second hover state machine to fight. Both icons are the same
  * size, so the swap can't move the target out from under the cursor.
  */
+function ProjectItem({ name }: { name: string }) {
+  return (
+    <View style={styles.projectItem} testID="sidebar-workspace-project-name">
+      <ThemedFolder size={META_ICON_SIZE} uniProps={foregroundMutedMapping} />
+      <Text style={styles.projectName} numberOfLines={1}>
+        {name}
+      </Text>
+    </View>
+  );
+}
+
+const foregroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+
 function PullRequestItem({ hint }: { hint: PrHint }) {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
@@ -260,6 +282,20 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1.5],
+    minWidth: 0,
+  },
+  projectItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  projectName: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: Math.max(16, Math.round(theme.fontSize.xs * 1.2)),
+    flexShrink: 1,
     minWidth: 0,
   },
   item: {

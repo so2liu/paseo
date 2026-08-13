@@ -1955,11 +1955,11 @@ export function SidebarWorkspaceList({
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");
   const supportsPinningByServerId = useHostFeatureMap(serverIds, "workspacePinning");
   const onToggleWorkspacePin = useSidebarWorkspacePinController();
-  // Status mode drops the project grouping, so its rows carry their own project
-  // icon. Project mode fetches the same icons inside ProjectModeList for its
-  // project headers, so only the active mode requests them.
+  // Status and device modes both hoist workspaces out of their project groups, so each row
+  // carries its project identity. Project mode fetches the same icons inside ProjectModeList
+  // for its headers, so only a hoisted mode requests them here.
   const statusProjectIconTargets = useMemo(
-    () => (groupMode === "status" ? resolveSidebarProjectIconTargets(projects) : []),
+    () => (groupMode !== "project" ? resolveSidebarProjectIconTargets(projects) : []),
     [groupMode, projects],
   );
   const statusProjectIconByProjectViewKey = useProjectIcons({

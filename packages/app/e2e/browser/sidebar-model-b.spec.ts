@@ -160,12 +160,19 @@ test.describe("Model B sidebar shape", () => {
       // the status view.
       await expect(sidebar.locator('[data-testid^="workspace-tab-"]')).toHaveCount(0);
 
-      // Status mode drops the project grouping, so each row leads its subtitle
-      // with the project's icon to keep projects distinguishable.
-      for (const workspaceId of [idleProject.workspaceId, activeMock.workspaceId]) {
+      // Status mode changes placement, not identity: each hoisted row keeps the project name,
+      // host metadata, creation time, and workspace kind it shows in project grouping.
+      for (const workspace of [idleProject, activeMock]) {
+        const row = workspaceRow(page, workspace.workspaceId).first();
         await expect(
-          page.getByTestId(`sidebar-row-project-icon-${getServerId()}:${workspaceId}`).first(),
+          page
+            .getByTestId(`sidebar-row-project-icon-${getServerId()}:${workspace.workspaceId}`)
+            .first(),
         ).toBeVisible({ timeout: 60_000 });
+        await expect(row.getByTestId("sidebar-workspace-project-name")).toHaveText(
+          workspace.projectDisplayName,
+        );
+        await expect(row.locator('[data-testid^="sidebar-workspace-kind-"]')).toBeVisible();
       }
 
       // The busy workspace is grouped under Working, the idle one under Done:

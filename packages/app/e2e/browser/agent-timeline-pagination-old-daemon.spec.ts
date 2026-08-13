@@ -32,6 +32,8 @@ test("does not repeat an assistant block when the current app paginates a publis
   const agent: MockAgentWorkspace = {
     agentId: createdAgent.id,
     workspaceId: workspace.workspaceId,
+    workspaceName: workspace.workspaceName,
+    projectDisplayName: workspace.projectDisplayName,
     cwd: workspace.repoPath,
     client: workspace.client,
     cleanup: workspace.cleanup,
