@@ -297,6 +297,29 @@ describe("combined model selector data", () => {
     ).toBe("Select model");
   });
 
+  it("keeps the live model visible while its provider catalog is loading", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({ provider: "codex", status: "loading", models: [] }),
+    ]);
+
+    expect(
+      resolveSelectedModelLabel({
+        providers,
+        selectedProvider: "codex",
+        selectedModel: "gpt-5.6-sol",
+        isLoading: true,
+      }),
+    ).toBe("gpt-5.6-sol");
+    expect(
+      resolveSelectedModelLabel({
+        providers: [],
+        selectedProvider: "codex",
+        selectedModel: "gpt-5.6-sol",
+        isLoading: true,
+      }),
+    ).toBe("gpt-5.6-sol");
+  });
+
   it("keeps a stored selected model visible when current snapshot rows no longer offer it", () => {
     const providers = buildSelectableProviderSelectorProviders([
       snapshotEntry({
