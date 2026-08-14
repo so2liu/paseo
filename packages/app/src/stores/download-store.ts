@@ -188,7 +188,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
           }
           downloadedUri = result.uri;
         } catch (error) {
-          if (isBrowserOnlyDownload(isElectron)) {
+          if (isWeb) {
             throw error;
           }
           downloadedUri = await downloadOverActiveClient();
@@ -291,11 +291,7 @@ function shouldDownloadOverActiveClient(
   activeConnectionType: "directTcp" | "directSocket" | "directPipe" | "relay" | null,
   isElectron: boolean,
 ): boolean {
-  return activeConnectionType !== "directTcp" && (!isWeb || isElectron);
-}
-
-function isBrowserOnlyDownload(isElectron: boolean): boolean {
-  return isWeb && !isElectron;
+  return isElectron || (!isWeb && activeConnectionType !== "directTcp");
 }
 
 async function persistActiveClientDownload({

@@ -194,6 +194,58 @@ describe("download store native transfers", () => {
     ]);
   });
 
+  test("downloads over the active client when Paseo Desktop is connected through direct TCP", async () => {
+    platformMocks.isWeb = true;
+    const bytes = new Uint8Array([11, 12, 13]);
+    const readFile = vi.fn(async () => ({
+      bytes,
+      mime: "text/markdown",
+      size: bytes.byteLength,
+    }));
+    const saveDesktopFile = vi.fn(async () => ({
+      status: "saved" as const,
+      path: "/Users/test/Downloads/design.md",
+    }));
+    const requestFileDownloadToken = vi.fn(async () => ({
+      token: "token",
+      fileName: "design.md",
+      mimeType: "text/markdown",
+      error: null,
+    }));
+
+    await useDownloadStore.getState().startDownload({
+      serverId: "server-1",
+      scopeId: "workspace-1",
+      fileName: "design.md",
+      path: "docs/design.md",
+      daemonProfile: {
+        serverId: "server-1",
+        label: "Mac",
+        lifecycle: {},
+        appearance: defaultHostAppearance(),
+        connections: [
+          {
+            id: "direct:mac.local:6767",
+            type: "directTcp",
+            endpoint: "mac.local:6767",
+          },
+        ],
+        preferredConnectionId: null,
+        createdAt: "2026-08-14T00:00:00.000Z",
+        updatedAt: "2026-08-14T00:00:00.000Z",
+      },
+      activeConnectionType: "directTcp",
+      isElectron: true,
+      readFile,
+      saveDesktopFile,
+      requestFileDownloadToken,
+    });
+
+    expect(requestFileDownloadToken).not.toHaveBeenCalled();
+    expect(readFile).toHaveBeenCalledWith("docs/design.md");
+    expect(saveDesktopFile).toHaveBeenCalledWith({ fileName: "design.md", bytes });
+  });
+
   test("dismisses the download when the Desktop save dialog is cancelled", async () => {
     platformMocks.isWeb = true;
     const bytes = new Uint8Array([8, 9, 10]);
