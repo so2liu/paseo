@@ -863,6 +863,8 @@ interface Waiter<T> {
   resolve(value: T): void;
   reject(error: Error): void;
   timeoutHandle: ReturnType<typeof setTimeout> | null;
+  timeoutMs: number;
+  timeoutError: Error;
   requestId?: string;
 }
 
@@ -5690,6 +5692,7 @@ export class DaemonClient {
       if (!pending) {
         return;
       }
+      this.refreshRequestWaiterTimeout(frame.requestId);
       this.activeBinaryFileTransfers.set(frame.requestId, {
         ...pending,
         mime: frame.metadata.mime,
@@ -5706,6 +5709,7 @@ export class DaemonClient {
     if (!transfer) {
       return;
     }
+    this.refreshRequestWaiterTimeout(frame.requestId);
 
     if (frame.opcode === FileTransferOpcode.FileChunk) {
       transfer.chunks.push(frame.payload);
@@ -6068,24 +6072,17 @@ export class DaemonClient {
       };
       rejectFn = wrappedReject;
 
-      const timeoutHandle =
-        timeout > 0
-          ? setTimeout(() => {
-              if (waiter) {
-                this.waiters.delete(waiter);
-              }
-              wrappedReject(timeoutError);
-            }, timeout)
-          : null;
-
       waiter = {
         predicate,
         resolve: wrappedResolve,
         reject: wrappedReject,
-        timeoutHandle,
+        timeoutHandle: null,
+        timeoutMs: timeout,
+        timeoutError,
         requestId: options?.requestId,
       };
       this.waiters.add(waiter);
+      this.armWaiterTimeout(waiter);
     });
 
     const cancel = (error: Error) => {
@@ -6114,6 +6111,30 @@ export class DaemonClient {
     };
 
     return { promise, cancel };
+  }
+
+  private refreshRequestWaiterTimeout(requestId: string): void {
+    for (const waiter of this.waiters) {
+      if (waiter.requestId === requestId) {
+        this.armWaiterTimeout(waiter);
+      }
+    }
+  }
+
+  private armWaiterTimeout(waiter: Waiter<unknown>): void {
+    if (waiter.timeoutHandle) {
+      clearTimeout(waiter.timeoutHandle);
+    }
+    if (waiter.timeoutMs <= 0) {
+      waiter.timeoutHandle = null;
+      return;
+    }
+
+    waiter.timeoutHandle = setTimeout(() => {
+      this.waiters.delete(waiter);
+      waiter.timeoutHandle = null;
+      waiter.reject(waiter.timeoutError);
+    }, waiter.timeoutMs);
   }
 }
 
