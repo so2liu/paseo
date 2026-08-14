@@ -158,6 +158,7 @@ export function resolveSelectedModelLabel(input: {
   isLoading: boolean;
 }): string {
   const selectedProvider = input.selectedProvider.trim();
+  const selectedModel = input.selectedModel.trim();
   if (!selectedProvider) {
     return input.isLoading
       ? i18n.t("providerSelection.loading")
@@ -166,12 +167,15 @@ export function resolveSelectedModelLabel(input: {
 
   const provider = input.providers.find((entry) => entry.id === selectedProvider);
   if (!provider) {
+    if (selectedModel) {
+      return selectedModel;
+    }
     return input.isLoading
       ? i18n.t("providerSelection.loading")
       : i18n.t("providerSelection.selectModel");
   }
   if (provider.modelSelection.kind === "loading") {
-    return i18n.t("providerSelection.loading");
+    return selectedModel || i18n.t("providerSelection.loading");
   }
   if (provider.modelSelection.kind === "error") {
     return i18n.t("providerSelection.error");
@@ -181,7 +185,6 @@ export function resolveSelectedModelLabel(input: {
   }
 
   const model = provider.modelSelection.rows.find((entry) => entry.modelId === input.selectedModel);
-  const selectedModel = input.selectedModel.trim();
   if (!model && selectedModel) {
     return selectedModel;
   }
