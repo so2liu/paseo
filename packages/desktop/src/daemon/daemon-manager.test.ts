@@ -36,6 +36,7 @@ vi.mock("electron", () => ({
     isPackaged: true,
   },
   ipcMain: { handle: vi.fn() },
+  dialog: { showSaveDialog: vi.fn() },
   powerMonitor: { getSystemIdleTime: vi.fn(() => 0) },
 }));
 

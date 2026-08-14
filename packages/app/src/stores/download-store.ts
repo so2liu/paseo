@@ -7,6 +7,7 @@ import { buildDaemonWebSocketUrl } from "@/utils/daemon-endpoints";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { isWeb } from "@/constants/platform";
 import { i18n } from "@/i18n/i18next";
+import type { DesktopDownloadSaveResult } from "@/desktop/downloads";
 
 interface DownloadProgress {
   percent: number;
@@ -38,11 +39,16 @@ interface DownloadState {
     path: string;
     daemonProfile: HostProfile | undefined;
     activeConnectionType: "directTcp" | "directSocket" | "directPipe" | "relay" | null;
+    isElectron: boolean;
     readFile: (path: string) => Promise<{
       bytes: Uint8Array;
       mime: string;
       size: number;
     }>;
+    saveDesktopFile: (input: {
+      fileName: string;
+      bytes: Uint8Array;
+    }) => Promise<DesktopDownloadSaveResult>;
     requestFileDownloadToken: (path: string) => Promise<{
       token: string | null;
       fileName: string | null;
@@ -73,7 +79,9 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     path,
     daemonProfile,
     activeConnectionType,
+    isElectron,
     readFile,
+    saveDesktopFile,
     requestFileDownloadToken,
   }) => {
     const id = generateDownloadId();
@@ -94,13 +102,11 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     try {
       const downloadTarget = resolveDaemonDownloadTarget(daemonProfile);
       let resolvedFileName = fileName;
-      let downloadedUri: string;
+      let downloadedUri: string | null;
       let downloadedMimeType: string | null = null;
 
       const downloadOverActiveClient = async () => {
         const file = await readFile(path);
-        const targetFile = resolveDownloadTargetFile(resolvedFileName);
-        targetFile.write(file.bytes);
         get().updateProgress(id, {
           percent: 1,
           bytesWritten: file.size,
@@ -109,11 +115,16 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
           eta: 0,
         });
         downloadedMimeType = file.mime;
-        return targetFile.uri;
+
+        return persistActiveClientDownload({
+          fileName: resolvedFileName,
+          bytes: file.bytes,
+          isElectron,
+          saveDesktopFile,
+        });
       };
 
-      const shouldUseActiveClient = !isWeb && activeConnectionType !== "directTcp";
-      if (shouldUseActiveClient) {
+      if (shouldDownloadOverActiveClient(activeConnectionType, isElectron)) {
         downloadedUri = await downloadOverActiveClient();
       } else {
         try {
@@ -184,16 +195,14 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         }
       }
 
-      get().completeDownload(id);
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(downloadedUri, {
-          mimeType: downloadedMimeType ?? undefined,
-          dialogTitle: resolvedFileName
-            ? i18n.t("downloads.shareFileNamed", { fileName: resolvedFileName })
-            : i18n.t("downloads.shareFile"),
-        });
-      }
+      await finishDownload({
+        downloadedUri,
+        downloadedMimeType,
+        resolvedFileName,
+        id,
+        isElectron,
+        actions: get(),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : i18n.t("downloads.failed");
       if (isWeb) {
@@ -276,6 +285,73 @@ function findMostRecentDownloadId(downloads: Map<string, Download>): string | nu
     }
   }
   return mostRecent?.id ?? null;
+}
+
+function shouldDownloadOverActiveClient(
+  activeConnectionType: "directTcp" | "directSocket" | "directPipe" | "relay" | null,
+  isElectron: boolean,
+): boolean {
+  return isElectron || (!isWeb && activeConnectionType !== "directTcp");
+}
+
+async function persistActiveClientDownload({
+  fileName,
+  bytes,
+  isElectron,
+  saveDesktopFile,
+}: {
+  fileName: string;
+  bytes: Uint8Array;
+  isElectron: boolean;
+  saveDesktopFile: (input: {
+    fileName: string;
+    bytes: Uint8Array;
+  }) => Promise<DesktopDownloadSaveResult>;
+}): Promise<string | null> {
+  if (isElectron) {
+    const result = await saveDesktopFile({ fileName, bytes });
+    if (result.status === "cancelled") {
+      return null;
+    }
+    return result.path;
+  }
+
+  const targetFile = resolveDownloadTargetFile(fileName);
+  targetFile.write(bytes);
+  return targetFile.uri;
+}
+
+async function finishDownload({
+  downloadedUri,
+  downloadedMimeType,
+  resolvedFileName,
+  id,
+  isElectron,
+  actions,
+}: {
+  downloadedUri: string | null;
+  downloadedMimeType: string | null;
+  resolvedFileName: string;
+  id: string;
+  isElectron: boolean;
+  actions: Pick<DownloadState, "completeDownload" | "dismissDownload">;
+}): Promise<void> {
+  if (downloadedUri === null) {
+    actions.dismissDownload(id);
+    return;
+  }
+
+  actions.completeDownload(id);
+  if (isElectron || !(await Sharing.isAvailableAsync())) {
+    return;
+  }
+
+  await Sharing.shareAsync(downloadedUri, {
+    mimeType: downloadedMimeType ?? undefined,
+    dialogTitle: resolvedFileName
+      ? i18n.t("downloads.shareFileNamed", { fileName: resolvedFileName })
+      : i18n.t("downloads.shareFile"),
+  });
 }
 
 interface DownloadTarget {

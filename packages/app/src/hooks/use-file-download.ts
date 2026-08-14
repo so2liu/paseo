@@ -2,6 +2,8 @@ import { useCallback, useMemo } from "react";
 import { useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import { useDownloadStore } from "@/stores/download-store";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
+import { getIsElectron } from "@/constants/platform";
+import { saveDesktopDownload } from "@/desktop/downloads";
 
 interface UseFileDownloadParams {
   serverId: string;
@@ -50,7 +52,9 @@ export function useFileDownload({
         path,
         daemonProfile,
         activeConnectionType: hostSnapshot?.activeConnection?.type ?? null,
+        isElectron: getIsElectron(),
         readFile: readFileForDownload,
+        saveDesktopFile: saveDesktopDownload,
         requestFileDownloadToken: (targetPath) => requestFileDownloadToken(targetPath),
       });
     },

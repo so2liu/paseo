@@ -205,6 +205,7 @@ import {
 } from "@/workspace/file-open";
 import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
 import { getFileNameFromPath } from "@/attachments/utils";
+import { saveDesktopDownload } from "@/desktop/downloads";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 
@@ -2876,7 +2877,9 @@ function WorkspaceScreenContent({
         path: downloadTarget.path,
         daemonProfile,
         activeConnectionType,
+        isElectron: getIsElectron(),
         readFile: (targetPath) => client.readFile(downloadTarget.cwd, targetPath),
+        saveDesktopFile: saveDesktopDownload,
         requestFileDownloadToken: (targetPath) =>
           client.requestDownloadToken(downloadTarget.cwd, targetPath),
       });
