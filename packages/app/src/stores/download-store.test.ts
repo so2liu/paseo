@@ -193,4 +193,25 @@ describe("download store native transfers", () => {
       expect.objectContaining({ fileName: "design.md", status: "complete" }),
     ]);
   });
+
+  test("dismisses the download when the Desktop save dialog is cancelled", async () => {
+    platformMocks.isWeb = true;
+    const bytes = new Uint8Array([8, 9, 10]);
+
+    await useDownloadStore.getState().startDownload({
+      serverId: "server-1",
+      scopeId: "workspace-1",
+      fileName: "design.md",
+      path: "docs/design.md",
+      daemonProfile: undefined,
+      activeConnectionType: "relay",
+      isElectron: true,
+      readFile: async () => ({ bytes, mime: "text/markdown", size: bytes.byteLength }),
+      saveDesktopFile: async () => ({ status: "cancelled" }),
+      requestFileDownloadToken: vi.fn(),
+    });
+
+    expect(useDownloadStore.getState().downloads.size).toBe(0);
+    expect(useDownloadStore.getState().activeDownloadId).toBeNull();
+  });
 });

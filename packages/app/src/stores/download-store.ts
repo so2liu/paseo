@@ -102,7 +102,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     try {
       const downloadTarget = resolveDaemonDownloadTarget(daemonProfile);
       let resolvedFileName = fileName;
-      let downloadedUri: string;
+      let downloadedUri: string | null;
       let downloadedMimeType: string | null = null;
 
       const downloadOverActiveClient = async () => {
@@ -195,20 +195,14 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         }
       }
 
-      get().completeDownload(id);
-
-      if (isElectron) {
-        return;
-      }
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(downloadedUri, {
-          mimeType: downloadedMimeType ?? undefined,
-          dialogTitle: resolvedFileName
-            ? i18n.t("downloads.shareFileNamed", { fileName: resolvedFileName })
-            : i18n.t("downloads.shareFile"),
-        });
-      }
+      await finishDownload({
+        downloadedUri,
+        downloadedMimeType,
+        resolvedFileName,
+        id,
+        isElectron,
+        actions: get(),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : i18n.t("downloads.failed");
       if (isWeb) {
@@ -317,11 +311,11 @@ async function persistActiveClientDownload({
     fileName: string;
     bytes: Uint8Array;
   }) => Promise<DesktopDownloadSaveResult>;
-}): Promise<string> {
+}): Promise<string | null> {
   if (isElectron) {
     const result = await saveDesktopFile({ fileName, bytes });
     if (result.status === "cancelled") {
-      throw new Error(i18n.t("downloads.cancelled"));
+      return null;
     }
     return result.path;
   }
@@ -329,6 +323,39 @@ async function persistActiveClientDownload({
   const targetFile = resolveDownloadTargetFile(fileName);
   targetFile.write(bytes);
   return targetFile.uri;
+}
+
+async function finishDownload({
+  downloadedUri,
+  downloadedMimeType,
+  resolvedFileName,
+  id,
+  isElectron,
+  actions,
+}: {
+  downloadedUri: string | null;
+  downloadedMimeType: string | null;
+  resolvedFileName: string;
+  id: string;
+  isElectron: boolean;
+  actions: Pick<DownloadState, "completeDownload" | "dismissDownload">;
+}): Promise<void> {
+  if (downloadedUri === null) {
+    actions.dismissDownload(id);
+    return;
+  }
+
+  actions.completeDownload(id);
+  if (isElectron || !(await Sharing.isAvailableAsync())) {
+    return;
+  }
+
+  await Sharing.shareAsync(downloadedUri, {
+    mimeType: downloadedMimeType ?? undefined,
+    dialogTitle: resolvedFileName
+      ? i18n.t("downloads.shareFileNamed", { fileName: resolvedFileName })
+      : i18n.t("downloads.shareFile"),
+  });
 }
 
 interface DownloadTarget {
