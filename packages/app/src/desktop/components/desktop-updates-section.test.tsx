@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   appVersion: "0.3.1-LY.10",
   daemonStatus: {
     serverId: "local",
-    status: "running" as "starting" | "running" | "stopped" | "errored",
+    status: "running" as const,
     listen: "127.0.0.1:6767",
     hostname: "mac",
     pid: 1234,
@@ -174,8 +174,6 @@ describe("LocalDaemonSection version sync", () => {
     root = createRoot(container);
     queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     mocks.appVersion = "0.3.1-LY.10";
-    mocks.daemonStatus.status = "running";
-    mocks.daemonStatus.pid = 1234;
     mocks.daemonStatus.version = "0.3.0+LY";
     mocks.daemonStatus.desktopManaged = true;
     mocks.daemonStatus.desktopBuildId = "build-7";
@@ -225,16 +223,6 @@ describe("LocalDaemonSection version sync", () => {
 
   it("explains that an externally managed daemon must be updated outside Desktop", () => {
     mocks.daemonStatus.version = "0.3.1+LY";
-    mocks.daemonStatus.desktopManaged = false;
-
-    render();
-
-    expect(container.textContent).toContain("Update the external daemon service.");
-    expect(container.querySelector('[data-testid="daemon-version-sync-button"]')).toBeNull();
-  });
-
-  it("keeps external upgrade guidance visible when the daemon process is unresponsive", () => {
-    mocks.daemonStatus.status = "errored";
     mocks.daemonStatus.desktopManaged = false;
 
     render();

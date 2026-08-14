@@ -61,6 +61,8 @@ export interface DesktopRuntimeConfig {
   slowInstall?: boolean;
   /** Initial PID reported by desktop_daemon_status. Defaults to null. */
   daemonPid?: number | null;
+  /** Initial lifecycle state reported by desktop_daemon_status. Defaults to running. */
+  initialDaemonState?: "running" | "stopped" | "errored";
   daemonVersion?: string | null;
   daemonLogPath?: string;
   /** Initial manageBuiltInDaemon setting. Defaults to false. */
@@ -136,7 +138,7 @@ export async function installDesktopRuntime(
   await page.addInitScript((cfg) => {
     // Mutable state shared across IPC calls within this page
     let manageDaemon = cfg.manageBuiltInDaemon ?? false;
-    let daemonRunning = true;
+    let daemonState = cfg.initialDaemonState ?? "running";
     let currentPid: number | null = cfg.daemonPid ?? null;
     let startCount = 0;
     window.__desktopDaemonStartRequested = false;
@@ -144,7 +146,7 @@ export async function installDesktopRuntime(
     function buildDaemonStatus() {
       return {
         serverId: cfg.serverId,
-        status: daemonRunning ? "running" : "stopped",
+        status: daemonState,
         listen: cfg.daemonListen ?? "127.0.0.1:6767",
         hostname: null,
         pid: currentPid,
@@ -161,7 +163,7 @@ export async function installDesktopRuntime(
         return new Promise(() => undefined);
       }
       startCount += 1;
-      daemonRunning = true;
+      daemonState = "running";
       // First start (bootstrap) returns the configured PID; subsequent starts
       // (after a stop) get a fresh PID so tests can observe the change.
       currentPid = (cfg.daemonPid ?? 10000) + (startCount - 1) * 1000;
@@ -255,7 +257,7 @@ export async function installDesktopRuntime(
         }
 
         if (command === "stop_desktop_daemon") {
-          daemonRunning = false;
+          daemonState = "stopped";
           currentPid = null;
           return buildDaemonStatus();
         }
