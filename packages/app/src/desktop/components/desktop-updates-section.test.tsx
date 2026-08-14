@@ -222,6 +222,7 @@ describe("LocalDaemonSection version sync", () => {
   });
 
   it("explains that an externally managed daemon must be updated outside Desktop", () => {
+    mocks.daemonStatus.version = "0.3.1+LY";
     mocks.daemonStatus.desktopManaged = false;
 
     render();

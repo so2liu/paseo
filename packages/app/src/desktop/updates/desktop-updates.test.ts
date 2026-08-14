@@ -43,6 +43,7 @@ describe("desktop-updates helpers", () => {
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
+        daemonRunning: true,
         desktopManaged: true,
         desktopBuildId: "build-10",
         appBuildId: "build-10",
@@ -52,6 +53,7 @@ describe("desktop-updates helpers", () => {
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
+        daemonRunning: true,
         desktopManaged: true,
         desktopBuildId: "build-7",
         appBuildId: "build-10",
@@ -61,6 +63,7 @@ describe("desktop-updates helpers", () => {
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
+        daemonRunning: true,
         desktopManaged: true,
         desktopBuildId: null,
         appBuildId: "build-10",
@@ -68,27 +71,39 @@ describe("desktop-updates helpers", () => {
     ).toBe(true);
   });
 
-  it("uses compatible base versions for externally managed daemons", async () => {
+  it("always surfaces running external daemons because their exact build is unknown", async () => {
     const { isDesktopDaemonVersionMismatch } = await loadModuleForPlatform("web");
 
     expect(
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
-        desktopManaged: false,
-        desktopBuildId: null,
-        appBuildId: null,
-      }),
-    ).toBe(false);
-    expect(
-      isDesktopDaemonVersionMismatch({
-        appVersion: "0.3.1-LY.10",
-        daemonVersion: "0.3.0+LY",
+        daemonRunning: true,
         desktopManaged: false,
         desktopBuildId: null,
         appBuildId: null,
       }),
     ).toBe(true);
+    expect(
+      isDesktopDaemonVersionMismatch({
+        appVersion: "0.3.1-LY.10",
+        daemonVersion: "0.3.0+LY",
+        daemonRunning: true,
+        desktopManaged: false,
+        desktopBuildId: null,
+        appBuildId: null,
+      }),
+    ).toBe(true);
+    expect(
+      isDesktopDaemonVersionMismatch({
+        appVersion: "0.3.1-LY.10",
+        daemonVersion: null,
+        daemonRunning: false,
+        desktopManaged: false,
+        desktopBuildId: null,
+        appBuildId: null,
+      }),
+    ).toBe(false);
   });
 
   it("formats display versions with v prefix and unavailable fallback", async () => {

@@ -339,6 +339,7 @@ function DaemonVersionSyncCard({
   const daemonVersionMismatch = isDesktopDaemonVersionMismatch({
     appVersion,
     daemonVersion: daemonStatus?.version,
+    daemonRunning: daemonStatus?.status === "running",
     desktopManaged: daemonStatus?.desktopManaged === true,
     desktopBuildId: daemonStatus?.desktopBuildId,
     appBuildId: daemonStatus?.appBuildId,
@@ -351,6 +352,7 @@ function DaemonVersionSyncCard({
       const stillMismatched = isDesktopDaemonVersionMismatch({
         appVersion,
         daemonVersion: nextStatus.version,
+        daemonRunning: nextStatus.status === "running",
         desktopManaged: nextStatus.desktopManaged,
         desktopBuildId: nextStatus.desktopBuildId,
         appBuildId: nextStatus.appBuildId,
