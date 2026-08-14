@@ -1,7 +1,8 @@
 import { type ChildProcess } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { app, ipcMain, powerMonitor } from "electron";
+import { app, dialog, ipcMain, powerMonitor } from "electron";
 import log from "electron-log/main";
 import { resolvePaseoHome, spawnProcess } from "@getpaseo/server";
 import {
@@ -41,6 +42,7 @@ import { getHostRegistryBackupStore } from "../settings/host-registry-backup-ele
 import { isRunningUnderARM64Translation } from "../system/arm64-translation.js";
 import { getDesktopAppLogs } from "../diagnostics/app-logs.js";
 import { tailFile } from "../diagnostics/tail-file.js";
+import { saveDownloadBytes } from "../features/downloads.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
 const STARTUP_POLL_INTERVAL_MS = 200;
@@ -542,6 +544,12 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     read_file_base64: (args) => readManagedFileBase64(args ?? {}),
     delete_attachment_file: (args) => deleteManagedAttachmentFile(args ?? {}),
     garbage_collect_attachment_files: (args) => garbageCollectManagedAttachmentFiles(args ?? {}),
+    save_download_bytes: (args) =>
+      saveDownloadBytes(args ?? {}, {
+        downloadsDirectory: app.getPath("downloads"),
+        showSaveDialog: (options) => dialog.showSaveDialog(options),
+        writeFile,
+      }),
     open_local_daemon_transport: async (args) => {
       const target = args as { transportType: "socket" | "pipe"; transportPath: string };
       return await openLocalTransportSession(target);

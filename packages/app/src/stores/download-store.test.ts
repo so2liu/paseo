@@ -7,9 +7,17 @@ const nativeMocks = vi.hoisted(() => ({
   createDownloadResumable: vi.fn(),
 }));
 
-vi.mock("@/constants/platform", () => ({
+const platformMocks = vi.hoisted(() => ({
   isWeb: false,
-  isNative: true,
+}));
+
+vi.mock("@/constants/platform", () => ({
+  get isWeb() {
+    return platformMocks.isWeb;
+  },
+  get isNative() {
+    return !platformMocks.isWeb;
+  },
 }));
 
 vi.mock("expo-file-system", () => ({
@@ -48,6 +56,7 @@ import { defaultHostAppearance } from "@/hosts/appearance";
 
 describe("download store native transfers", () => {
   beforeEach(() => {
+    platformMocks.isWeb = false;
     nativeMocks.files.clear();
     nativeMocks.shareAsync.mockReset();
     nativeMocks.isAvailableAsync.mockReset();
@@ -75,7 +84,9 @@ describe("download store native transfers", () => {
       path: "docs/design.pdf",
       daemonProfile: undefined,
       activeConnectionType: "relay",
+      isElectron: false,
       readFile,
+      saveDesktopFile: vi.fn(),
       requestFileDownloadToken,
     });
 
@@ -129,7 +140,9 @@ describe("download store native transfers", () => {
         updatedAt: "2026-07-26T00:00:00.000Z",
       },
       activeConnectionType: "directTcp",
+      isElectron: false,
       readFile,
+      saveDesktopFile: vi.fn(),
       requestFileDownloadToken: vi.fn(async () => ({
         token: "token",
         fileName: "notes.txt",
@@ -144,5 +157,40 @@ describe("download store native transfers", () => {
       mimeType: "text/plain",
       dialogTitle: "Share notes.txt",
     });
+  });
+
+  test("downloads over the active client when Paseo Desktop is connected through relay", async () => {
+    platformMocks.isWeb = true;
+    const bytes = new Uint8Array([8, 9, 10]);
+    const readFile = vi.fn(async () => ({
+      bytes,
+      mime: "text/markdown",
+      size: bytes.byteLength,
+    }));
+    const saveDesktopFile = vi.fn(async () => ({
+      status: "saved" as const,
+      path: "/Users/test/Downloads/design.md",
+    }));
+    const requestFileDownloadToken = vi.fn();
+
+    await useDownloadStore.getState().startDownload({
+      serverId: "server-1",
+      scopeId: "workspace-1",
+      fileName: "design.md",
+      path: "docs/design.md",
+      daemonProfile: undefined,
+      activeConnectionType: "relay",
+      isElectron: true,
+      readFile,
+      saveDesktopFile,
+      requestFileDownloadToken,
+    });
+
+    expect(requestFileDownloadToken).not.toHaveBeenCalled();
+    expect(readFile).toHaveBeenCalledWith("docs/design.md");
+    expect(saveDesktopFile).toHaveBeenCalledWith({ fileName: "design.md", bytes });
+    expect([...useDownloadStore.getState().downloads.values()]).toEqual([
+      expect.objectContaining({ fileName: "design.md", status: "complete" }),
+    ]);
   });
 });

@@ -56,10 +56,11 @@ Relative workspace assets are not resolved by the preview.
 
 ## File downloads
 
-Browser downloads use a short-lived daemon token and the daemon's HTTP download endpoint. Native
-downloads follow the active host transport: relay, socket, and pipe connections reuse the existing
-binary WebSocket file channel; direct TCP keeps the HTTP path for streaming efficiency and falls
-back to the binary client path if HTTP fails.
+Browser downloads use a short-lived daemon token and the daemon's HTTP download endpoint. Desktop
+and native downloads follow the active host transport: relay, socket, and pipe connections reuse
+the existing encrypted binary file channel; direct TCP keeps the HTTP path for streaming efficiency
+and falls back to the binary client path if HTTP fails.
 
 On iOS and Android, the downloaded bytes are first written to the app cache and then handed to the
-system share sheet. The user chooses a durable destination such as Files from that sheet.
+system share sheet. The user chooses a durable destination such as Files from that sheet. Desktop
+binary downloads open the operating system's save dialog and write to the user-selected path.
