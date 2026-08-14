@@ -109,6 +109,19 @@ test("change gating allows superseded workflow runs to cancel", () => {
   }
 });
 
+test("browser shards fail within the fork release wait window", () => {
+  const jobs = jobBlocks(readFileSync(ciWorkflowPath, "utf8"));
+  const primaryShard = jobs.get("playwright-1")?.join("\n") ?? "";
+
+  assert.match(
+    primaryShard,
+    /- name: Run Playwright E2E tests\n\s+#.*\n\s+#.*\n\s+timeout-minutes: 30/,
+  );
+  for (const jobId of ["playwright-2", "playwright-3", "playwright-4"]) {
+    assert.match(jobs.get(jobId)?.join("\n") ?? "", /steps: \*playwright_test_steps/);
+  }
+});
+
 test("focused contracts stay inside existing required checks", () => {
   const jobs = jobBlocks(readFileSync(ciWorkflowPath, "utf8"));
   const changes = jobs.get("changes")?.join("\n") ?? "";

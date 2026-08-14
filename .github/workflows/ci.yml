@@ -364,6 +364,9 @@ jobs:
         run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai
 
       - name: Run Playwright E2E tests
+        # This fork has one release owner; fail with diagnostics instead of inheriting
+        # GitHub's six-hour step ceiling and leaving a release waiting indefinitely.
+        timeout-minutes: 30
         run: npm run test:e2e --workspace=@getpaseo/app -- --shard=${{ env.PLAYWRIGHT_SHARD }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
