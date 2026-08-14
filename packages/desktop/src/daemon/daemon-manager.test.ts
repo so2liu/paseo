@@ -9,6 +9,7 @@ import { createDaemonCommandHandlers } from "./daemon-manager";
 const mocks = vi.hoisted(() => ({
   paseoHome: "/tmp/paseo-desktop-daemon-manager-test-home",
   appVersion: "1.2.3",
+  appIsPackaged: true,
   settings: {
     releaseChannel: "stable",
     daemon: {
@@ -34,7 +35,9 @@ vi.mock("electron", () => ({
   app: {
     getPath: vi.fn(() => "/tmp/paseo-user-data"),
     getVersion: vi.fn(() => mocks.appVersion),
-    isPackaged: true,
+    get isPackaged() {
+      return mocks.appIsPackaged;
+    },
   },
   ipcMain: { handle: vi.fn() },
   dialog: { showSaveDialog: vi.fn() },
@@ -114,6 +117,8 @@ function scheduleFailedStartup(child: MockChildProcess): void {
 describe("daemon-manager commands", () => {
   beforeEach(() => {
     mocks.appVersion = "1.2.3";
+    mocks.appIsPackaged = true;
+    delete process.env.PASEO_DESKTOP_BUILD_ID;
     mocks.settings = DEFAULT_DESKTOP_SETTINGS;
     mocks.runExternalCliJsonCommand.mockReset();
     mocks.runExternalCliTextCommand.mockReset();
@@ -129,6 +134,7 @@ describe("daemon-manager commands", () => {
   });
 
   afterEach(() => {
+    delete process.env.PASEO_DESKTOP_BUILD_ID;
     rmSync(mocks.paseoHome, { recursive: true, force: true });
     rmSync(mocks.appLogPath, { force: true });
   });
@@ -169,6 +175,30 @@ describe("daemon-manager commands", () => {
     });
 
     expect(mocks.runExternalCliJsonCommand).toHaveBeenCalledWith(["daemon", "status", "--json"]);
+  });
+
+  it("uses a distribution build identity for unpackaged Nix Desktop launches", async () => {
+    mocks.appIsPackaged = false;
+    process.env.PASEO_DESKTOP_BUILD_ID = "nix:/nix/store/build-b-paseo-desktop";
+    mocks.runExternalCliJsonCommand.mockResolvedValue({
+      localDaemon: "running",
+      connectedDaemon: "reachable",
+      serverId: "server-1",
+      pid: 7675,
+      listen: "127.0.0.1:6767",
+      hostname: "dev-host",
+      daemonVersion: "1.2.3+LY",
+      desktopManaged: true,
+      desktopBuildId: "nix:/nix/store/build-a-paseo-desktop",
+    });
+    const handlers = createDaemonCommandHandlers();
+
+    await expect(handlers.desktop_daemon_status()).resolves.toMatchObject({
+      status: "running",
+      desktopManaged: true,
+      desktopBuildId: "nix:/nix/store/build-a-paseo-desktop",
+      appBuildId: "nix:/nix/store/build-b-paseo-desktop",
+    });
   });
 
   it("routes running desktop daemon stops through external CLI daemon stop", async () => {

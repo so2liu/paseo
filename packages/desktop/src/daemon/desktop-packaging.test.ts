@@ -90,6 +90,15 @@ describe("desktop packaging", () => {
     }
   });
 
+  it("stamps unpackaged Nix Desktop launches with their unique store output", () => {
+    const nixPackage = readFileSync(
+      join(packageRoot, "..", "..", "nix", "desktop-package.nix"),
+      "utf8",
+    );
+
+    expect(nixPackage).toContain('--set PASEO_DESKTOP_BUILD_ID "nix:$out"');
+  });
+
   it("unpacks server zsh shell integration files for external shells", () => {
     const config = readFileSync(join(packageRoot, "electron-builder.yml"), "utf8");
 

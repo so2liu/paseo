@@ -243,6 +243,10 @@ function resolveDesktopAppVersion(): string {
 
 function resolveDesktopBuildId(): string {
   if (!app.isPackaged) {
+    const distributionBuildId = process.env.PASEO_DESKTOP_BUILD_ID?.trim();
+    if (distributionBuildId) {
+      return distributionBuildId;
+    }
     return `development:${resolveDesktopAppVersion()}`;
   }
 
