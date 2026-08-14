@@ -13,6 +13,7 @@ const keys = [
   "ELECTRON_NO_ATTACH_CONSOLE",
   "ELECTRON_RUN_AS_NODE",
   "PASEO_DESKTOP_MANAGED",
+  "PASEO_DESKTOP_BUILD_ID",
   "PASEO_NODE_ENV",
   "PASEO_SUPERVISED",
 ];
@@ -84,6 +85,7 @@ describe("execCommand", () => {
         CUSTOM: "from-env",
         ELECTRON_NO_ATTACH_CONSOLE: "1",
         PASEO_DESKTOP_MANAGED: "1",
+        PASEO_DESKTOP_BUILD_ID: "desktop-build",
         PASEO_NODE_ENV: "test",
       },
       envOverlay: {
@@ -97,6 +99,7 @@ describe("execCommand", () => {
       ELECTRON_NO_ATTACH_CONSOLE: null,
       ELECTRON_RUN_AS_NODE: null,
       PASEO_DESKTOP_MANAGED: null,
+      PASEO_DESKTOP_BUILD_ID: null,
       PASEO_NODE_ENV: null,
       PASEO_SUPERVISED: null,
     });
@@ -153,6 +156,7 @@ describe("execCommand", () => {
       CUSTOM: "spawn-overlay",
       ELECTRON_NO_ATTACH_CONSOLE: null,
       ELECTRON_RUN_AS_NODE: null,
+      PASEO_DESKTOP_BUILD_ID: null,
       PASEO_DESKTOP_MANAGED: null,
       PASEO_NODE_ENV: null,
       PASEO_SUPERVISED: null,
@@ -165,6 +169,8 @@ describe("execCommand", () => {
       baseEnv: {
         ELECTRON_RUN_AS_NODE: "1",
         PATH: process.env.PATH,
+        PASEO_DESKTOP_BUILD_ID: "desktop-build",
+        PASEO_DESKTOP_MANAGED: "1",
         PASEO_NODE_ENV: "production",
       },
       envOverlay: {
@@ -177,7 +183,8 @@ describe("execCommand", () => {
       CUSTOM: "internal",
       ELECTRON_NO_ATTACH_CONSOLE: null,
       ELECTRON_RUN_AS_NODE: "1",
-      PASEO_DESKTOP_MANAGED: null,
+      PASEO_DESKTOP_BUILD_ID: "desktop-build",
+      PASEO_DESKTOP_MANAGED: "1",
       PASEO_NODE_ENV: "production",
       PASEO_SUPERVISED: "1",
     });
@@ -210,6 +217,7 @@ describe("execCommand", () => {
       CUSTOM: "from-helper",
       ELECTRON_NO_ATTACH_CONSOLE: null,
       ELECTRON_RUN_AS_NODE: "1",
+      PASEO_DESKTOP_BUILD_ID: null,
       PASEO_DESKTOP_MANAGED: null,
       PASEO_NODE_ENV: null,
       PASEO_SUPERVISED: null,

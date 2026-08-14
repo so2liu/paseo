@@ -17,6 +17,7 @@ describe("paseo env contract", () => {
     PATH: "/usr/bin",
     PASEO_AGENT_ID: "agent-123",
     PASEO_DESKTOP_MANAGED: "1",
+    PASEO_DESKTOP_BUILD_ID: "desktop-build",
     [PASEO_NODE_ENV]: "production",
     PASEO_SUPERVISED: "1",
   };
@@ -24,6 +25,7 @@ describe("paseo env contract", () => {
     "ELECTRON_RUN_AS_NODE",
     "PASEO_NODE_ENV",
     "PASEO_DESKTOP_MANAGED",
+    "PASEO_DESKTOP_BUILD_ID",
     "PASEO_SUPERVISED",
     "ELECTRON_NO_ATTACH_CONSOLE",
   ] as const;
@@ -37,6 +39,7 @@ describe("paseo env contract", () => {
       NODE_ENV: "development",
       PATH: "/usr/bin",
       PASEO_DESKTOP_MANAGED: "1",
+      PASEO_DESKTOP_BUILD_ID: "desktop-build",
       [PASEO_NODE_ENV]: "production",
       PASEO_SUPERVISED: "1",
       PASEO_AGENT_ID: "agent-123",
@@ -82,6 +85,7 @@ describe("paseo env contract", () => {
     expect(env.PATH).toBe("/usr/bin");
     expect(env.ELECTRON_NO_ATTACH_CONSOLE).toBeUndefined();
     expect(env.PASEO_DESKTOP_MANAGED).toBeUndefined();
+    expect(env.PASEO_DESKTOP_BUILD_ID).toBeUndefined();
     expect(env[PASEO_NODE_ENV]).toBeUndefined();
     expect(env.PASEO_SUPERVISED).toBeUndefined();
   });
@@ -97,6 +101,7 @@ describe("paseo env contract", () => {
     expect(command.env.CUSTOM).toBe("value");
     expect(command.env.ELECTRON_NO_ATTACH_CONSOLE).toBeUndefined();
     expect(command.env.PASEO_DESKTOP_MANAGED).toBeUndefined();
+    expect(command.env.PASEO_DESKTOP_BUILD_ID).toBeUndefined();
     expect(command.env[PASEO_NODE_ENV]).toBeUndefined();
     expect(command.env.PASEO_SUPERVISED).toBeUndefined();
   });

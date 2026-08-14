@@ -1192,6 +1192,18 @@ export const ptBR: TranslationResources = {
       openAdvancedSettings: "Abrir configurações avançadas do daemon",
       versionMismatch:
         "As versões do app e do daemon não coincidem. Atualize ambos para a mesma versão para a melhor experiência.",
+      versionSync: {
+        managedHint:
+          "Este daemon pertence a uma versão anterior do Desktop. Sincronize e reinicie com a versão incluída neste app.",
+        managedPausedHint:
+          "Ative o gerenciamento do daemon integrado e depois sincronize e reinicie.",
+        externalHint:
+          "Este daemon é gerenciado fora do Desktop. Atualize o serviço externo do daemon e reinicie-o.",
+        action: "Sincronizar e reiniciar",
+        syncing: "Sincronizando...",
+        failed: "Não foi possível sincronizar o daemon: {{message}}",
+        stillMismatched: "O daemon reiniciou, mas ainda informa uma versão diferente.",
+      },
       loadFailed: "Não foi possível carregar o status do daemon desktop.",
     },
     updates: {

@@ -201,6 +201,7 @@ buildNpmPackage {
         --add-flags "$out/share/paseo-desktop/electron-app" \
         --add-flags "--no-sandbox" \
         --add-flags "--class=paseo-desktop" \
+        --set PASEO_DESKTOP_BUILD_ID "nix:$out" \
         --set EXPO_DEV_URL "paseo://app/" \
         --set CHROME_DESKTOP "paseo-desktop.desktop"
 

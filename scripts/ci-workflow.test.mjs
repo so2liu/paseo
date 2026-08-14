@@ -21,10 +21,8 @@ const gatedCiJobs = new Map([
   ["desktop-tests-windows", { name: "desktop-tests (windows-latest)", contract: "desktop" }],
   ["app-tests", { name: "app-tests", contract: "app" }],
   ["sdk-tests", { name: "sdk-tests", contract: "sdk" }],
-  ["playwright-1", { name: "playwright (shard 1/4)", contract: "browser" }],
-  ["playwright-2", { name: "playwright (shard 2/4)", contract: "browser" }],
-  ["playwright-3", { name: "playwright (shard 3/4)", contract: "browser" }],
-  ["playwright-4", { name: "playwright (shard 4/4)", contract: "browser" }],
+  ["playwright-1", { name: "playwright (1/2)", contract: "browser" }],
+  ["playwright-2", { name: "playwright (2/2)", contract: "browser" }],
   ["relay-tests", { name: "relay-tests", contract: "relay" }],
   ["cli-tests-1", { name: "cli-tests (shard 1/3)", contract: "cli" }],
   ["cli-tests-2", { name: "cli-tests (shard 2/3)", contract: "cli" }],
@@ -107,6 +105,26 @@ test("change gating allows superseded workflow runs to cancel", () => {
       "always() keeps jobs alive after concurrency cancellation; use !cancelled() for fail-open gating",
     );
   }
+});
+
+test("browser suite is manual-only and uses two cost-capped runners in the fork", () => {
+  const jobs = jobBlocks(readFileSync(ciWorkflowPath, "utf8"));
+  const firstShard = jobs.get("playwright-1")?.join("\n") ?? "";
+  const secondShard = jobs.get("playwright-2")?.join("\n") ?? "";
+
+  assert.match(firstShard, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(firstShard, /^    timeout-minutes: 45$/m);
+  assert.match(firstShard, /^      E2E_WORKERS: "4"$/m);
+  assert.match(firstShard, /^      PLAYWRIGHT_SHARD: "1\/2"$/m);
+  assert.match(firstShard, /- name: Run Playwright E2E tests\n\s+#.*\n\s+timeout-minutes: 40/);
+  assert.match(secondShard, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(secondShard, /^    timeout-minutes: 45$/m);
+  assert.match(secondShard, /^      E2E_WORKERS: "4"$/m);
+  assert.match(secondShard, /^      PLAYWRIGHT_SHARD: "2\/2"$/m);
+  assert.match(secondShard, /steps: \*playwright_test_steps/);
+  assert.ok(!jobs.has("playwright"));
+  assert.ok(!jobs.has("playwright-3"));
+  assert.ok(!jobs.has("playwright-4"));
 });
 
 test("focused contracts stay inside existing required checks", () => {
@@ -250,11 +268,11 @@ test("browser and desktop tests have exclusive, directory-owned suites", () => {
   ]);
 });
 
-test("non-required Docker and Nix workflows avoid runners with workflow path filters", () => {
+test("non-owner Docker and Nix channels are manual-only in the fork", () => {
   for (const workflowPath of [dockerWorkflowPath, nixWorkflowPath]) {
     const source = readFileSync(workflowPath, "utf8");
     const trigger = source.split("jobs:", 1)[0];
-    assert.match(trigger, /^\s+paths:\s*$/m);
-    assert.doesNotMatch(source, /dorny\/paths-filter/);
+    assert.match(trigger, /^\s+workflow_dispatch:\s*$/m);
+    assert.doesNotMatch(trigger, /^\s+(?:pull_request|push):\s*$/m);
   }
 });

@@ -166,18 +166,47 @@ export function normalizeVersionForComparison(version: string | null | undefined
   return value.replace(/^v/i, "");
 }
 
+export function normalizeAppDaemonVersion(version: string | null | undefined): string | null {
+  const normalized = normalizeVersionForComparison(version);
+  if (!normalized) {
+    return null;
+  }
+
+  // Desktop releases use `-LY.N`; daemon runtimes use `+LY`. Both describe the same fork base.
+  return normalized.replace(/\+.*$/, "").replace(/-LY\.\d+$/i, "");
+}
+
 export function isVersionMismatch(
   appVersion: string | null | undefined,
   daemonVersion: string | null | undefined,
 ): boolean {
-  const app = normalizeVersionForComparison(appVersion);
-  const daemon = normalizeVersionForComparison(daemonVersion);
+  const app = normalizeAppDaemonVersion(appVersion);
+  const daemon = normalizeAppDaemonVersion(daemonVersion);
 
   if (!app || !daemon) {
     return false;
   }
 
   return app !== daemon;
+}
+
+export function isDesktopDaemonVersionMismatch(input: {
+  appVersion: string | null | undefined;
+  daemonVersion: string | null | undefined;
+  daemonRunning: boolean;
+  desktopManaged: boolean;
+  desktopBuildId: string | null | undefined;
+  appBuildId: string | null | undefined;
+}): boolean {
+  if (!input.desktopManaged) {
+    // External daemons do not carry the Desktop artifact identity, so matching package
+    // versions cannot prove that they came from the current customized-fork commit.
+    return input.daemonRunning;
+  }
+
+  const appBuildId = input.appBuildId?.trim();
+  const desktopBuildId = input.desktopBuildId?.trim();
+  return Boolean(appBuildId && appBuildId !== desktopBuildId);
 }
 
 export function formatVersionWithPrefix(version: string | null | undefined): string {

@@ -1,31 +1,8 @@
 name: Docker
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "docker/**"
-      - ".dockerignore"
-      - ".github/workflows/docker.yml"
-      - "package.json"
-      - "package-lock.json"
-      - "patches/**"
-      - "scripts/**"
-      - "tsconfig.json"
-      - "tsconfig.base.json"
-      - "packages/app/**"
-      - "packages/cli/**"
-      - "packages/client/**"
-      - "packages/expo-two-way-audio/**"
-      - "packages/highlight/**"
-      - "packages/protocol/**"
-      - "packages/relay/**"
-      - "packages/server/**"
-  # Fork note: the tag trigger is removed — publishing targets
-  # ghcr.io/getpaseo/paseo, which this fork cannot write to. Branch builds stay on
-  # as non-publishing checks.
-  push:
-    branches: [main]
+  # This two-user fork does not deploy through Docker. Keep the upstream-compatible
+  # build available for deliberate checks without charging every PR and main push.
   workflow_dispatch:
     inputs:
       paseo_version:
@@ -51,7 +28,7 @@ on:
 
 concurrency:
   group: docker-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io

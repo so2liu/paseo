@@ -8,6 +8,8 @@ import { createDaemonCommandHandlers } from "./daemon-manager";
 
 const mocks = vi.hoisted(() => ({
   paseoHome: "/tmp/paseo-desktop-daemon-manager-test-home",
+  appVersion: "1.2.3",
+  appIsPackaged: true,
   settings: {
     releaseChannel: "stable",
     daemon: {
@@ -32,8 +34,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("electron", () => ({
   app: {
     getPath: vi.fn(() => "/tmp/paseo-user-data"),
-    getVersion: vi.fn(() => "1.2.3"),
-    isPackaged: true,
+    getVersion: vi.fn(() => mocks.appVersion),
+    get isPackaged() {
+      return mocks.appIsPackaged;
+    },
   },
   ipcMain: { handle: vi.fn() },
   dialog: { showSaveDialog: vi.fn() },
@@ -112,6 +116,9 @@ function scheduleFailedStartup(child: MockChildProcess): void {
 
 describe("daemon-manager commands", () => {
   beforeEach(() => {
+    mocks.appVersion = "1.2.3";
+    mocks.appIsPackaged = true;
+    delete process.env.PASEO_DESKTOP_BUILD_ID;
     mocks.settings = DEFAULT_DESKTOP_SETTINGS;
     mocks.runExternalCliJsonCommand.mockReset();
     mocks.runExternalCliTextCommand.mockReset();
@@ -127,6 +134,7 @@ describe("daemon-manager commands", () => {
   });
 
   afterEach(() => {
+    delete process.env.PASEO_DESKTOP_BUILD_ID;
     rmSync(mocks.paseoHome, { recursive: true, force: true });
     rmSync(mocks.appLogPath, { force: true });
   });
@@ -167,6 +175,30 @@ describe("daemon-manager commands", () => {
     });
 
     expect(mocks.runExternalCliJsonCommand).toHaveBeenCalledWith(["daemon", "status", "--json"]);
+  });
+
+  it("uses a distribution build identity for unpackaged Nix Desktop launches", async () => {
+    mocks.appIsPackaged = false;
+    process.env.PASEO_DESKTOP_BUILD_ID = "nix:/nix/store/build-b-paseo-desktop";
+    mocks.runExternalCliJsonCommand.mockResolvedValue({
+      localDaemon: "running",
+      connectedDaemon: "reachable",
+      serverId: "server-1",
+      pid: 7675,
+      listen: "127.0.0.1:6767",
+      hostname: "dev-host",
+      daemonVersion: "1.2.3+LY",
+      desktopManaged: true,
+      desktopBuildId: "nix:/nix/store/build-a-paseo-desktop",
+    });
+    const handlers = createDaemonCommandHandlers();
+
+    await expect(handlers.desktop_daemon_status()).resolves.toMatchObject({
+      status: "running",
+      desktopManaged: true,
+      desktopBuildId: "nix:/nix/store/build-a-paseo-desktop",
+      appBuildId: "nix:/nix/store/build-b-paseo-desktop",
+    });
   });
 
   it("routes running desktop daemon stops through external CLI daemon stop", async () => {
@@ -320,7 +352,7 @@ describe("daemon-manager commands", () => {
     );
   });
 
-  it("uses a stale reachable desktop daemon when the version matches", async () => {
+  it("uses a stale reachable desktop daemon when the build identity matches", async () => {
     mocks.runExternalCliJsonCommand.mockResolvedValue({
       localDaemon: "stale_pid",
       connectedDaemon: "reachable",
@@ -330,6 +362,7 @@ describe("daemon-manager commands", () => {
       hostname: "dev-host",
       daemonVersion: "1.2.3",
       desktopManaged: true,
+      desktopBuildId: "1.2.3",
     });
     const handlers = createDaemonCommandHandlers();
 
@@ -342,13 +375,86 @@ describe("daemon-manager commands", () => {
       home: mocks.paseoHome,
       version: "1.2.3",
       desktopManaged: true,
+      desktopBuildId: "1.2.3",
+      appBuildId: "1.2.3",
       error: null,
     });
 
     expect(mocks.spawnProcess).not.toHaveBeenCalled();
   });
 
-  it("restarts a stale reachable desktop daemon when the version differs", async () => {
+  it("does not restart a daemon started by the exact Desktop build", async () => {
+    mocks.appVersion = "0.3.1-LY.10";
+    mocks.runExternalCliJsonCommand.mockResolvedValue({
+      localDaemon: "running",
+      connectedDaemon: "reachable",
+      serverId: "server-1",
+      pid: 7675,
+      listen: "127.0.0.1:6767",
+      hostname: "dev-host",
+      daemonVersion: "0.3.1+LY",
+      desktopManaged: true,
+      desktopBuildId: "0.3.1-LY.10",
+    });
+    const handlers = createDaemonCommandHandlers();
+
+    await expect(handlers.start_desktop_daemon()).resolves.toMatchObject({
+      status: "running",
+      version: "0.3.1+LY",
+      desktopManaged: true,
+    });
+
+    expect(mocks.runExternalCliJsonCommand).toHaveBeenCalledTimes(1);
+    expect(mocks.spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("restarts a legacy managed daemon that has no Desktop build marker", async () => {
+    mocks.runExternalCliJsonCommand
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        connectedDaemon: "reachable",
+        serverId: "server-1",
+        pid: 7675,
+        listen: "127.0.0.1:6767",
+        daemonVersion: "1.2.3",
+        desktopManaged: true,
+      })
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        connectedDaemon: "reachable",
+        serverId: "server-1",
+        pid: 7675,
+        listen: "127.0.0.1:6767",
+        daemonVersion: "1.2.3",
+        desktopManaged: true,
+      })
+      .mockResolvedValueOnce({ action: "stopped" })
+      .mockResolvedValueOnce({
+        localDaemon: "stopped",
+        connectedDaemon: "unreachable",
+        serverId: "",
+      })
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        connectedDaemon: "reachable",
+        serverId: "server-2",
+        pid: 8888,
+        listen: "127.0.0.1:6767",
+        daemonVersion: "1.2.3",
+        desktopManaged: true,
+        desktopBuildId: "1.2.3",
+      });
+    mocks.spawnProcess.mockReturnValue(createMockChildProcess());
+
+    await expect(createDaemonCommandHandlers().start_desktop_daemon()).resolves.toMatchObject({
+      serverId: "server-2",
+      desktopBuildId: "1.2.3",
+    });
+
+    expect(mocks.spawnProcess).toHaveBeenCalledTimes(1);
+  });
+
+  it("restarts a same-version daemon when its unique Desktop build identity differs", async () => {
     mocks.runExternalCliJsonCommand
       .mockResolvedValueOnce({
         localDaemon: "stale_pid",
@@ -357,8 +463,9 @@ describe("daemon-manager commands", () => {
         pid: 7675,
         listen: "127.0.0.1:6767",
         hostname: "dev-host",
-        daemonVersion: "1.2.2",
+        daemonVersion: "1.2.3",
         desktopManaged: true,
+        desktopBuildId: "older-build",
       })
       .mockResolvedValueOnce({
         localDaemon: "stale_pid",
@@ -366,8 +473,9 @@ describe("daemon-manager commands", () => {
         serverId: "server-1",
         pid: 7675,
         listen: "127.0.0.1:6767",
-        daemonVersion: "1.2.2",
+        daemonVersion: "1.2.3",
         desktopManaged: true,
+        desktopBuildId: "older-build",
       })
       .mockResolvedValueOnce({ action: "stopped" })
       .mockResolvedValueOnce({
@@ -384,6 +492,7 @@ describe("daemon-manager commands", () => {
         hostname: "dev-host",
         daemonVersion: "1.2.3",
         desktopManaged: true,
+        desktopBuildId: "1.2.3",
       });
     mocks.spawnProcess.mockReturnValue(createMockChildProcess());
     const handlers = createDaemonCommandHandlers();
@@ -397,6 +506,8 @@ describe("daemon-manager commands", () => {
       home: mocks.paseoHome,
       version: "1.2.3",
       desktopManaged: true,
+      desktopBuildId: "1.2.3",
+      appBuildId: "1.2.3",
       error: null,
     });
 
@@ -454,6 +565,8 @@ describe("daemon-manager commands", () => {
         detached: true,
         stdio: ["ignore", "ignore", "ignore"],
         envOverlay: expect.objectContaining({
+          PASEO_DESKTOP_MANAGED: "1",
+          PASEO_DESKTOP_BUILD_ID: "1.2.3",
           PASEO_CLI: getBundledCliShimPath(),
           PASEO_WEB_UI_ENABLED: "false",
         }),

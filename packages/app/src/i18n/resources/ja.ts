@@ -1182,6 +1182,17 @@ export const ja: TranslationResources = {
       openAdvancedSettings: "高度なデーモン設定を開く",
       versionMismatch:
         "アプリとデーモンのバージョンが一致しません。最良の体験のために両方を同じバージョンに更新してください。",
+      versionSync: {
+        managedHint:
+          "この daemon は古い Desktop ビルドのものです。このアプリに同梱されたバージョンへ同期して再起動してください。",
+        managedPausedHint: "内蔵 daemon の管理をオンにしてから、同期して再起動してください。",
+        externalHint:
+          "この daemon は Desktop の外部で管理されています。外部 daemon サービスを更新してから再起動してください。",
+        action: "同期して再起動",
+        syncing: "同期中...",
+        failed: "daemon を同期できません: {{message}}",
+        stillMismatched: "daemon は再起動しましたが、引き続き異なるバージョンを報告しています。",
+      },
       loadFailed: "デスクトップデーモンのステータスを読み込めません。",
     },
     updates: {

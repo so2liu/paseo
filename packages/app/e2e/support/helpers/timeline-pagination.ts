@@ -557,14 +557,21 @@ export async function scrollTimelineUntilOlderHistoryIsReachable(
       return;
     }
     const previousHeight = await readTimelineViewport(page);
-    await userScrollsTimelineToHistoryStart(page);
+    // A collapsed page can already be at scrollTop 0 with no overflow. Force a scroll event so
+    // the near-start pagination callback still runs in that state.
+    await scrollTimelineToOldestLoadedEdge(page);
     // Upstream waits for the box to get taller. This fork collapses a completed turn's
     // execution steps behind a toggle, so a page of older history can arrive and leave the
-    // timeline *shorter* than it was. Any change in height means the page landed; if nothing
-    // moves at all, the loop scrolls again and the prompt check above ends it.
+    // timeline *shorter* than it was, or keep the same height when collapsed rows replace one
+    // another. Treat either a height change or the target prompt appearing as a landed page.
     await expect
-      .poll(async () => (await readTimelineViewport(page)).scrollHeight)
-      .not.toBe(previousHeight.scrollHeight);
+      .poll(async () => {
+        if ((await prompt.count()) > 0) {
+          return true;
+        }
+        return (await readTimelineViewport(page)).scrollHeight !== previousHeight.scrollHeight;
+      })
+      .toBe(true);
     await waitForTimelineGeometryToSettle(page);
   }
   await expect(prompt).toBeVisible();
