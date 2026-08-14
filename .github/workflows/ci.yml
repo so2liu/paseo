@@ -330,16 +330,18 @@ jobs:
       - name: Typecheck client examples
         run: npm run typecheck:examples --workspace=@getpaseo/client
 
-  playwright-1:
-    name: playwright (shard 1/4)
+  playwright:
+    name: playwright
     needs: changes
     if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
+    # The fork serves two people. One four-worker runner covers the complete suite
+    # without paying setup and wall-clock charges for four concurrent runners.
+    timeout-minutes: 50
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-      PLAYWRIGHT_SHARD: "1/4"
-      PLAYWRIGHT_ARTIFACT: "1"
-    steps: &playwright_test_steps
+      E2E_WORKERS: "4"
+    steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -364,10 +366,9 @@ jobs:
         run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai
 
       - name: Run Playwright E2E tests
-        # This fork has one release owner; fail with diagnostics instead of inheriting
-        # GitHub's six-hour step ceiling and leaving a release waiting indefinitely.
-        timeout-minutes: 30
-        run: npm run test:e2e --workspace=@getpaseo/app -- --shard=${{ env.PLAYWRIGHT_SHARD }}
+        # Leave time for diagnostics while bounding the expensive part of the job.
+        timeout-minutes: 45
+        run: npm run test:e2e --workspace=@getpaseo/app
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
@@ -375,44 +376,11 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-results-${{ env.PLAYWRIGHT_ARTIFACT }}
+          name: playwright-results
           path: |
             packages/app/test-results/
             packages/app/playwright-report/
           retention-days: 7
-
-  playwright-2:
-    name: playwright (shard 2/4)
-    needs: changes
-    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
-    runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-      PLAYWRIGHT_SHARD: "2/4"
-      PLAYWRIGHT_ARTIFACT: "2"
-    steps: *playwright_test_steps
-
-  playwright-3:
-    name: playwright (shard 3/4)
-    needs: changes
-    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
-    runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-      PLAYWRIGHT_SHARD: "3/4"
-      PLAYWRIGHT_ARTIFACT: "3"
-    steps: *playwright_test_steps
-
-  playwright-4:
-    name: playwright (shard 4/4)
-    needs: changes
-    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
-    runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-      PLAYWRIGHT_SHARD: "4/4"
-      PLAYWRIGHT_ARTIFACT: "4"
-    steps: *playwright_test_steps
 
   relay-tests:
     name: relay-tests
