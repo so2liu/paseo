@@ -157,6 +157,28 @@ test.describe("Desktop daemon management", () => {
     await expectDaemonStatusLogPath(page, realState.logPath);
   });
 
+  test("an unresponsive external daemon keeps its manual upgrade guidance visible", async ({
+    page,
+  }) => {
+    const serverId = getServerId();
+    await installDesktopRuntime(page, {
+      serverId,
+      manageBuiltInDaemon: false,
+      daemonPid: 1234,
+      daemonVersion: "0.3.1+LY",
+      initialDaemonState: "errored",
+    });
+    await gotoAppShell(page);
+    await openDesktopSettings(page, serverId);
+
+    await expect(
+      page.getByText(
+        "This daemon is managed outside Desktop. Update the external daemon service to the same version, then restart it.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByTestId("daemon-version-sync-button")).toHaveCount(0);
+  });
+
   test("stopping and restarting the daemon updates the PID", async ({ page }) => {
     const serverId = getServerId();
     const realState = await loadRealDaemonState();

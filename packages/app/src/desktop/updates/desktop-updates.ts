@@ -193,7 +193,7 @@ export function isVersionMismatch(
 export function isDesktopDaemonVersionMismatch(input: {
   appVersion: string | null | undefined;
   daemonVersion: string | null | undefined;
-  daemonRunning: boolean;
+  daemonPresent: boolean;
   desktopManaged: boolean;
   desktopBuildId: string | null | undefined;
   appBuildId: string | null | undefined;
@@ -201,7 +201,7 @@ export function isDesktopDaemonVersionMismatch(input: {
   if (!input.desktopManaged) {
     // External daemons do not carry the Desktop artifact identity, so matching package
     // versions cannot prove that they came from the current customized-fork commit.
-    return input.daemonRunning;
+    return input.daemonPresent;
   }
 
   const appBuildId = input.appBuildId?.trim();

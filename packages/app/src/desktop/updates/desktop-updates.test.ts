@@ -43,7 +43,7 @@ describe("desktop-updates helpers", () => {
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
-        daemonRunning: true,
+        daemonPresent: true,
         desktopManaged: true,
         desktopBuildId: "build-10",
         appBuildId: "build-10",
@@ -53,7 +53,7 @@ describe("desktop-updates helpers", () => {
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
-        daemonRunning: true,
+        daemonPresent: true,
         desktopManaged: true,
         desktopBuildId: "build-7",
         appBuildId: "build-10",
@@ -63,7 +63,7 @@ describe("desktop-updates helpers", () => {
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
-        daemonRunning: true,
+        daemonPresent: true,
         desktopManaged: true,
         desktopBuildId: null,
         appBuildId: "build-10",
@@ -78,7 +78,7 @@ describe("desktop-updates helpers", () => {
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
-        daemonRunning: true,
+        daemonPresent: true,
         desktopManaged: false,
         desktopBuildId: null,
         appBuildId: null,
@@ -88,7 +88,7 @@ describe("desktop-updates helpers", () => {
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.0+LY",
-        daemonRunning: true,
+        daemonPresent: true,
         desktopManaged: false,
         desktopBuildId: null,
         appBuildId: null,
@@ -98,7 +98,7 @@ describe("desktop-updates helpers", () => {
       isDesktopDaemonVersionMismatch({
         appVersion: "0.3.1-LY.10",
         daemonVersion: null,
-        daemonRunning: false,
+        daemonPresent: false,
         desktopManaged: false,
         desktopBuildId: null,
         appBuildId: null,
