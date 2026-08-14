@@ -333,11 +333,11 @@ jobs:
   playwright-1:
     name: playwright (1/2)
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
-    # The fork serves two people. Two four-worker runners cover the complete suite
-    # for roughly half the billed runner-minutes of upstream's four-runner layout.
-    timeout-minutes: 30
+    # The fork serves two people, so the complete browser suite is opt-in instead
+    # of consuming runner minutes on every PR and main-branch push.
+    timeout-minutes: 45
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       E2E_WORKERS: "4"
@@ -369,7 +369,7 @@ jobs:
 
       - name: Run Playwright E2E tests
         # Leave time for diagnostics while bounding the expensive part of the job.
-        timeout-minutes: 25
+        timeout-minutes: 40
         run: npm run test:e2e --workspace=@getpaseo/app -- --shard=${{ env.PLAYWRIGHT_SHARD }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -387,9 +387,9 @@ jobs:
   playwright-2:
     name: playwright (2/2)
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       E2E_WORKERS: "4"

@@ -107,16 +107,18 @@ test("change gating allows superseded workflow runs to cancel", () => {
   }
 });
 
-test("browser suite uses two cost-capped runners in the fork", () => {
+test("browser suite is manual-only and uses two cost-capped runners in the fork", () => {
   const jobs = jobBlocks(readFileSync(ciWorkflowPath, "utf8"));
   const firstShard = jobs.get("playwright-1")?.join("\n") ?? "";
   const secondShard = jobs.get("playwright-2")?.join("\n") ?? "";
 
-  assert.match(firstShard, /^    timeout-minutes: 30$/m);
+  assert.match(firstShard, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(firstShard, /^    timeout-minutes: 45$/m);
   assert.match(firstShard, /^      E2E_WORKERS: "4"$/m);
   assert.match(firstShard, /^      PLAYWRIGHT_SHARD: "1\/2"$/m);
-  assert.match(firstShard, /- name: Run Playwright E2E tests\n\s+#.*\n\s+timeout-minutes: 25/);
-  assert.match(secondShard, /^    timeout-minutes: 30$/m);
+  assert.match(firstShard, /- name: Run Playwright E2E tests\n\s+#.*\n\s+timeout-minutes: 40/);
+  assert.match(secondShard, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(secondShard, /^    timeout-minutes: 45$/m);
   assert.match(secondShard, /^      E2E_WORKERS: "4"$/m);
   assert.match(secondShard, /^      PLAYWRIGHT_SHARD: "2\/2"$/m);
   assert.match(secondShard, /steps: \*playwright_test_steps/);
