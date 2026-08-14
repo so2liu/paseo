@@ -290,4 +290,28 @@ describe("LocalDaemonSection version sync", () => {
     });
     expect(button?.disabled).toBe(false);
   });
+
+  it("rejects a matching build identity when the restarted daemon is not running", async () => {
+    mocks.restartDesktopDaemon.mockResolvedValue({
+      ...mocks.daemonStatus,
+      status: "errored",
+      version: "0.3.1+LY",
+      desktopBuildId: "build-10",
+      appBuildId: "build-10",
+      error: "port 6767 is busy",
+    });
+    render();
+
+    const button = container.querySelector<HTMLButtonElement>(
+      '[data-testid="daemon-version-sync-button"]',
+    );
+    await act(async () => button?.click());
+
+    await waitFor(() => {
+      expect(container.textContent).toContain("Unable to sync daemon: port 6767 is busy");
+    });
+    expect(mocks.setStatus).not.toHaveBeenCalled();
+    expect(mocks.refetch).not.toHaveBeenCalled();
+    expect(button?.disabled).toBe(false);
+  });
 });

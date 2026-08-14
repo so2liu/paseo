@@ -349,6 +349,9 @@ function DaemonVersionSyncCard({
   const syncDaemonVersion = useMutation({
     mutationFn: async () => {
       const nextStatus = await restartDesktopDaemon();
+      if (nextStatus.status !== "running") {
+        throw new Error(nextStatus.error ?? t("desktop.daemon.status.notRunning"));
+      }
       const stillMismatched = isDesktopDaemonVersionMismatch({
         appVersion,
         daemonVersion: nextStatus.version,
