@@ -1157,6 +1157,15 @@ export const zhCN: TranslationResources = {
       advancedSettings: "高级设置",
       openAdvancedSettings: "打开 daemon 高级设置",
       versionMismatch: "App 和 daemon 版本不匹配。请将两者更新到相同版本，以获得最佳体验。",
+      versionSync: {
+        managedHint: "当前 daemon 来自旧版 Desktop。点击同步并重启，将它换成此 App 内置的版本。",
+        managedPausedHint: "请先开启“管理内置 daemon”，然后点击“同步并重启”。",
+        externalHint: "当前 daemon 由 Desktop 外部管理。请更新外部 daemon 服务后再重启。",
+        action: "同步并重启",
+        syncing: "正在同步...",
+        failed: "无法同步 daemon：{{message}}",
+        stillMismatched: "daemon 已重启，但报告的版本仍与 App 不同。",
+      },
       loadFailed: "无法加载桌面 daemon 状态。",
     },
     updates: {

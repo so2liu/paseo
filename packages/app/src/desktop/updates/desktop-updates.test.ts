@@ -14,10 +14,15 @@ describe("desktop-updates helpers", () => {
   });
 
   it("normalizes versions for app-daemon comparisons", async () => {
-    const { normalizeVersionForComparison } = await loadModuleForPlatform("web");
+    const { normalizeAppDaemonVersion, normalizeVersionForComparison } =
+      await loadModuleForPlatform("web");
 
     expect(normalizeVersionForComparison(" v0.1.15 ")).toBe("0.1.15");
     expect(normalizeVersionForComparison("0.1.15")).toBe("0.1.15");
+    expect(normalizeAppDaemonVersion("0.3.1-LY.10")).toBe("0.3.1");
+    expect(normalizeAppDaemonVersion("0.3.1+LY")).toBe("0.3.1");
+    expect(normalizeAppDaemonVersion("0.2.0-beta.4-LY.2")).toBe("0.2.0-beta.4");
+    expect(normalizeAppDaemonVersion("0.2.0-beta.4+LY")).toBe("0.2.0-beta.4");
     expect(normalizeVersionForComparison(null)).toBeNull();
   });
 
@@ -25,8 +30,60 @@ describe("desktop-updates helpers", () => {
     const { isVersionMismatch } = await loadModuleForPlatform("web");
 
     expect(isVersionMismatch("v0.1.15", "0.1.15")).toBe(false);
+    expect(isVersionMismatch("0.3.1-LY.10", "0.3.1+LY")).toBe(false);
+    expect(isVersionMismatch("0.2.0-beta.4-LY.2", "0.2.0-beta.4+LY")).toBe(false);
     expect(isVersionMismatch("0.1.15", "0.1.16")).toBe(true);
     expect(isVersionMismatch("0.1.15", null)).toBe(false);
+  });
+
+  it("compares managed daemons against the exact Desktop build that started them", async () => {
+    const { isDesktopDaemonVersionMismatch } = await loadModuleForPlatform("web");
+
+    expect(
+      isDesktopDaemonVersionMismatch({
+        appVersion: "0.3.1-LY.10",
+        daemonVersion: "0.3.1+LY",
+        desktopManaged: true,
+        desktopVersion: "0.3.1-LY.10",
+      }),
+    ).toBe(false);
+    expect(
+      isDesktopDaemonVersionMismatch({
+        appVersion: "0.3.1-LY.10",
+        daemonVersion: "0.3.1+LY",
+        desktopManaged: true,
+        desktopVersion: "0.3.1-LY.7",
+      }),
+    ).toBe(true);
+    expect(
+      isDesktopDaemonVersionMismatch({
+        appVersion: "0.3.1-LY.10",
+        daemonVersion: "0.3.1+LY",
+        desktopManaged: true,
+        desktopVersion: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("uses compatible base versions for externally managed daemons", async () => {
+    const { isDesktopDaemonVersionMismatch } = await loadModuleForPlatform("web");
+
+    expect(
+      isDesktopDaemonVersionMismatch({
+        appVersion: "0.3.1-LY.10",
+        daemonVersion: "0.3.1+LY",
+        desktopManaged: false,
+        desktopVersion: null,
+      }),
+    ).toBe(false);
+    expect(
+      isDesktopDaemonVersionMismatch({
+        appVersion: "0.3.1-LY.10",
+        daemonVersion: "0.3.0+LY",
+        desktopManaged: false,
+        desktopVersion: null,
+      }),
+    ).toBe(true);
   });
 
   it("formats display versions with v prefix and unavailable fallback", async () => {

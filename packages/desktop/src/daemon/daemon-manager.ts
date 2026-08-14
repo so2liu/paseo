@@ -73,6 +73,7 @@ export interface DesktopDaemonStatus {
   home: string;
   version: string | null;
   desktopManaged: boolean;
+  desktopVersion?: string;
   error: string | null;
 }
 
@@ -141,6 +142,7 @@ function summarizeDesktopDaemonStatus(status: DesktopDaemonStatus): Record<strin
     serverId: status.serverId || null,
     version: status.version,
     desktopManaged: status.desktopManaged,
+    desktopVersion: status.desktopVersion ?? null,
     error: status.error,
   };
 }
@@ -262,6 +264,10 @@ export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus>
       status = "errored";
     }
 
+    const desktopVersion =
+      desktopManaged && typeof payload.desktopVersion === "string"
+        ? payload.desktopVersion.trim()
+        : "";
     return {
       serverId: typeof payload.serverId === "string" ? payload.serverId : "",
       status,
@@ -272,6 +278,7 @@ export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus>
       home,
       version: typeof payload.daemonVersion === "string" ? payload.daemonVersion : null,
       desktopManaged,
+      ...(desktopVersion ? { desktopVersion } : {}),
       error: null,
     };
   } catch (error) {
@@ -300,8 +307,8 @@ function normalizeVersion(version: string | null): string | null {
 function shouldRestartForVersion(current: DesktopDaemonStatus): boolean {
   if (!current.desktopManaged) return false;
   const appVersion = normalizeVersion(resolveDesktopAppVersion());
-  const daemonVersion = normalizeVersion(current.version);
-  return Boolean(appVersion && daemonVersion && appVersion !== daemonVersion);
+  const daemonDesktopVersion = normalizeVersion(current.desktopVersion ?? null);
+  return Boolean(appVersion && appVersion !== daemonDesktopVersion);
 }
 
 function assertBuiltInDaemonManagementEnabled(settings: DesktopSettings): void {
@@ -361,6 +368,7 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
       logDesktopDaemonLifecycle("daemon version mismatch, restarting", {
         appVersion: normalizeVersion(resolveDesktopAppVersion()),
         daemonVersion: normalizeVersion(current.version),
+        daemonDesktopVersion: normalizeVersion(current.desktopVersion ?? null),
       });
       await stopDesktopDaemon("version_mismatch");
     } else {
@@ -399,6 +407,7 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
     env: invocation.env,
     envOverlay: {
       PASEO_DESKTOP_MANAGED: "1",
+      PASEO_DESKTOP_VERSION: resolveDesktopAppVersion(),
       PASEO_CLI: getBundledCliShimPath(),
       PASEO_WEB_UI_ENABLED: "false",
     },

@@ -1180,6 +1180,17 @@ export const en = {
       openAdvancedSettings: "Open advanced daemon settings",
       versionMismatch:
         "App and daemon versions don't match. Update both to the same version for the best experience.",
+      versionSync: {
+        managedHint:
+          "This daemon is from an older Desktop build. Sync and restart it with the version bundled in this app.",
+        managedPausedHint: "Turn on built-in daemon management, then sync and restart.",
+        externalHint:
+          "This daemon is managed outside Desktop. Update the external daemon service to the same version, then restart it.",
+        action: "Sync and restart",
+        syncing: "Syncing...",
+        failed: "Unable to sync daemon: {{message}}",
+        stillMismatched: "The daemon restarted but still reports a different version.",
+      },
       loadFailed: "Unable to load desktop daemon status.",
     },
     updates: {

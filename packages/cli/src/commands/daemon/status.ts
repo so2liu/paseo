@@ -32,6 +32,7 @@ interface DaemonStatus {
   cliVersion: string;
   daemonVersion: string | null;
   desktopManaged: boolean;
+  desktopVersion: string | null;
   providers: ProviderBinaryStatus[];
   note?: string;
 }
@@ -111,6 +112,7 @@ function toStatusRows(status: DaemonStatus): StatusRow[] {
     { key: "CLI Node", value: status.cliNode },
     { key: "CLI", value: status.cliVersion },
     { key: "Daemon Version", value: status.daemonVersion ?? "-" },
+    { key: "Desktop Version", value: status.desktopVersion ?? "-" },
   ];
 
   if (status.note) {
@@ -434,6 +436,7 @@ export async function runStatusCommand(
     cliVersion,
     daemonVersion,
     desktopManaged: state.pidInfo?.desktopManaged === true,
+    desktopVersion: state.pidInfo?.desktopVersion ?? null,
     providers,
     note,
   };

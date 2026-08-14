@@ -1201,6 +1201,18 @@ export const es: TranslationResources = {
       openAdvancedSettings: "Abrir configuración avanzada del demonio",
       versionMismatch:
         "Las versiones de la aplicación y del demonio no coinciden. Actualice ambos a la misma versión para obtener la mejor experiencia.",
+      versionSync: {
+        managedHint:
+          "Este daemon pertenece a una versión anterior de Desktop. Sincronízalo y reinícialo con la versión incluida en esta app.",
+        managedPausedHint:
+          "Activa la administración del daemon integrado y, luego, sincronízalo y reinícialo.",
+        externalHint:
+          "Este daemon se administra fuera de Desktop. Actualiza el servicio externo del daemon y reinícialo.",
+        action: "Sincronizar y reiniciar",
+        syncing: "Sincronizando...",
+        failed: "No se pudo sincronizar el daemon: {{message}}",
+        stillMismatched: "El daemon se reinició, pero aún informa una versión diferente.",
+      },
       loadFailed: "No se puede cargar el estado del demonio del escritorio.",
     },
     updates: {

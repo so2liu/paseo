@@ -1201,6 +1201,18 @@ export const fr: TranslationResources = {
       openAdvancedSettings: "Ouvrir les paramètres avancés du démon",
       versionMismatch:
         "Les versions de l'application et du démon ne correspondent pas. Mettez à jour les deux vers la même version pour une meilleure expérience.",
+      versionSync: {
+        managedHint:
+          "Ce daemon provient d'une ancienne version de Desktop. Synchronisez-le et redémarrez-le avec la version incluse dans cette app.",
+        managedPausedHint:
+          "Activez la gestion du daemon intégré, puis synchronisez-le et redémarrez-le.",
+        externalHint:
+          "Ce daemon est géré en dehors de Desktop. Mettez à jour le service daemon externe, puis redémarrez-le.",
+        action: "Synchroniser et redémarrer",
+        syncing: "Synchronisation...",
+        failed: "Impossible de synchroniser le daemon : {{message}}",
+        stillMismatched: "Le daemon a redémarré, mais signale toujours une version différente.",
+      },
       loadFailed: "Impossible de charger l'état du démon de bureau.",
     },
     updates: {

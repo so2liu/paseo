@@ -1,22 +1,28 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, { type ReactElement, useCallback, useMemo, useState } from "react";
 import { Alert, Text, View } from "react-native";
+import { useMutation } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/screens/settings/settings-section";
-import { ArrowUpRight, Copy, FileText, Activity } from "lucide-react-native";
+import { ArrowUpRight, Copy, FileText, Activity, RefreshCw } from "lucide-react-native";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
-import { getCliDaemonStatus, shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
+import { isDesktopDaemonVersionMismatch } from "@/desktop/updates/desktop-updates";
+import {
+  type DesktopDaemonStatus,
+  getCliDaemonStatus,
+  restartDesktopDaemon,
+  shouldUseDesktopDaemon,
+} from "@/desktop/daemon/desktop-daemon";
 import { useBuiltInDaemonManagement } from "@/desktop/hooks/use-built-in-daemon-management";
 import { useDaemonStatus } from "@/desktop/hooks/use-daemon-status";
 import { useDesktopSettings, type DesktopSettings } from "@/desktop/settings/desktop-settings";
-import { resolveAppVersion } from "@/utils/app-version";
+import { resolveDisplayAppVersion } from "@/utils/app-version";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 
 type DesktopDaemonSettings = DesktopSettings["daemon"];
@@ -314,11 +320,101 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
   );
 }
 
+interface DaemonVersionSyncCardProps {
+  appVersion: string | null;
+  daemonStatus: DesktopDaemonStatus | null;
+  isDaemonManagementPaused: boolean;
+  setStatus: (status: DesktopDaemonStatus) => void;
+  refetch: () => void;
+}
+
+function DaemonVersionSyncCard({
+  appVersion,
+  daemonStatus,
+  isDaemonManagementPaused,
+  setStatus,
+  refetch,
+}: DaemonVersionSyncCardProps) {
+  const { t } = useTranslation();
+  const daemonVersionMismatch = isDesktopDaemonVersionMismatch({
+    appVersion,
+    daemonVersion: daemonStatus?.version,
+    desktopManaged: daemonStatus?.desktopManaged === true,
+    desktopVersion: daemonStatus?.desktopVersion,
+  });
+  const canSyncDaemonVersion =
+    daemonVersionMismatch && !isDaemonManagementPaused && daemonStatus?.desktopManaged === true;
+  const syncDaemonVersion = useMutation({
+    mutationFn: async () => {
+      const nextStatus = await restartDesktopDaemon();
+      const stillMismatched = isDesktopDaemonVersionMismatch({
+        appVersion,
+        daemonVersion: nextStatus.version,
+        desktopManaged: nextStatus.desktopManaged,
+        desktopVersion: nextStatus.desktopVersion,
+      });
+      if (stillMismatched) {
+        throw new Error(t("desktop.daemon.versionSync.stillMismatched"));
+      }
+      return nextStatus;
+    },
+    onSuccess: (nextStatus) => {
+      setStatus(nextStatus);
+      refetch();
+    },
+  });
+  const handleSyncDaemonVersion = useCallback(() => {
+    if (!syncDaemonVersion.isPending) {
+      syncDaemonVersion.mutate();
+    }
+  }, [syncDaemonVersion]);
+
+  if (!daemonVersionMismatch) {
+    return null;
+  }
+
+  let hint = t("desktop.daemon.versionSync.externalHint");
+  if (daemonStatus?.desktopManaged) {
+    hint = isDaemonManagementPaused
+      ? t("desktop.daemon.versionSync.managedPausedHint")
+      : t("desktop.daemon.versionSync.managedHint");
+  }
+
+  return (
+    <View style={styles.warningCard}>
+      <View style={styles.warningContent}>
+        <Text style={styles.warningText}>{hint}</Text>
+        {syncDaemonVersion.error ? (
+          <Text style={styles.warningError} testID="daemon-version-sync-error">
+            {t("desktop.daemon.versionSync.failed", {
+              message: syncDaemonVersion.error.message,
+            })}
+          </Text>
+        ) : null}
+      </View>
+      {canSyncDaemonVersion ? (
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={RefreshCw}
+          loading={syncDaemonVersion.isPending}
+          onPress={handleSyncDaemonVersion}
+          testID="daemon-version-sync-button"
+        >
+          {syncDaemonVersion.isPending
+            ? t("desktop.daemon.versionSync.syncing")
+            : t("desktop.daemon.versionSync.action")}
+        </Button>
+      ) : null}
+    </View>
+  );
+}
+
 export function LocalDaemonSection() {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const showSection = shouldUseDesktopDaemon();
-  const appVersion = resolveAppVersion();
+  const appVersion = resolveDisplayAppVersion();
   const { settings, updateSettings, isLoading: isLoadingSettings } = useDesktopSettings();
   const daemonSettings = settings.daemon;
   const updateDaemonSettings = useCallback(
@@ -329,9 +425,6 @@ export function LocalDaemonSection() {
 
   const daemonStatus = data?.status ?? null;
   const daemonLogs = data?.logs ?? null;
-  const daemonVersion = daemonStatus?.version ?? null;
-
-  const daemonVersionMismatch = isVersionMismatch(appVersion, daemonVersion);
   const daemonStatusStateText =
     statusError ??
     (daemonStatus?.status === "running"
@@ -445,11 +538,13 @@ export function LocalDaemonSection() {
             isLoadingCliStatus={isLoadingCliStatus}
           />
 
-          {daemonVersionMismatch ? (
-            <View style={styles.warningCard}>
-              <Text style={styles.warningText}>{t("desktop.daemon.versionMismatch")}</Text>
-            </View>
-          ) : null}
+          <DaemonVersionSyncCard
+            appVersion={appVersion}
+            daemonStatus={daemonStatus}
+            isDaemonManagementPaused={isDaemonManagementPaused}
+            setStatus={setStatus}
+            refetch={refetch}
+          />
         </>
       )}
 
@@ -503,9 +598,21 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "rgba(245, 158, 11, 0.12)",
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[3],
+  },
+  warningContent: {
+    flex: 1,
+    gap: theme.spacing[1],
   },
   warningText: {
     color: theme.colors.palette.amber[500],
+    fontSize: theme.fontSize.xs,
+  },
+  warningError: {
+    color: theme.colors.destructive,
     fontSize: theme.fontSize.xs,
   },
   modalBody: {

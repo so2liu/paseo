@@ -14,6 +14,36 @@ import {
 } from "./pid-lock.js";
 
 describe("pid-lock ownership", () => {
+  test("records the exact Desktop build that started a managed daemon", async () => {
+    const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-desktop-version-"));
+    const previousDesktopManaged = process.env.PASEO_DESKTOP_MANAGED;
+    const previousDesktopVersion = process.env.PASEO_DESKTOP_VERSION;
+
+    try {
+      process.env.PASEO_DESKTOP_MANAGED = "1";
+      process.env.PASEO_DESKTOP_VERSION = "0.3.1-LY.10";
+
+      await acquirePidLock(paseoHome, null, { ownerPid: process.pid + 10_000 });
+
+      await expect(getPidLockInfo(paseoHome)).resolves.toMatchObject({
+        desktopManaged: true,
+        desktopVersion: "0.3.1-LY.10",
+      });
+    } finally {
+      if (previousDesktopManaged === undefined) {
+        delete process.env.PASEO_DESKTOP_MANAGED;
+      } else {
+        process.env.PASEO_DESKTOP_MANAGED = previousDesktopManaged;
+      }
+      if (previousDesktopVersion === undefined) {
+        delete process.env.PASEO_DESKTOP_VERSION;
+      } else {
+        process.env.PASEO_DESKTOP_VERSION = previousDesktopVersion;
+      }
+      await rm(paseoHome, { recursive: true, force: true });
+    }
+  });
+
   test("writes and releases lock for explicit owner pid", async () => {
     const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-owner-"));
     const ownerPid = process.pid + 10_000;

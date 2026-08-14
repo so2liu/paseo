@@ -27,6 +27,7 @@ export interface DesktopDaemonStatus {
   home: string;
   version: string | null;
   desktopManaged: boolean;
+  desktopVersion?: string;
   error: string | null;
 }
 
@@ -90,6 +91,7 @@ function parseDesktopDaemonStatus(raw: unknown): DesktopDaemonStatus {
   if (!isRecord(raw)) {
     throw new Error("Unexpected desktop daemon status response.");
   }
+  const desktopVersion = toStringOrNull(raw.desktopVersion);
   return {
     serverId: toStringOrNull(raw.serverId) ?? "",
     status: parseDesktopDaemonState(raw.status),
@@ -99,6 +101,7 @@ function parseDesktopDaemonStatus(raw: unknown): DesktopDaemonStatus {
     home: toStringOrNull(raw.home) ?? "",
     version: toStringOrNull(raw.version),
     desktopManaged: raw.desktopManaged === true,
+    ...(desktopVersion ? { desktopVersion } : {}),
     error: toStringOrNull(raw.error),
   };
 }
