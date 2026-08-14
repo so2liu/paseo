@@ -45,6 +45,7 @@ import { tailFile } from "../diagnostics/tail-file.js";
 import { saveDownloadBytes } from "../features/downloads.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
+const DESKTOP_BUILD_ID_FILENAME = "desktop-build-id";
 const STARTUP_POLL_INTERVAL_MS = 200;
 const STARTUP_POLL_MAX_ATTEMPTS = 150;
 const DETACHED_STARTUP_GRACE_MS = 1200;
@@ -73,7 +74,8 @@ export interface DesktopDaemonStatus {
   home: string;
   version: string | null;
   desktopManaged: boolean;
-  desktopVersion?: string;
+  desktopBuildId?: string;
+  appBuildId?: string;
   error: string | null;
 }
 
@@ -142,7 +144,8 @@ function summarizeDesktopDaemonStatus(status: DesktopDaemonStatus): Record<strin
     serverId: status.serverId || null,
     version: status.version,
     desktopManaged: status.desktopManaged,
-    desktopVersion: status.desktopVersion ?? null,
+    desktopBuildId: status.desktopBuildId ?? null,
+    appBuildId: status.appBuildId ?? null,
     error: status.error,
   };
 }
@@ -238,6 +241,25 @@ function resolveDesktopAppVersion(): string {
   return app.getVersion();
 }
 
+function resolveDesktopBuildId(): string {
+  if (!app.isPackaged) {
+    return `development:${resolveDesktopAppVersion()}`;
+  }
+
+  const resourcesPath = process.resourcesPath;
+  if (!resourcesPath) {
+    // Electron always supplies resourcesPath in packaged apps. Unit tests use a lightweight mock.
+    return resolveDesktopAppVersion();
+  }
+
+  const buildIdPath = path.join(resourcesPath, DESKTOP_BUILD_ID_FILENAME);
+  const buildId = readFileSync(buildIdPath, "utf8").trim();
+  if (!buildId) {
+    throw new Error(`Bundled Paseo Desktop build ID is empty at ${buildIdPath}`);
+  }
+  return buildId;
+}
+
 // ---------------------------------------------------------------------------
 // Daemon lifecycle
 // ---------------------------------------------------------------------------
@@ -264,10 +286,11 @@ export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus>
       status = "errored";
     }
 
-    const desktopVersion =
-      desktopManaged && typeof payload.desktopVersion === "string"
-        ? payload.desktopVersion.trim()
+    const desktopBuildId =
+      desktopManaged && typeof payload.desktopBuildId === "string"
+        ? payload.desktopBuildId.trim()
         : "";
+    const appBuildId = resolveDesktopBuildId();
     return {
       serverId: typeof payload.serverId === "string" ? payload.serverId : "",
       status,
@@ -278,7 +301,8 @@ export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus>
       home,
       version: typeof payload.daemonVersion === "string" ? payload.daemonVersion : null,
       desktopManaged,
-      ...(desktopVersion ? { desktopVersion } : {}),
+      ...(desktopBuildId ? { desktopBuildId } : {}),
+      ...(desktopManaged ? { appBuildId } : {}),
       error: null,
     };
   } catch (error) {
@@ -306,9 +330,9 @@ function normalizeVersion(version: string | null): string | null {
 
 function shouldRestartForVersion(current: DesktopDaemonStatus): boolean {
   if (!current.desktopManaged) return false;
-  const appVersion = normalizeVersion(resolveDesktopAppVersion());
-  const daemonDesktopVersion = normalizeVersion(current.desktopVersion ?? null);
-  return Boolean(appVersion && appVersion !== daemonDesktopVersion);
+  const appBuildId = current.appBuildId?.trim() || resolveDesktopBuildId();
+  const daemonBuildId = current.desktopBuildId?.trim();
+  return appBuildId !== daemonBuildId;
 }
 
 function assertBuiltInDaemonManagementEnabled(settings: DesktopSettings): void {
@@ -368,7 +392,8 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
       logDesktopDaemonLifecycle("daemon version mismatch, restarting", {
         appVersion: normalizeVersion(resolveDesktopAppVersion()),
         daemonVersion: normalizeVersion(current.version),
-        daemonDesktopVersion: normalizeVersion(current.desktopVersion ?? null),
+        appBuildId: current.appBuildId ?? resolveDesktopBuildId(),
+        daemonBuildId: current.desktopBuildId ?? null,
       });
       await stopDesktopDaemon("version_mismatch");
     } else {
@@ -407,7 +432,7 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
     env: invocation.env,
     envOverlay: {
       PASEO_DESKTOP_MANAGED: "1",
-      PASEO_DESKTOP_VERSION: resolveDesktopAppVersion(),
+      PASEO_DESKTOP_BUILD_ID: resolveDesktopBuildId(),
       PASEO_CLI: getBundledCliShimPath(),
       PASEO_WEB_UI_ENABLED: "false",
     },

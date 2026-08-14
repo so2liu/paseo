@@ -11,6 +11,16 @@ if not exist "%APP_EXECUTABLE%" (
 
 set "ELECTRON_RUN_AS_NODE=1"
 set "PASEO_NODE_ENV=production"
+set "DESKTOP_BUILD_ID_PATH=%RESOURCES_DIR%\desktop-build-id"
+if not exist "%DESKTOP_BUILD_ID_PATH%" (
+  echo Bundled Paseo Desktop build ID not found at %DESKTOP_BUILD_ID_PATH% 1>&2
+  exit /b 1
+)
+set /p "PASEO_DESKTOP_BUILD_ID="<"%DESKTOP_BUILD_ID_PATH%"
+if not defined PASEO_DESKTOP_BUILD_ID (
+  echo Bundled Paseo Desktop build ID is empty at %DESKTOP_BUILD_ID_PATH% 1>&2
+  exit /b 1
+)
 rem PASEO_DESKTOP_MANAGED marks daemons started through this bundled CLI as
 rem desktop-managed, so the desktop app restarts them when it upgrades.
 set "PASEO_DESKTOP_MANAGED=1"

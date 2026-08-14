@@ -12,7 +12,7 @@ export const pidLockInfoSchema = z.object({
   uid: z.number(),
   listen: z.string().nullable(),
   desktopManaged: z.boolean().optional(),
-  desktopVersion: z.string().min(1).optional(),
+  desktopBuildId: z.string().min(1).optional(),
   heartbeat: z.literal(true).optional(),
 });
 
@@ -193,7 +193,7 @@ export async function acquirePidLock(
 
   // Create new lock with exclusive flag
   const desktopManaged = process.env.PASEO_DESKTOP_MANAGED === "1";
-  const desktopVersion = process.env.PASEO_DESKTOP_VERSION?.trim();
+  const desktopBuildId = process.env.PASEO_DESKTOP_BUILD_ID?.trim();
   const lockInfo: PidLockInfo = {
     pid: lockOwnerPid,
     startedAt: new Date().toISOString(),
@@ -202,7 +202,7 @@ export async function acquirePidLock(
     listen,
     heartbeat: true,
     ...(desktopManaged ? { desktopManaged: true } : {}),
-    ...(desktopManaged && desktopVersion ? { desktopVersion } : {}),
+    ...(desktopManaged && desktopBuildId ? { desktopBuildId } : {}),
   };
 
   await writeNewPidLock(pidPath, lockInfo);

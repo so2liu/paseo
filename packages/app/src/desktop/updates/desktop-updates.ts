@@ -194,15 +194,16 @@ export function isDesktopDaemonVersionMismatch(input: {
   appVersion: string | null | undefined;
   daemonVersion: string | null | undefined;
   desktopManaged: boolean;
-  desktopVersion: string | null | undefined;
+  desktopBuildId: string | null | undefined;
+  appBuildId: string | null | undefined;
 }): boolean {
   if (!input.desktopManaged) {
     return isVersionMismatch(input.appVersion, input.daemonVersion);
   }
 
-  const appVersion = normalizeVersionForComparison(input.appVersion);
-  const desktopVersion = normalizeVersionForComparison(input.desktopVersion);
-  return Boolean(appVersion && appVersion !== desktopVersion);
+  const appBuildId = input.appBuildId?.trim();
+  const desktopBuildId = input.desktopBuildId?.trim();
+  return Boolean(appBuildId && appBuildId !== desktopBuildId);
 }
 
 export function formatVersionWithPrefix(version: string | null | undefined): string {

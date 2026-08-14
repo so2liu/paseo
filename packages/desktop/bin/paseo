@@ -43,7 +43,18 @@ fi
 
 RUNNER_PATH="${RESOURCES_DIR}/app.asar.unpacked/dist/daemon/node-entrypoint-runner.js"
 CLI_ENTRYPOINT="${RESOURCES_DIR}/app.asar/node_modules/@getpaseo/cli/dist/index.js"
+DESKTOP_BUILD_ID_PATH="${RESOURCES_DIR}/desktop-build-id"
+
+if [ ! -r "${DESKTOP_BUILD_ID_PATH}" ]; then
+  echo "Bundled Paseo Desktop build ID not found at ${DESKTOP_BUILD_ID_PATH}" >&2
+  exit 1
+fi
+PASEO_DESKTOP_BUILD_ID=$(sed -n '1p' "${DESKTOP_BUILD_ID_PATH}")
+if [ -z "${PASEO_DESKTOP_BUILD_ID}" ]; then
+  echo "Bundled Paseo Desktop build ID is empty at ${DESKTOP_BUILD_ID_PATH}" >&2
+  exit 1
+fi
 
 # PASEO_DESKTOP_MANAGED marks daemons started through this bundled CLI as
 # desktop-managed, so the desktop app restarts them when it upgrades.
-exec env ELECTRON_RUN_AS_NODE=1 PASEO_NODE_ENV=production PASEO_DESKTOP_MANAGED=1 PASEO_CLI="${SCRIPT_PATH}" "${APP_EXECUTABLE}" --disable-warning=DEP0040 "${RUNNER_PATH}" node-script "${CLI_ENTRYPOINT}" "$@"
+exec env ELECTRON_RUN_AS_NODE=1 PASEO_NODE_ENV=production PASEO_DESKTOP_MANAGED=1 PASEO_DESKTOP_BUILD_ID="${PASEO_DESKTOP_BUILD_ID}" PASEO_CLI="${SCRIPT_PATH}" "${APP_EXECUTABLE}" --disable-warning=DEP0040 "${RUNNER_PATH}" node-script "${CLI_ENTRYPOINT}" "$@"

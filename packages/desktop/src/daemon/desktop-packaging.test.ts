@@ -10,10 +10,19 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const require = createRequire(import.meta.url);
+const { writeDesktopBuildId } = require("../../scripts/desktop-build-id.js") as {
+  writeDesktopBuildId: (
+    appOutDir: string,
+    platform: string,
+    buildId?: string,
+  ) => { buildId: string; buildIdPath: string };
+};
 
 function writeExecutable(filePath: string, contents: string): void {
   writeFileSync(filePath, contents, "utf8");
@@ -43,6 +52,7 @@ function createFakeMacBundle(options: { includeHelper: boolean }): {
   mkdirSync(dirname(mainPath), { recursive: true });
   copyFileSync(join(packageRoot, "bin", "paseo"), shimPath);
   chmodSync(shimPath, 0o755);
+  writeFileSync(join(resourcesPath, "desktop-build-id"), "build-123\n", "utf8");
 
   writeExecutable(mainPath, "#!/bin/sh\necho main-executable\n");
 
@@ -52,7 +62,7 @@ function createFakeMacBundle(options: { includeHelper: boolean }): {
       helperPath,
       [
         "#!/bin/sh",
-        'printf "helper env=%s/%s cli=%s\\n" "$ELECTRON_RUN_AS_NODE" "$PASEO_NODE_ENV" "$PASEO_CLI"',
+        'printf "helper env=%s/%s build=%s cli=%s\\n" "$ELECTRON_RUN_AS_NODE" "$PASEO_NODE_ENV" "$PASEO_DESKTOP_BUILD_ID" "$PASEO_CLI"',
         'printf "args=%s\\n" "$*"',
         "",
       ].join("\n"),
@@ -63,6 +73,23 @@ function createFakeMacBundle(options: { includeHelper: boolean }): {
 }
 
 describe("desktop packaging", () => {
+  it("stamps every packaged app with a unique build identity", () => {
+    const root = mkdtempSync(join(tmpdir(), "paseo-desktop-build-id-test-"));
+    const resourcesPath = join(root, "Paseo.app", "Contents", "Resources");
+    mkdirSync(resourcesPath, { recursive: true });
+
+    try {
+      const first = writeDesktopBuildId(root, "darwin");
+      const second = writeDesktopBuildId(root, "darwin");
+
+      expect(first.buildId).not.toBe(second.buildId);
+      expect(first.buildIdPath).toBe(join(resourcesPath, "desktop-build-id"));
+      expect(readFileSync(second.buildIdPath, "utf8")).toBe(`${second.buildId}\n`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("unpacks server zsh shell integration files for external shells", () => {
     const config = readFileSync(join(packageRoot, "electron-builder.yml"), "utf8");
 
@@ -121,7 +148,9 @@ describe("desktop packaging", () => {
       const result = spawnSync(bundle.shimPath, ["--version"], { encoding: "utf8" });
 
       expect(result.status).toBe(0);
-      expect(result.stdout).toContain(`helper env=1/production cli=${bundle.shimPath}`);
+      expect(result.stdout).toContain(
+        `helper env=1/production build=build-123 cli=${bundle.shimPath}`,
+      );
       expect(result.stdout).toContain("node-entrypoint-runner.js");
       expect(result.stdout).toContain("node-script");
       expect(result.stdout).toContain("@getpaseo/cli/dist/index.js");

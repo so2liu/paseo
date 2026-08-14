@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { smokePackagedDesktopApp } = require("../e2e/packaged-app-smoke.js");
+const { writeDesktopBuildId } = require("./desktop-build-id.js");
 
 const EXECUTABLE_NAME = "Paseo";
 
@@ -113,6 +114,8 @@ exports.default = async function afterPack(context) {
   const platform = context.electronPlatformName;
   const arch = ARCH_MAP[context.arch] || process.arch;
 
+  const { buildId, buildIdPath } = writeDesktopBuildId(context.appOutDir, platform);
+  console.log(`Stamped Desktop build ${buildId} at ${buildIdPath}`);
   pruneNativeModules(context.appOutDir, platform, arch);
 
   if (platform === "linux" || platform === "win32") {

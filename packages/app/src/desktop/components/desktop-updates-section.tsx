@@ -340,7 +340,8 @@ function DaemonVersionSyncCard({
     appVersion,
     daemonVersion: daemonStatus?.version,
     desktopManaged: daemonStatus?.desktopManaged === true,
-    desktopVersion: daemonStatus?.desktopVersion,
+    desktopBuildId: daemonStatus?.desktopBuildId,
+    appBuildId: daemonStatus?.appBuildId,
   });
   const canSyncDaemonVersion =
     daemonVersionMismatch && !isDaemonManagementPaused && daemonStatus?.desktopManaged === true;
@@ -351,7 +352,8 @@ function DaemonVersionSyncCard({
         appVersion,
         daemonVersion: nextStatus.version,
         desktopManaged: nextStatus.desktopManaged,
-        desktopVersion: nextStatus.desktopVersion,
+        desktopBuildId: nextStatus.desktopBuildId,
+        appBuildId: nextStatus.appBuildId,
       });
       if (stillMismatched) {
         throw new Error(t("desktop.daemon.versionSync.stillMismatched"));

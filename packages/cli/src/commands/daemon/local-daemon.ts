@@ -26,7 +26,7 @@ export interface LocalDaemonPidInfo {
   uid?: number;
   listen?: string;
   desktopManaged?: boolean;
-  desktopVersion?: string;
+  desktopBuildId?: string;
 }
 
 export interface LocalDaemonState {
@@ -260,7 +260,7 @@ function readPidFile(pidPath: string): LocalDaemonPidInfo | null {
       uid: typeof parsed.uid === "number" ? parsed.uid : undefined,
       listen: resolveListenField(parsed.listen, parsed.sockPath),
       desktopManaged: parsed.desktopManaged === true ? true : undefined,
-      desktopVersion: typeof parsed.desktopVersion === "string" ? parsed.desktopVersion : undefined,
+      desktopBuildId: typeof parsed.desktopBuildId === "string" ? parsed.desktopBuildId : undefined,
     };
   } catch {
     return null;

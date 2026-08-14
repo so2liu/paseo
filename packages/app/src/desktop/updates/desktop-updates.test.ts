@@ -44,7 +44,8 @@ describe("desktop-updates helpers", () => {
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
         desktopManaged: true,
-        desktopVersion: "0.3.1-LY.10",
+        desktopBuildId: "build-10",
+        appBuildId: "build-10",
       }),
     ).toBe(false);
     expect(
@@ -52,7 +53,8 @@ describe("desktop-updates helpers", () => {
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
         desktopManaged: true,
-        desktopVersion: "0.3.1-LY.7",
+        desktopBuildId: "build-7",
+        appBuildId: "build-10",
       }),
     ).toBe(true);
     expect(
@@ -60,7 +62,8 @@ describe("desktop-updates helpers", () => {
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
         desktopManaged: true,
-        desktopVersion: null,
+        desktopBuildId: null,
+        appBuildId: "build-10",
       }),
     ).toBe(true);
   });
@@ -73,7 +76,8 @@ describe("desktop-updates helpers", () => {
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.1+LY",
         desktopManaged: false,
-        desktopVersion: null,
+        desktopBuildId: null,
+        appBuildId: null,
       }),
     ).toBe(false);
     expect(
@@ -81,7 +85,8 @@ describe("desktop-updates helpers", () => {
         appVersion: "0.3.1-LY.10",
         daemonVersion: "0.3.0+LY",
         desktopManaged: false,
-        desktopVersion: null,
+        desktopBuildId: null,
+        appBuildId: null,
       }),
     ).toBe(true);
   });

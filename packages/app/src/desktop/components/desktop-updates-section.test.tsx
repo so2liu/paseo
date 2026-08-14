@@ -18,7 +18,8 @@ const mocks = vi.hoisted(() => ({
     home: "/tmp/paseo",
     version: "0.3.0+LY" as string | null,
     desktopManaged: true,
-    desktopVersion: "0.3.1-LY.7" as string | undefined,
+    desktopBuildId: "build-7" as string | undefined,
+    appBuildId: "build-10" as string | undefined,
     error: null,
   },
   restartDesktopDaemon: vi.fn(),
@@ -175,7 +176,8 @@ describe("LocalDaemonSection version sync", () => {
     mocks.appVersion = "0.3.1-LY.10";
     mocks.daemonStatus.version = "0.3.0+LY";
     mocks.daemonStatus.desktopManaged = true;
-    mocks.daemonStatus.desktopVersion = "0.3.1-LY.7";
+    mocks.daemonStatus.desktopBuildId = "build-7";
+    mocks.daemonStatus.appBuildId = "build-10";
     mocks.manageBuiltInDaemon = true;
     mocks.restartDesktopDaemon.mockReset();
     mocks.setStatus.mockReset();
@@ -201,7 +203,7 @@ describe("LocalDaemonSection version sync", () => {
 
   it("does not warn when the daemon came from the exact Desktop build", () => {
     mocks.daemonStatus.version = "0.3.1+LY";
-    mocks.daemonStatus.desktopVersion = "0.3.1-LY.10";
+    mocks.daemonStatus.desktopBuildId = "build-10";
 
     render();
 
@@ -211,7 +213,7 @@ describe("LocalDaemonSection version sync", () => {
 
   it("warns when a same-base daemon came from an older Desktop build", () => {
     mocks.daemonStatus.version = "0.3.1+LY";
-    mocks.daemonStatus.desktopVersion = "0.3.1-LY.7";
+    mocks.daemonStatus.desktopBuildId = "build-7";
 
     render();
 
@@ -243,7 +245,8 @@ describe("LocalDaemonSection version sync", () => {
     const nextStatus = {
       ...mocks.daemonStatus,
       version: "0.3.1+LY",
-      desktopVersion: "0.3.1-LY.10",
+      desktopBuildId: "build-10",
+      appBuildId: "build-10",
     };
     let finishRestart: ((status: typeof nextStatus) => void) | null = null;
     mocks.restartDesktopDaemon.mockReturnValue(

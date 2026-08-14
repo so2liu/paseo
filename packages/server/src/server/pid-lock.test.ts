@@ -17,17 +17,17 @@ describe("pid-lock ownership", () => {
   test("records the exact Desktop build that started a managed daemon", async () => {
     const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-desktop-version-"));
     const previousDesktopManaged = process.env.PASEO_DESKTOP_MANAGED;
-    const previousDesktopVersion = process.env.PASEO_DESKTOP_VERSION;
+    const previousDesktopBuildId = process.env.PASEO_DESKTOP_BUILD_ID;
 
     try {
       process.env.PASEO_DESKTOP_MANAGED = "1";
-      process.env.PASEO_DESKTOP_VERSION = "0.3.1-LY.10";
+      process.env.PASEO_DESKTOP_BUILD_ID = "build-ly-10";
 
       await acquirePidLock(paseoHome, null, { ownerPid: process.pid + 10_000 });
 
       await expect(getPidLockInfo(paseoHome)).resolves.toMatchObject({
         desktopManaged: true,
-        desktopVersion: "0.3.1-LY.10",
+        desktopBuildId: "build-ly-10",
       });
     } finally {
       if (previousDesktopManaged === undefined) {
@@ -35,10 +35,10 @@ describe("pid-lock ownership", () => {
       } else {
         process.env.PASEO_DESKTOP_MANAGED = previousDesktopManaged;
       }
-      if (previousDesktopVersion === undefined) {
-        delete process.env.PASEO_DESKTOP_VERSION;
+      if (previousDesktopBuildId === undefined) {
+        delete process.env.PASEO_DESKTOP_BUILD_ID;
       } else {
-        process.env.PASEO_DESKTOP_VERSION = previousDesktopVersion;
+        process.env.PASEO_DESKTOP_BUILD_ID = previousDesktopBuildId;
       }
       await rm(paseoHome, { recursive: true, force: true });
     }
