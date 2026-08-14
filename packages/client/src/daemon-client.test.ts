@@ -1931,6 +1931,67 @@ test("readFile resolves from binary file frames when the daemon supports them", 
   expect(new TextDecoder().decode(result.bytes)).toBe("hello");
 });
 
+test("readFile stays active while binary file frames keep making progress", async () => {
+  vi.useFakeTimers();
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.readFile("/tmp/project", "large.bin", "req-large-binary");
+  void responsePromise.catch(() => undefined);
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "req-large-binary",
+      metadata: {
+        mime: "application/octet-stream",
+        size: 5,
+        encoding: "binary",
+        modifiedAt: "2026-05-02T00:00:00.000Z",
+      },
+    }),
+  );
+
+  await vi.advanceTimersByTimeAsync(40_000);
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-large-binary",
+      payload: new TextEncoder().encode("hel"),
+    }),
+  );
+  await vi.advanceTimersByTimeAsync(40_000);
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-large-binary",
+      payload: new TextEncoder().encode("lo"),
+    }),
+  );
+  await vi.advanceTimersByTimeAsync(40_000);
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileEnd,
+      requestId: "req-large-binary",
+    }),
+  );
+
+  const result = await responsePromise;
+  expect(new TextDecoder().decode(result.bytes)).toBe("hello");
+});
+
 test("uploadFile sends metadata request and file bytes as binary chunks", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

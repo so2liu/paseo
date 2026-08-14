@@ -60,6 +60,8 @@ Browser downloads use a short-lived daemon token and the daemon's HTTP download 
 downloads always reuse the active binary client channel, then open the operating system's save
 dialog. Native relay, socket, and pipe connections use the same binary channel; native direct TCP
 keeps the HTTP path for streaming efficiency and falls back to the binary client path if HTTP fails.
+Binary transfers refresh their request idle deadline on every begin, chunk, and end frame, so slow
+large files may take longer than the normal RPC timeout as long as transfer progress continues.
 
 On iOS and Android, the downloaded bytes are first written to the app cache and then handed to the
 system share sheet. The user chooses a durable destination such as Files from that sheet. Desktop
