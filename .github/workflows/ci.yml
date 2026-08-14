@@ -330,18 +330,20 @@ jobs:
       - name: Typecheck client examples
         run: npm run typecheck:examples --workspace=@getpaseo/client
 
-  playwright:
-    name: playwright
+  playwright-1:
+    name: playwright (1/2)
     needs: changes
     if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
-    # The fork serves two people. One four-worker runner covers the complete suite
-    # without paying setup and wall-clock charges for four concurrent runners.
-    timeout-minutes: 50
+    # The fork serves two people. Two four-worker runners cover the complete suite
+    # for roughly half the billed runner-minutes of upstream's four-runner layout.
+    timeout-minutes: 30
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       E2E_WORKERS: "4"
-    steps:
+      PLAYWRIGHT_SHARD: "1/2"
+      PLAYWRIGHT_ARTIFACT: "1"
+    steps: &playwright_test_steps
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -367,8 +369,8 @@ jobs:
 
       - name: Run Playwright E2E tests
         # Leave time for diagnostics while bounding the expensive part of the job.
-        timeout-minutes: 45
-        run: npm run test:e2e --workspace=@getpaseo/app
+        timeout-minutes: 25
+        run: npm run test:e2e --workspace=@getpaseo/app -- --shard=${{ env.PLAYWRIGHT_SHARD }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
@@ -376,11 +378,24 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-results
+          name: playwright-results-${{ env.PLAYWRIGHT_ARTIFACT }}
           path: |
             packages/app/test-results/
             packages/app/playwright-report/
           retention-days: 7
+
+  playwright-2:
+    name: playwright (2/2)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      E2E_WORKERS: "4"
+      PLAYWRIGHT_SHARD: "2/2"
+      PLAYWRIGHT_ARTIFACT: "2"
+    steps: *playwright_test_steps
 
   relay-tests:
     name: relay-tests

@@ -21,7 +21,8 @@ const gatedCiJobs = new Map([
   ["desktop-tests-windows", { name: "desktop-tests (windows-latest)", contract: "desktop" }],
   ["app-tests", { name: "app-tests", contract: "app" }],
   ["sdk-tests", { name: "sdk-tests", contract: "sdk" }],
-  ["playwright", { name: "playwright", contract: "browser" }],
+  ["playwright-1", { name: "playwright (1/2)", contract: "browser" }],
+  ["playwright-2", { name: "playwright (2/2)", contract: "browser" }],
   ["relay-tests", { name: "relay-tests", contract: "relay" }],
   ["cli-tests-1", { name: "cli-tests (shard 1/3)", contract: "cli" }],
   ["cli-tests-2", { name: "cli-tests (shard 2/3)", contract: "cli" }],
@@ -106,16 +107,20 @@ test("change gating allows superseded workflow runs to cancel", () => {
   }
 });
 
-test("browser suite uses one cost-capped runner in the fork", () => {
+test("browser suite uses two cost-capped runners in the fork", () => {
   const jobs = jobBlocks(readFileSync(ciWorkflowPath, "utf8"));
-  const browser = jobs.get("playwright")?.join("\n") ?? "";
+  const firstShard = jobs.get("playwright-1")?.join("\n") ?? "";
+  const secondShard = jobs.get("playwright-2")?.join("\n") ?? "";
 
-  assert.match(browser, /^    timeout-minutes: 50$/m);
-  assert.match(browser, /^      E2E_WORKERS: "4"$/m);
-  assert.match(browser, /- name: Run Playwright E2E tests\n\s+#.*\n\s+timeout-minutes: 45/);
-  assert.doesNotMatch(browser, /--shard|PLAYWRIGHT_SHARD/);
-  assert.ok(!jobs.has("playwright-1"));
-  assert.ok(!jobs.has("playwright-2"));
+  assert.match(firstShard, /^    timeout-minutes: 30$/m);
+  assert.match(firstShard, /^      E2E_WORKERS: "4"$/m);
+  assert.match(firstShard, /^      PLAYWRIGHT_SHARD: "1\/2"$/m);
+  assert.match(firstShard, /- name: Run Playwright E2E tests\n\s+#.*\n\s+timeout-minutes: 25/);
+  assert.match(secondShard, /^    timeout-minutes: 30$/m);
+  assert.match(secondShard, /^      E2E_WORKERS: "4"$/m);
+  assert.match(secondShard, /^      PLAYWRIGHT_SHARD: "2\/2"$/m);
+  assert.match(secondShard, /steps: \*playwright_test_steps/);
+  assert.ok(!jobs.has("playwright"));
   assert.ok(!jobs.has("playwright-3"));
   assert.ok(!jobs.has("playwright-4"));
 });
