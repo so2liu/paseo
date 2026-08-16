@@ -115,11 +115,6 @@ export async function ensureAgentLoaded(
     broadcastTimeline: deps.broadcastTimeline === true,
   };
   const initPromise = serializeAgentLoadMutation(agentId, async () => {
-    const serializedExisting = deps.agentManager.getAgent(agentId);
-    if (serializedExisting) {
-      return serializedExisting;
-    }
-
     const record = await deps.agentStorage.get(agentId);
     if (!record) {
       throw new Error(`Agent not found: ${agentId}`);
