@@ -6277,16 +6277,7 @@ export class Session {
               attentionTimestamp: null,
             };
             await this.agentStorage.upsert(nextRecord);
-            const agent = this.buildStoredAgentPayload(nextRecord);
-            const project = await this.buildProjectPlacementForWorkspace(workspace);
-            this.emit({
-              type: "agent_update",
-              payload: {
-                kind: "upsert",
-                agent,
-                project,
-              },
-            });
+            this.agentManager.publishStoredAgentRecord(nextRecord);
             return true;
           });
           if (cleared) {
@@ -6375,6 +6366,13 @@ export class Session {
       await serializeAgentLoadMutation(candidate.id, async () => {
         const liveAgent = this.agentManager.getAgent(candidate.id);
         if (liveAgent) {
+          if (
+            liveAgent.lifecycle === "running" ||
+            liveAgent.lifecycle === "initializing" ||
+            liveAgent.pendingPermissions.size > 0
+          ) {
+            throw new Error(`Workspace is active: ${workspaceId}`);
+          }
           if (liveAgent.attention.requiresAttention) {
             throw new Error(`Workspace is not done: ${workspaceId}`);
           }
@@ -6398,16 +6396,7 @@ export class Session {
           attentionTimestamp: timestamp,
         };
         await this.agentStorage.upsert(nextRecord);
-        const agent = this.buildStoredAgentPayload(nextRecord);
-        const project = await this.buildProjectPlacementForWorkspace(workspace);
-        this.emit({
-          type: "agent_update",
-          payload: {
-            kind: "upsert",
-            agent,
-            project,
-          },
-        });
+        this.agentManager.publishStoredAgentRecord(nextRecord);
       });
 
       await this.emitWorkspaceUpdateForWorkspaceId(workspaceId);

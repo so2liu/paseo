@@ -581,6 +581,7 @@ function createSessionForWorkspaceTests(
     unarchiveSnapshot: async () => true,
     clearAgentAttention: async () => {},
     markAgentReadyForReview: async () => {},
+    publishStoredAgentRecord: () => {},
     notifyAgentState: () => {},
     ...options.agentManager,
   });
@@ -1658,7 +1659,15 @@ test("workspace clear attention clears stored-only agents and responds", async (
     requiresAttention: true,
     attentionReason: "finished",
   });
-  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  let publishedRecord: StoredAgentRecord | null = null;
+  const session = createSessionForWorkspaceTests({
+    onMessage: (message) => emitted.push(message),
+    agentManager: {
+      publishStoredAgentRecord: (record: StoredAgentRecord) => {
+        publishedRecord = record;
+      },
+    },
+  });
 
   session.workspaceRegistry.list = async () => [workspace];
   session.workspaceRegistry.get = async (id: string) =>
@@ -1698,11 +1707,11 @@ test("workspace clear attention clears stored-only agents and responds", async (
     success: true,
     error: null,
   });
-  const agentUpdate = findByType(emitted, "agent_update");
-  expect(agentUpdate.payload.kind).toBe("upsert");
-  if (agentUpdate.payload.kind === "upsert") {
-    expect(agentUpdate.payload.agent.requiresAttention).toBe(false);
-  }
+  expect(publishedRecord).toMatchObject({
+    id: storedRecord.id,
+    requiresAttention: false,
+    attentionReason: null,
+  });
 });
 
 test("workspace mark ready restores stored-only workspace review attention", async () => {
@@ -1722,7 +1731,15 @@ test("workspace mark ready restores stored-only workspace review attention", asy
     updatedAt: "2026-03-30T15:00:00.000Z",
   });
   storedRecord.workspaceId = workspace.workspaceId;
-  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  let publishedRecord: StoredAgentRecord | null = null;
+  const session = createSessionForWorkspaceTests({
+    onMessage: (message) => emitted.push(message),
+    agentManager: {
+      publishStoredAgentRecord: (record: StoredAgentRecord) => {
+        publishedRecord = record;
+      },
+    },
+  });
 
   session.workspaceRegistry.get = async (id: string) =>
     id === workspace.workspaceId ? workspace : null;
@@ -1768,15 +1785,11 @@ test("workspace mark ready restores stored-only workspace review attention", asy
     success: true,
     error: null,
   });
-  const agentUpdate = findByType(emitted, "agent_update");
-  expect(agentUpdate.payload.kind).toBe("upsert");
-  if (agentUpdate.payload.kind === "upsert") {
-    expect(agentUpdate.payload.agent).toMatchObject({
-      id: storedRecord.id,
-      requiresAttention: true,
-      attentionReason: "finished",
-    });
-  }
+  expect(publishedRecord).toMatchObject({
+    id: storedRecord.id,
+    requiresAttention: true,
+    attentionReason: "finished",
+  });
 });
 
 test("workspace mark ready does not overwrite live error attention", async () => {

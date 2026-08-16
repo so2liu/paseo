@@ -1848,6 +1848,60 @@ export class AgentManager {
     this.emitState(agent, { persist: false });
   }
 
+  publishStoredAgentRecord(record: StoredAgentRecord): void {
+    if (record.internal) {
+      return;
+    }
+    const updatedAt = new Date(record.updatedAt);
+    const parsedAttentionTimestamp = new Date(record.attentionTimestamp ?? record.updatedAt);
+    const attention: AttentionState =
+      record.requiresAttention === true && Number.isFinite(parsedAttentionTimestamp.getTime())
+        ? {
+            requiresAttention: true,
+            attentionReason: record.attentionReason ?? "finished",
+            attentionTimestamp: parsedAttentionTimestamp,
+          }
+        : { requiresAttention: false };
+    this.dispatch({
+      type: "agent_state",
+      agent: {
+        id: record.id,
+        provider: record.provider,
+        cwd: record.cwd,
+        workspaceId: record.workspaceId,
+        owner: record.owner,
+        session: null,
+        capabilities: STORED_AGENT_CAPABILITIES,
+        config: buildStoredAgentConfig(record),
+        runtimeInfo: undefined,
+        lifecycle: "closed",
+        createdAt: new Date(record.createdAt),
+        updatedAt,
+        availableModes: [],
+        features: record.features,
+        currentModeId: record.lastModeId ?? null,
+        pendingPermissions: new Map(),
+        bufferedPermissionResolutions: new Map(),
+        inFlightPermissionResponses: new Set(),
+        pendingReplacement: false,
+        activeForegroundTurnId: null,
+        activeTurnId: null,
+        activeTurnStartedAt: null,
+        foregroundTurnWaiters: new Set(),
+        finalizedForegroundTurnIds: new Set(),
+        unsubscribeSession: null,
+        persistence: record.persistence ?? null,
+        historyPrimed: true,
+        lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
+        lastUsage: undefined,
+        lastError: record.lastError ?? undefined,
+        attention,
+        internal: record.internal,
+        labels: record.labels,
+      },
+    });
+  }
+
   async archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord> {
     const registry = this.requireRegistry();
     const liveAgent = this.getAgent(agentId);
