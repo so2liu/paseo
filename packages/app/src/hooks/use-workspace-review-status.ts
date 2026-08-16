@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { i18n } from "@/i18n/i18next";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useHostFeature } from "@/runtime/host-features";
@@ -18,14 +18,14 @@ export function useWorkspaceReviewStatus({
   serverId: string;
   workspaceId: string;
 }): WorkspaceReviewStatusController {
-  const workspaceReviewState = useSessionStore((state) => {
-    const session = state.sessions[serverId];
-    return {
-      status: session?.workspaces.get(workspaceId)?.status ?? null,
-      hasRootAgent: session?.workspaceAgentActivity.has(workspaceId) === true,
-    };
-  });
-  const { status, hasRootAgent } = workspaceReviewState;
+  const status = useSessionStore(
+    (state) => state.sessions[serverId]?.workspaces.get(workspaceId)?.status ?? null,
+  );
+  const hasRootAgent = useSessionStore(
+    (state) => state.sessions[serverId]?.workspaceAgentActivity.has(workspaceId) === true,
+  );
+  const markDonePendingRef = useRef(false);
+  const markReadyPendingRef = useRef(false);
   const supportsMarkReady = useHostFeature(serverId, "workspaceMarkReady");
 
   const getClient = useCallback(() => {
@@ -37,17 +37,27 @@ export function useWorkspaceReviewStatus({
   }, [serverId]);
 
   const markDone = useCallback(async () => {
-    if (status !== "attention" && status !== "failed") {
+    if (markDonePendingRef.current || (status !== "attention" && status !== "failed")) {
       return;
     }
-    await getClient().clearWorkspaceAttention(workspaceId);
+    markDonePendingRef.current = true;
+    try {
+      await getClient().clearWorkspaceAttention(workspaceId);
+    } finally {
+      markDonePendingRef.current = false;
+    }
   }, [getClient, status, workspaceId]);
 
   const markReady = useCallback(async () => {
-    if (status !== "done" || !supportsMarkReady || !hasRootAgent) {
+    if (markReadyPendingRef.current || status !== "done" || !supportsMarkReady || !hasRootAgent) {
       return;
     }
-    await getClient().markWorkspaceReady(workspaceId);
+    markReadyPendingRef.current = true;
+    try {
+      await getClient().markWorkspaceReady(workspaceId);
+    } finally {
+      markReadyPendingRef.current = false;
+    }
   }, [getClient, hasRootAgent, status, supportsMarkReady, workspaceId]);
 
   return useMemo(
