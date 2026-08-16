@@ -1779,6 +1779,57 @@ test("workspace mark ready restores stored-only workspace review attention", asy
   }
 });
 
+test("workspace mark ready does not overwrite stored error attention", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: REPO_CWD,
+    projectId: REPO_CWD,
+    cwd: REPO_CWD,
+    kind: "directory",
+    displayName: "repo",
+    createdAt: "2026-03-30T15:00:00.000Z",
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  });
+  const storedRecord = makeStoredAgent({
+    id: "stored-agent-failed",
+    cwd: REPO_CWD,
+    updatedAt: "2026-03-30T15:00:00.000Z",
+    requiresAttention: true,
+    attentionReason: "error",
+  });
+  storedRecord.workspaceId = workspace.workspaceId;
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  session.workspaceRegistry.get = async () => workspace;
+  session.agentStorage.get = async () => storedRecord;
+  session.listAgentPayloads = async () => [
+    makeAgent({
+      id: storedRecord.id,
+      cwd: storedRecord.cwd,
+      workspaceId: workspace.workspaceId,
+      status: "closed",
+      updatedAt: storedRecord.updatedAt,
+    }),
+  ];
+
+  await session.handleMessage({
+    type: "workspace.mark_ready.request",
+    workspaceId: workspace.workspaceId,
+    requestId: "mark-ready-failed",
+  });
+
+  expect(storedRecord).toMatchObject({
+    requiresAttention: true,
+    attentionReason: "error",
+  });
+  expect(findByType(emitted, "workspace.mark_ready.response").payload).toEqual({
+    requestId: "mark-ready-failed",
+    workspaceId: workspace.workspaceId,
+    agentId: null,
+    success: false,
+    error: `Workspace is not done: ${workspace.workspaceId}`,
+  });
+});
+
 test("workspace mark ready rejects workspaces without a root agent", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const workspace = createPersistedWorkspaceRecord({

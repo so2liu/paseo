@@ -6379,6 +6379,9 @@ export class Session {
         if (!record || record.internal || record.archivedAt) {
           throw new Error(`Agent not found: ${candidate.id}`);
         }
+        if (record.requiresAttention === true) {
+          throw new Error(`Workspace is not done: ${workspaceId}`);
+        }
         const timestamp = new Date().toISOString();
         const nextRecord: StoredAgentRecord = {
           ...record,

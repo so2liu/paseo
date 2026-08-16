@@ -18,9 +18,14 @@ export function useWorkspaceReviewStatus({
   serverId: string;
   workspaceId: string;
 }): WorkspaceReviewStatusController {
-  const status = useSessionStore(
-    (state) => state.sessions[serverId]?.workspaces.get(workspaceId)?.status ?? null,
-  );
+  const workspaceReviewState = useSessionStore((state) => {
+    const session = state.sessions[serverId];
+    return {
+      status: session?.workspaces.get(workspaceId)?.status ?? null,
+      hasRootAgent: session?.workspaceAgentActivity.has(workspaceId) === true,
+    };
+  });
+  const { status, hasRootAgent } = workspaceReviewState;
   const supportsMarkReady = useHostFeature(serverId, "workspaceMarkReady");
 
   const getClient = useCallback(() => {
@@ -39,19 +44,19 @@ export function useWorkspaceReviewStatus({
   }, [getClient, status, workspaceId]);
 
   const markReady = useCallback(async () => {
-    if (status !== "done" || !supportsMarkReady) {
+    if (status !== "done" || !supportsMarkReady || !hasRootAgent) {
       return;
     }
     await getClient().markWorkspaceReady(workspaceId);
-  }, [getClient, status, supportsMarkReady, workspaceId]);
+  }, [getClient, hasRootAgent, status, supportsMarkReady, workspaceId]);
 
   return useMemo(
     () => ({
       canMarkDone: status === "attention" || status === "failed",
-      canMarkReady: status === "done" && supportsMarkReady,
+      canMarkReady: status === "done" && supportsMarkReady && hasRootAgent,
       markDone,
       markReady,
     }),
-    [markDone, markReady, status, supportsMarkReady],
+    [hasRootAgent, markDone, markReady, status, supportsMarkReady],
   );
 }
