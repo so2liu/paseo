@@ -113,7 +113,26 @@ export function extractTimestamps(record: StoredAgentRecord): {
   labels?: Record<string, string>;
   workspaceId?: string;
   owner?: StoredAgentRecord["owner"];
+  attention?:
+    | { requiresAttention: false }
+    | {
+        requiresAttention: true;
+        attentionReason: "finished" | "error" | "permission";
+        attentionTimestamp: Date;
+      };
 } {
+  const storedAttentionTimestamp =
+    record.attentionTimestamp ?? record.lastActivityAt ?? record.updatedAt;
+  const parsedAttentionTimestamp = new Date(storedAttentionTimestamp);
+  const attention =
+    record.requiresAttention === true && Number.isFinite(parsedAttentionTimestamp.getTime())
+      ? {
+          requiresAttention: true as const,
+          attentionReason: record.attentionReason ?? ("finished" as const),
+          attentionTimestamp: parsedAttentionTimestamp,
+        }
+      : { requiresAttention: false as const };
+
   return {
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.lastActivityAt ?? record.updatedAt),
@@ -121,6 +140,7 @@ export function extractTimestamps(record: StoredAgentRecord): {
     labels: record.labels,
     workspaceId: record.workspaceId,
     owner: record.owner,
+    attention,
   };
 }
 

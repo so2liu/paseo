@@ -2225,6 +2225,12 @@ export const WorkspaceClearAttentionRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const WorkspaceMarkReadyRequestSchema = z.object({
+  type: z.literal("workspace.mark_ready.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+
 // Highlighted diff token schema
 // Note: style can be a compound class name (e.g., "heading meta") from the syntax highlighter
 const HighlightTokenSchema = z.object({
@@ -2733,6 +2739,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ArchiveWorkspaceRequestSchema,
   WorkspaceCreateRequestSchema,
   WorkspaceClearAttentionRequestSchema,
+  WorkspaceMarkReadyRequestSchema,
   FileExplorerRequestSchema,
   FileSubscribeRequestSchema,
   FileUnsubscribeRequestSchema,
@@ -3044,6 +3051,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceScriptManagement: z.boolean().optional(),
         // COMPAT(projectCustomIcon): added in v0.2.0, remove after 2027-01-20.
         projectCustomIcon: z.boolean().optional(),
+        // COMPAT(workspaceMarkReady): added in v0.3.1-LY.12, remove gate after 2027-02-16.
+        workspaceMarkReady: z.boolean().optional(),
       })
       .optional(),
   })
@@ -3977,6 +3986,17 @@ export const WorkspaceClearAttentionResponseSchema = z.object({
         error: z.string().nullable(),
       }),
     ),
+    success: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const WorkspaceMarkReadyResponseSchema = z.object({
+  type: z.literal("workspace.mark_ready.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspaceId: z.string(),
+    agentId: z.string().nullable(),
     success: z.boolean(),
     error: z.string().nullable(),
   }),
@@ -5560,6 +5580,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ClearAgentAttentionResponseMessageSchema,
   WorkspaceCreateResponseSchema,
   WorkspaceClearAttentionResponseSchema,
+  WorkspaceMarkReadyResponseSchema,
   SendAgentMessageResponseMessageSchema,
   AgentMessageQueueGetResponseSchema,
   AgentMessageQueueEnqueueResponseSchema,
@@ -6048,6 +6069,7 @@ export type ProjectGithubCloneRequest = z.infer<typeof ProjectGithubCloneRequest
 export type ProjectGithubCloneProtocol = z.infer<typeof ProjectGithubCloneProtocolSchema>;
 export type ArchiveWorkspaceRequest = z.infer<typeof ArchiveWorkspaceRequestSchema>;
 export type WorkspaceClearAttentionRequest = z.infer<typeof WorkspaceClearAttentionRequestSchema>;
+export type WorkspaceMarkReadyRequest = z.infer<typeof WorkspaceMarkReadyRequestSchema>;
 export type FileExplorerRequest = z.infer<typeof FileExplorerRequestSchema>;
 export type FileExplorerResponse = z.infer<typeof FileExplorerResponseSchema>;
 export type FileVersion = z.infer<typeof FileVersionSchema>;

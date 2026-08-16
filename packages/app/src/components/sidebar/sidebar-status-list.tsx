@@ -34,7 +34,7 @@ import * as Clipboard from "expo-clipboard";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
-import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
+import { useWorkspaceReviewStatus } from "@/hooks/use-workspace-review-status";
 import {
   SidebarWorkspaceRowFrame,
   SidebarWorkspaceRowContent,
@@ -608,15 +608,23 @@ function StatusWorkspaceRowWithMenu({
   const onTogglePin = canPin ? handleTogglePin : undefined;
 
   const archiveShortcutKeys = useShortcutKeys("archive-workspace");
-  const { hasClearableAttention, clearAttention } = useClearWorkspaceAttention({
+  const { canMarkDone, canMarkReady, markDone, markReady } = useWorkspaceReviewStatus({
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
+    status: workspace.statusBucket,
+    hasRootAgent: workspace.hasRootAgent === true,
+    supportsMarkReady: workspace.supportsMarkReady === true,
   });
-  const handleMarkAsRead = useCallback(() => {
-    void clearAttention().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as read");
+  const handleMarkAsDone = useCallback(() => {
+    void markDone().catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as done");
     });
-  }, [clearAttention, toast]);
+  }, [markDone, toast]);
+  const handleMarkAsReady = useCallback(() => {
+    void markReady().catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to mark workspace ready");
+    });
+  }, [markReady, toast]);
 
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
@@ -652,7 +660,8 @@ function StatusWorkspaceRowWithMenu({
         onCopyBranchName={workspace.projectKind === "git" ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
-        onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
+        onMarkDone={canMarkDone ? handleMarkAsDone : undefined}
+        onMarkReady={canMarkReady ? handleMarkAsReady : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}
         onTogglePin={onTogglePin}
@@ -690,7 +699,8 @@ function StatusWorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
-  onMarkAsRead,
+  onMarkDone,
+  onMarkReady,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -713,7 +723,8 @@ function StatusWorkspaceRowInner({
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
-  onMarkAsRead?: () => void;
+  onMarkDone?: () => void;
+  onMarkReady?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
   onTogglePin?: () => void;
@@ -760,7 +771,7 @@ function StatusWorkspaceRowInner({
           inStatusGroup,
         });
         return (
-          <SidebarWorkspaceReviewSwipe onMarkDone={onMarkAsRead}>
+          <SidebarWorkspaceReviewSwipe onMarkDone={onMarkDone}>
             <View style={styles.workspaceRowContainer} {...hoverHandlers}>
               <SidebarWorkspaceContextMenu
                 contextMenuOpen={contextMenuOpen}
@@ -773,7 +784,8 @@ function StatusWorkspaceRowInner({
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
                 onRename={onRename}
-                onMarkAsRead={onMarkAsRead}
+                onMarkDone={onMarkDone}
+                onMarkReady={onMarkReady}
                 onArchive={onArchive}
                 archiveLabel={archiveLabel}
                 archiveStatus={archiveStatus}
@@ -804,7 +816,8 @@ function StatusWorkspaceRowInner({
                   shortcutNumber={shortcutNumber}
                   showShortcutBadge={showShortcutBadge}
                   reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
-                  onMarkDone={onMarkAsRead}
+                  onMarkDone={onMarkDone}
+                  onMarkReady={onMarkReady}
                 >
                   {renderSlot ? (
                     <StatusWorkspaceActionSlot
@@ -819,7 +832,8 @@ function StatusWorkspaceRowInner({
                       onCopyPath={onCopyPath}
                       onCopyBranchName={onCopyBranchName}
                       onRename={onRename}
-                      onMarkAsRead={onMarkAsRead}
+                      onMarkDone={onMarkDone}
+                      onMarkReady={onMarkReady}
                       onArchive={onArchive}
                       archiveLabel={archiveLabel}
                       archiveStatus={archiveStatus}
@@ -849,7 +863,8 @@ function StatusWorkspaceActionSlot({
   onCopyPath,
   onCopyBranchName,
   onRename,
-  onMarkAsRead,
+  onMarkDone,
+  onMarkReady,
   onArchive,
   archiveLabel,
   archiveStatus,
@@ -867,7 +882,8 @@ function StatusWorkspaceActionSlot({
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
   onRename?: () => void;
-  onMarkAsRead?: () => void;
+  onMarkDone?: () => void;
+  onMarkReady?: () => void;
   onArchive?: () => void;
   archiveLabel?: string;
   archiveStatus?: "idle" | "pending" | "success";
@@ -888,7 +904,8 @@ function StatusWorkspaceActionSlot({
             onCopyPath={onCopyPath}
             onCopyBranchName={onCopyBranchName}
             onRename={onRename}
-            onMarkAsRead={onMarkAsRead}
+            onMarkDone={onMarkDone}
+            onMarkReady={onMarkReady}
             onArchive={onArchive}
             archiveLabel={archiveLabel}
             archiveStatus={archiveStatus}

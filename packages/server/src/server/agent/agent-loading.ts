@@ -17,6 +17,30 @@ interface PendingAgentInitialization {
 }
 
 const pendingAgentInitializations = new Map<string, PendingAgentInitialization>();
+const agentLoadMutationTails = new Map<string, Promise<void>>();
+
+export async function serializeAgentLoadMutation<T>(
+  agentId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previous = agentLoadMutationTails.get(agentId) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = previous.catch(() => undefined).then(() => gate);
+  agentLoadMutationTails.set(agentId, tail);
+
+  await previous.catch(() => undefined);
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (agentLoadMutationTails.get(agentId) === tail) {
+      agentLoadMutationTails.delete(agentId);
+    }
+  }
+}
 
 export type AgentLoaderManager = Pick<
   AgentManager,
@@ -90,7 +114,7 @@ export async function ensureAgentLoaded(
   const pendingOptions = {
     broadcastTimeline: deps.broadcastTimeline === true,
   };
-  const initPromise = (async () => {
+  const initPromise = serializeAgentLoadMutation(agentId, async () => {
     const record = await deps.agentStorage.get(agentId);
     if (!record) {
       throw new Error(`Agent not found: ${agentId}`);
@@ -122,6 +146,7 @@ export async function ensureAgentLoaded(
       }
       snapshot = await deps.agentManager.createAgent(config, agentId, {
         labels: record.labels,
+        attention: extractTimestamps(record).attention,
         workspaceId: record.workspaceId,
         owner: record.owner,
       });
@@ -132,7 +157,7 @@ export async function ensureAgentLoaded(
       broadcast: () => pendingOptions.broadcastTimeline,
     });
     return deps.agentManager.getAgent(agentId) ?? snapshot;
-  })();
+  });
 
   const pending: PendingAgentInitialization = { promise: initPromise, options: pendingOptions };
   pendingAgentInitializations.set(agentId, pending);

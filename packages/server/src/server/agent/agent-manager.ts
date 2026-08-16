@@ -251,6 +251,7 @@ type ProviderClientMap = Partial<Record<AgentProvider, AgentClient>>;
 
 export interface CreateAgentOptions {
   labels?: Record<string, string>;
+  attention?: AttentionState;
   initialPrompt?: string;
   env?: Record<string, string>;
   persistSession?: boolean;
@@ -1131,6 +1132,7 @@ export class AgentManager {
     await this.requireExternalMcpSupport(session, storedConfig);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       labels: options.labels,
+      attention: options.attention,
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
       owner: options.owner,
@@ -1158,6 +1160,7 @@ export class AgentManager {
       labels?: Record<string, string>;
       workspaceId?: string;
       owner?: AgentOwner;
+      attention?: AttentionState;
     },
     resumeOptions?: AgentResumeSessionOptions,
   ): Promise<ManagedAgent> {
@@ -1177,6 +1180,7 @@ export class AgentManager {
       labels?: Record<string, string>;
       workspaceId?: string;
       owner?: AgentOwner;
+      attention?: AttentionState;
     },
     resumeOptions?: AgentResumeSessionOptions,
   ): Promise<ManagedAgent> {
@@ -1831,6 +1835,71 @@ export class AgentManager {
       await this.persistSnapshot(agent);
       this.emitState(agent, { persist: false });
     }
+  }
+
+  async markAgentReadyForReview(agentId: string): Promise<void> {
+    const agent = this.requireAgent(agentId);
+    agent.attention = {
+      requiresAttention: true,
+      attentionReason: "finished",
+      attentionTimestamp: new Date(),
+    };
+    await this.persistSnapshot(agent);
+    this.emitState(agent, { persist: false });
+  }
+
+  publishStoredAgentRecord(record: StoredAgentRecord): void {
+    if (record.internal) {
+      return;
+    }
+    const updatedAt = new Date(record.updatedAt);
+    const parsedAttentionTimestamp = new Date(record.attentionTimestamp ?? record.updatedAt);
+    const attention: AttentionState =
+      record.requiresAttention === true && Number.isFinite(parsedAttentionTimestamp.getTime())
+        ? {
+            requiresAttention: true,
+            attentionReason: record.attentionReason ?? "finished",
+            attentionTimestamp: parsedAttentionTimestamp,
+          }
+        : { requiresAttention: false };
+    this.dispatch({
+      type: "agent_state",
+      agent: {
+        id: record.id,
+        provider: record.provider,
+        cwd: record.cwd,
+        workspaceId: record.workspaceId,
+        owner: record.owner,
+        session: null,
+        capabilities: STORED_AGENT_CAPABILITIES,
+        config: buildStoredAgentConfig(record),
+        runtimeInfo: undefined,
+        lifecycle: "closed",
+        createdAt: new Date(record.createdAt),
+        updatedAt,
+        availableModes: [],
+        features: record.features,
+        currentModeId: record.lastModeId ?? null,
+        pendingPermissions: new Map(),
+        bufferedPermissionResolutions: new Map(),
+        inFlightPermissionResponses: new Set(),
+        pendingReplacement: false,
+        activeForegroundTurnId: null,
+        activeTurnId: null,
+        activeTurnStartedAt: null,
+        foregroundTurnWaiters: new Set(),
+        finalizedForegroundTurnIds: new Set(),
+        unsubscribeSession: null,
+        persistence: record.persistence ?? null,
+        historyPrimed: true,
+        lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
+        lastUsage: undefined,
+        lastError: record.lastError ?? undefined,
+        attention,
+        internal: record.internal,
+        labels: record.labels,
+      },
+    });
   }
 
   async archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord> {

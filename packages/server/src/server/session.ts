@@ -39,7 +39,11 @@ import {
   isStoredAgentProviderAvailable,
   toAgentPersistenceHandle,
 } from "./persistence-hooks.js";
-import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
+import {
+  ensureAgentLoaded,
+  ensureUnarchivedAgentLoaded,
+  serializeAgentLoadMutation,
+} from "./agent/agent-loading.js";
 import {
   formatSystemNotificationPrompt,
   sendPromptToAgent,
@@ -66,6 +70,7 @@ import { getErrorMessage, getErrorMessageOr } from "@getpaseo/protocol/error-uti
 import { getAgentStatusPriority } from "@getpaseo/protocol/agent-state-bucket";
 import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
 import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspace-git-service.js";
+import { resolveWorkspaceRootAgent } from "./workspace-directory.js";
 import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
 import {
   CLIENT_SHUTDOWN_RPC_REASON,
@@ -2192,6 +2197,8 @@ export class Session {
   private dispatchWorkspaceAndProjectMessage(
     msg: SessionInboundMessage,
   ): Promise<void> | undefined {
+    const reviewRequest = this.dispatchWorkspaceReviewMessage(msg);
+    if (reviewRequest) return reviewRequest;
     switch (msg.type) {
       case "fetch_workspaces_request":
         return this.handleFetchWorkspacesRequest(msg);
@@ -2226,12 +2233,21 @@ export class Session {
         return this.handleProjectRemoveRequest(msg);
       case "workspace.create.request":
         return this.handleWorkspaceCreateRequest(msg);
-      case "workspace.clear_attention.request":
-        return this.handleWorkspaceClearAttentionRequest(msg);
       case "workspace.title.set.request":
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
       case "workspace.pin.set.request":
         return this.handleWorkspacePinSetRequest(msg.workspaceId, msg.pinned, msg.requestId);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchWorkspaceReviewMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "workspace.clear_attention.request":
+        return this.handleWorkspaceClearAttentionRequest(msg);
+      case "workspace.mark_ready.request":
+        return this.handleWorkspaceMarkReadyRequest(msg);
       default:
         return undefined;
     }
@@ -6237,41 +6253,31 @@ export class Session {
           .map((agent) => agent.id);
 
         for (const agentId of clearableAgentIds) {
-          const liveAgent = this.agentManager.getAgent(agentId);
-          if (liveAgent) {
-            await this.agentManager.clearAgentAttention(agentId);
-            clearedAgentIds.push(agentId);
-            continue;
-          }
+          const cleared = await serializeAgentLoadMutation(agentId, async () => {
+            const liveAgent = this.agentManager.getAgent(agentId);
+            if (liveAgent) {
+              await this.agentManager.clearAgentAttention(agentId);
+              return true;
+            }
 
-          const record = await this.agentStorage.get(agentId);
-          if (
-            !record ||
-            record.internal ||
-            record.archivedAt ||
-            record.requiresAttention !== true
-          ) {
-            continue;
-          }
-          const nextRecord: StoredAgentRecord = {
-            ...record,
-            updatedAt: new Date().toISOString(),
-            requiresAttention: false,
-            attentionReason: null,
-            attentionTimestamp: null,
-          };
-          await this.agentStorage.upsert(nextRecord);
-          const agent = this.buildStoredAgentPayload(nextRecord);
-          const project = await this.buildProjectPlacementForWorkspace(workspace);
-          this.emit({
-            type: "agent_update",
-            payload: {
-              kind: "upsert",
-              agent,
-              project,
-            },
+            const record = await this.agentStorage.get(agentId);
+            if (
+              !record ||
+              record.internal ||
+              record.archivedAt ||
+              record.requiresAttention !== true
+            ) {
+              return false;
+            }
+            const nextRecord = await this.agentStorage.setAttention(agentId, {
+              requiresAttention: false,
+            });
+            this.agentManager.publishStoredAgentRecord(nextRecord);
+            return true;
           });
-          clearedAgentIds.push(agentId);
+          if (cleared) {
+            clearedAgentIds.push(agentId);
+          }
         }
 
         await this.emitWorkspaceUpdateForWorkspaceId(workspace.workspaceId);
@@ -6315,6 +6321,111 @@ export class Session {
                 .join("; "),
       },
     });
+  }
+
+  private async handleWorkspaceMarkReadyRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.mark_ready.request" }>,
+  ): Promise<void> {
+    const { requestId, workspaceId } = request;
+    try {
+      const workspace = await this.workspaceRegistry.get(workspaceId);
+      if (!workspace || workspace.archivedAt) {
+        throw new Error(`Workspace not found: ${workspaceId}`);
+      }
+
+      const agents = await this.listAgentPayloads();
+      const activeAgentsById = new Map(
+        agents.filter((agent) => !agent.archivedAt).map((agent) => [agent.id, agent]),
+      );
+      const candidate = agents
+        .filter((agent) => !agent.archivedAt)
+        .filter((agent) => agent.workspaceId === workspaceId)
+        .filter((agent) => resolveWorkspaceRootAgent(agent, activeAgentsById)?.id === agent.id)
+        .sort((left, right) => {
+          const activityDelta = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+          if (activityDelta !== 0) {
+            return activityDelta;
+          }
+          return left.id.localeCompare(right.id);
+        })[0];
+      if (!candidate) {
+        throw new Error(`Workspace has no root agent: ${workspaceId}`);
+      }
+      if (candidate.status === "running" || candidate.status === "initializing") {
+        throw new Error(`Workspace is active: ${workspaceId}`);
+      }
+      if ((candidate.pendingPermissions?.length ?? 0) > 0) {
+        throw new Error(`Workspace requires input: ${workspaceId}`);
+      }
+
+      await serializeAgentLoadMutation(candidate.id, async () => {
+        const currentWorkspace = (
+          await this.buildWorkspaceDescriptorMap({
+            includeGitData: false,
+            workspaceIds: [workspaceId],
+          })
+        ).get(workspaceId);
+        if (currentWorkspace?.status !== "done") {
+          throw new Error(`Workspace is not done: ${workspaceId}`);
+        }
+
+        const liveAgent = this.agentManager.getAgent(candidate.id);
+        if (liveAgent) {
+          if (
+            liveAgent.lifecycle === "running" ||
+            liveAgent.lifecycle === "initializing" ||
+            liveAgent.pendingPermissions.size > 0
+          ) {
+            throw new Error(`Workspace is active: ${workspaceId}`);
+          }
+          if (liveAgent.attention.requiresAttention) {
+            throw new Error(`Workspace is not done: ${workspaceId}`);
+          }
+          await this.agentManager.markAgentReadyForReview(candidate.id);
+          return;
+        }
+
+        const record = await this.agentStorage.get(candidate.id);
+        if (!record || record.internal || record.archivedAt) {
+          throw new Error(`Agent not found: ${candidate.id}`);
+        }
+        if (record.requiresAttention === true) {
+          throw new Error(`Workspace is not done: ${workspaceId}`);
+        }
+        const timestamp = new Date().toISOString();
+        const nextRecord = await this.agentStorage.setAttention(candidate.id, {
+          requiresAttention: true,
+          attentionReason: "finished",
+          attentionTimestamp: timestamp,
+        });
+        this.agentManager.publishStoredAgentRecord(nextRecord);
+      });
+
+      await this.emitWorkspaceUpdateForWorkspaceId(workspaceId);
+      this.emit({
+        type: "workspace.mark_ready.response",
+        payload: {
+          requestId,
+          workspaceId,
+          agentId: candidate.id,
+          success: true,
+          error: null,
+        },
+      });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      this.sessionLogger.error({ err: error, workspaceId }, "Failed to mark workspace ready");
+      this.emit({
+        type: "workspace.mark_ready.response",
+        payload: {
+          requestId,
+          workspaceId,
+          agentId: null,
+          success: false,
+          error: message,
+        },
+      });
+    }
   }
 
   private async handleFetchAgent(agentIdOrIdentifier: string, requestId: string): Promise<void> {

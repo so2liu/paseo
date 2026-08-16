@@ -137,6 +137,46 @@ export class AgentStorage {
     await this.queueRecordWrite(record);
   }
 
+  async setAttention(
+    agentId: string,
+    attention:
+      | { requiresAttention: false }
+      | {
+          requiresAttention: true;
+          attentionReason: "finished" | "error" | "permission";
+          attentionTimestamp: string;
+        },
+  ): Promise<StoredAgentRecord> {
+    await this.load();
+    let updatedRecord: StoredAgentRecord | null = null;
+    await this.queueRecordMutation(agentId, (existing) => {
+      if (!existing || existing.archivedAt) {
+        throw new Error(`Agent not found: ${agentId}`);
+      }
+      const updatedAt = new Date().toISOString();
+      updatedRecord = attention.requiresAttention
+        ? {
+            ...existing,
+            updatedAt,
+            requiresAttention: true,
+            attentionReason: attention.attentionReason,
+            attentionTimestamp: attention.attentionTimestamp,
+          }
+        : {
+            ...existing,
+            updatedAt,
+            requiresAttention: false,
+            attentionReason: null,
+            attentionTimestamp: null,
+          };
+      return updatedRecord;
+    });
+    if (!updatedRecord) {
+      throw new Error(`Agent not found: ${agentId}`);
+    }
+    return updatedRecord;
+  }
+
   private queueRecordWrite(record: StoredAgentRecord): Promise<void> {
     return this.queueRecordMutation(record.id, () => record);
   }
