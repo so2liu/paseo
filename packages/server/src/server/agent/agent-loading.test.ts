@@ -5,7 +5,7 @@ import { expect, test } from "vitest";
 
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { AgentManager } from "./agent-manager.js";
-import { ensureAgentLoaded } from "./agent-loading.js";
+import { ensureAgentLoaded, serializeAgentLoadMutation } from "./agent-loading.js";
 import { AgentStorage } from "./agent-storage.js";
 import type {
   AgentClient,
@@ -59,6 +59,71 @@ test("preserves unread attention when loading an agent for viewing", async () =>
       attentionTimestamp,
     });
   } finally {
+    await manager.closeAgent(agentId).catch(() => undefined);
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("serializes an explicit attention clear after an in-flight resume", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-loading-attention-race-"));
+  const logger = createTestLogger();
+  const storage = new AgentStorage(path.join(root, "agents"), logger);
+  const baseClient = createTestAgentClients().codex;
+  if (!baseClient) {
+    throw new Error("expected Codex test client");
+  }
+
+  let releaseResume!: () => void;
+  const resumeGate = new Promise<void>((resolve) => {
+    releaseResume = resolve;
+  });
+  const client: AgentClient = {
+    provider: baseClient.provider,
+    capabilities: baseClient.capabilities,
+    createSession: async (config, launchContext, options) =>
+      await baseClient.createSession(config, launchContext, options),
+    resumeSession: async (handle, overrides, launchContext) => {
+      await resumeGate;
+      return await baseClient.resumeSession(handle, overrides, launchContext);
+    },
+    fetchCatalog: async (options) => await baseClient.fetchCatalog(options),
+    isAvailable: async () => await baseClient.isAvailable(),
+  };
+  const manager = new AgentManager({ clients: { codex: client }, registry: storage, logger });
+  const agentId = "00000000-0000-4000-8000-000000000303";
+
+  try {
+    const agent = await manager.createAgent({ provider: "codex", cwd: root }, agentId, {
+      workspaceId: "workspace-review",
+    });
+    await manager.runAgent(agent.id, "finish this turn");
+    await manager.closeAgent(agent.id);
+
+    const load = ensureAgentLoaded(agent.id, {
+      agentManager: manager,
+      agentStorage: storage,
+      logger,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    const clear = serializeAgentLoadMutation(agent.id, async () => {
+      await manager.clearAgentAttention(agent.id);
+    });
+
+    releaseResume();
+    await load;
+    await clear;
+    await manager.flush();
+
+    expect(manager.getAgent(agent.id)?.attention).toEqual({ requiresAttention: false });
+    expect(await storage.get(agent.id)).toMatchObject({
+      requiresAttention: false,
+      attentionReason: null,
+      attentionTimestamp: null,
+    });
+  } finally {
+    releaseResume();
     await manager.closeAgent(agentId).catch(() => undefined);
     await manager.flush().catch(() => undefined);
     await storage.flush().catch(() => undefined);

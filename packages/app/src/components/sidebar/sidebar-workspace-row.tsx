@@ -18,7 +18,7 @@ import {
 } from "@/workspace/use-workspace-archive";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
-import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attention";
+import { useWorkspaceReviewStatus } from "@/hooks/use-workspace-review-status";
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { isNative as platformIsNative } from "@/constants/platform";
@@ -164,15 +164,20 @@ export function SidebarWorkspaceRow({
   );
 
   const archiveShortcutKeys = useShortcutKeys("archive-workspace");
-  const { hasClearableAttention, clearAttention } = useClearWorkspaceAttention({
+  const { canMarkDone, canMarkReady, markDone, markReady } = useWorkspaceReviewStatus({
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
   });
-  const handleMarkAsRead = useCallback(() => {
-    void clearAttention().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as read");
+  const handleMarkAsDone = useCallback(() => {
+    void markDone().catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to mark workspace as done");
     });
-  }, [clearAttention, toast]);
+  }, [markDone, toast]);
+  const handleMarkAsReady = useCallback(() => {
+    void markReady().catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to mark workspace ready");
+    });
+  }, [markReady, toast]);
 
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
@@ -210,7 +215,8 @@ export function SidebarWorkspaceRow({
         onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
-        onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
+        onMarkDone={canMarkDone ? handleMarkAsDone : undefined}
+        onMarkReady={canMarkReady ? handleMarkAsReady : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
       />
       <AdaptiveRenameModal
@@ -246,7 +252,8 @@ interface WorkspaceRowBodyProps {
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
-  onMarkAsRead?: () => void;
+  onMarkDone?: () => void;
+  onMarkReady?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
 }
 
@@ -269,7 +276,8 @@ function WorkspaceRowBody({
   onCopyBranchName,
   onCopyPath,
   onRename,
-  onMarkAsRead,
+  onMarkDone,
+  onMarkReady,
   archiveShortcutKeys,
 }: WorkspaceRowBodyProps) {
   const isTouchPlatform = platformIsNative;
@@ -321,7 +329,7 @@ function WorkspaceRowBody({
         });
         return (
           // The fork adds swipe-to-mark-done on touch platforms; the row itself is upstream's.
-          <SidebarWorkspaceReviewSwipe onMarkDone={onMarkAsRead}>
+          <SidebarWorkspaceReviewSwipe onMarkDone={onMarkDone}>
             <View
               {...(draggable ? dragAttributes : {})}
               {...(draggable ? dragHandleProps?.listeners : {})}
@@ -343,7 +351,8 @@ function WorkspaceRowBody({
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
                 onRename={onRename}
-                onMarkAsRead={onMarkAsRead}
+                onMarkDone={onMarkDone}
+                onMarkReady={onMarkReady}
                 onArchive={onArchive}
                 archiveLabel={archiveLabel}
                 archiveStatus={archiveStatus}
@@ -372,7 +381,8 @@ function WorkspaceRowBody({
                   isCreating={isCreating}
                   shortcutNumber={shortcutNumber}
                   showShortcutBadge={showShortcutBadge}
-                  onMarkDone={onMarkAsRead}
+                  onMarkDone={onMarkDone}
+                  onMarkReady={onMarkReady}
                 >
                   <WorkspaceRowTrailingActions
                     workspace={workspace}
@@ -390,7 +400,8 @@ function WorkspaceRowBody({
                     onCopyBranchName={onCopyBranchName}
                     onCopyPath={onCopyPath}
                     onRename={onRename}
-                    onMarkAsRead={onMarkAsRead}
+                    onMarkDone={onMarkDone}
+                    onMarkReady={onMarkReady}
                   />
                 </SidebarWorkspaceRowContent>
               </SidebarWorkspaceContextMenu>
@@ -415,7 +426,8 @@ function WorkspaceRowTrailingActions({
   archivePendingLabel,
   archiveShortcutKeys,
   onArchive,
-  onMarkAsRead,
+  onMarkDone,
+  onMarkReady,
   onCopyBranchName,
   onCopyPath,
   onRename,
@@ -432,7 +444,8 @@ function WorkspaceRowTrailingActions({
   archivePendingLabel?: string;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   onArchive?: () => void;
-  onMarkAsRead?: () => void;
+  onMarkDone?: () => void;
+  onMarkReady?: () => void;
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
@@ -473,7 +486,8 @@ function WorkspaceRowTrailingActions({
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
                 onRename={onRename}
-                onMarkAsRead={onMarkAsRead}
+                onMarkDone={onMarkDone}
+                onMarkReady={onMarkReady}
                 onArchive={onArchive}
                 archiveLabel={archiveLabel}
                 archiveStatus={archiveStatus}

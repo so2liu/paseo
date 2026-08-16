@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, type GestureResponderEvent, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
-import { Check, CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
+import { Check, CircleAlert, Folder, FolderGit2, Monitor, Undo2 } from "lucide-react-native";
 import { ProjectStatusIndicator } from "@/components/sidebar/project-leading-visual";
 import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import {
@@ -46,6 +46,7 @@ const needsInputColorMapping = (theme: Theme) => ({
 });
 
 const ThemedCheck = withUnistyles(Check);
+const ThemedUndo2 = withUnistyles(Undo2);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedFolder = withUnistyles(Folder);
@@ -138,6 +139,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   showShortcutBadge = false,
   reserveIdleStatusIndicatorSpace = true,
   onMarkDone,
+  onMarkReady,
   children,
 }: {
   workspace: SidebarWorkspaceEntry;
@@ -155,8 +157,9 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   showShortcutBadge?: boolean;
   /** Keep the empty leading slot when the workspace has no active status. */
   reserveIdleStatusIndicatorSpace?: boolean;
-  /** Completing review from the row itself, without opening the menu. */
+  /** Changing review state from the row itself, without opening the menu. */
   onMarkDone?: () => void;
+  onMarkReady?: () => void;
   children?: ReactNode;
 }) {
   const {
@@ -211,9 +214,10 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             prHint={workspace.prHint}
             serviceSummary={serviceSummary}
           />
-          {onMarkDone ? (
+          {onMarkDone || onMarkReady ? (
             <View style={styles.workspaceMarkDoneRow}>
-              <MarkDoneButton onPress={onMarkDone} />
+              {onMarkDone ? <ReviewStatusButton action="done" onPress={onMarkDone} /> : null}
+              {onMarkReady ? <ReviewStatusButton action="ready" onPress={onMarkReady} /> : null}
             </View>
           ) : null}
         </View>
@@ -261,7 +265,13 @@ function WorkspaceCreatedRow({
   );
 }
 
-function MarkDoneButton({ onPress }: { onPress: () => void }) {
+function ReviewStatusButton({
+  action,
+  onPress,
+}: {
+  action: "done" | "ready";
+  onPress: () => void;
+}) {
   const [isHovered, setIsHovered] = useState(false);
   const handlePressIn = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
@@ -283,17 +293,23 @@ function MarkDoneButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Mark workspace as done"
+      accessibilityLabel={
+        action === "done" ? "Mark workspace as done" : "Mark workspace as ready to review"
+      }
       hitSlop={4}
       onPressIn={handlePressIn}
       onPress={handlePress}
       onHoverIn={handleHoverIn}
       onHoverOut={handleHoverOut}
       style={markDoneStyles.button}
-      testID="sidebar-workspace-mark-done"
+      testID={action === "done" ? "sidebar-workspace-mark-done" : "sidebar-workspace-mark-ready"}
     >
-      <ThemedCheck size={12} uniProps={iconUniProps} />
-      <Text style={textStyle}>Mark as done</Text>
+      {action === "done" ? (
+        <ThemedCheck size={12} uniProps={iconUniProps} />
+      ) : (
+        <ThemedUndo2 size={12} uniProps={iconUniProps} />
+      )}
+      <Text style={textStyle}>{action === "done" ? "Mark as done" : "Ready to review"}</Text>
     </Pressable>
   );
 }

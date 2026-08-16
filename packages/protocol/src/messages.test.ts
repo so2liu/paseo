@@ -40,6 +40,44 @@ function fetchWorkspacesResponse(workspace: Record<string, unknown>) {
   };
 }
 
+describe("workspace review status RPCs", () => {
+  test("parses mark-ready request and response", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "workspace.mark_ready.request",
+        workspaceId: "workspace-1",
+        requestId: "mark-ready-1",
+      }),
+    ).toEqual({
+      type: "workspace.mark_ready.request",
+      workspaceId: "workspace-1",
+      requestId: "mark-ready-1",
+    });
+
+    expect(
+      SessionOutboundMessageSchema.parse({
+        type: "workspace.mark_ready.response",
+        payload: {
+          requestId: "mark-ready-1",
+          workspaceId: "workspace-1",
+          agentId: "agent-1",
+          success: true,
+          error: null,
+        },
+      }),
+    ).toEqual({
+      type: "workspace.mark_ready.response",
+      payload: {
+        requestId: "mark-ready-1",
+        workspaceId: "workspace-1",
+        agentId: "agent-1",
+        success: true,
+        error: null,
+      },
+    });
+  });
+});
+
 describe("agent attention clear compatibility", () => {
   test("accepts legacy auto-clear requests without treating them as explicit", () => {
     const parsed = SessionInboundMessageSchema.parse({

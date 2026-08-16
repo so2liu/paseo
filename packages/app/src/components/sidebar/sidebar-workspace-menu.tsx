@@ -2,7 +2,16 @@ import { useMemo, type ComponentProps, type PropsWithChildren, type ReactNode } 
 import { useTranslation } from "react-i18next";
 import { type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Archive, CircleCheck, Copy, MoreVertical, Pencil, Pin, PinOff } from "lucide-react-native";
+import {
+  Archive,
+  CircleCheck,
+  Copy,
+  MoreVertical,
+  Pencil,
+  Pin,
+  PinOff,
+  Undo2,
+} from "lucide-react-native";
 import { isWeb } from "@/constants/platform";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
@@ -39,14 +48,14 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
+const ThemedUndo2 = withUnistyles(Undo2);
 const ThemedPin = withUnistyles(Pin);
 const ThemedPinOff = withUnistyles(PinOff);
 
 const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
 const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
-const markAsReadLeadingIcon = (
-  <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />
-);
+const markDoneLeadingIcon = <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />;
+const markReadyLeadingIcon = <ThemedUndo2 size={14} uniProps={foregroundMutedColorMapping} />;
 const archiveLeadingIcon = <ThemedArchive size={14} uniProps={foregroundMutedColorMapping} />;
 const pinLeadingIcon = <ThemedPin size={14} uniProps={foregroundMutedColorMapping} />;
 const unpinLeadingIcon = <ThemedPinOff size={14} uniProps={foregroundMutedColorMapping} />;
@@ -65,7 +74,8 @@ export interface SidebarWorkspaceMenuProps {
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
   onRename?: () => void;
-  onMarkAsRead?: () => void;
+  onMarkDone?: () => void;
+  onMarkReady?: () => void;
   onArchive: () => void;
   archiveLabel?: string;
   archiveStatus?: "idle" | "pending" | "success";
@@ -110,7 +120,8 @@ function SidebarWorkspaceMenuItems({
   onCopyPath,
   onCopyBranchName,
   onRename,
-  onMarkAsRead,
+  onMarkDone,
+  onMarkReady,
   onArchive,
   archiveLabel,
   archiveStatus,
@@ -158,14 +169,24 @@ function SidebarWorkspaceMenuItems({
           {t("sidebar.workspace.actions.rename")}
         </WorkspaceMenuItem>
       ) : null}
-      {onMarkAsRead ? (
+      {onMarkDone ? (
         <WorkspaceMenuItem
           surface={surface}
-          testID={`sidebar-workspace-menu-mark-as-read-${workspaceKey}`}
-          leading={markAsReadLeadingIcon}
-          onSelect={onMarkAsRead}
+          testID={`sidebar-workspace-menu-mark-done-${workspaceKey}`}
+          leading={markDoneLeadingIcon}
+          onSelect={onMarkDone}
         >
-          Mark as read
+          Mark as done
+        </WorkspaceMenuItem>
+      ) : null}
+      {onMarkReady ? (
+        <WorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-mark-ready-${workspaceKey}`}
+          leading={markReadyLeadingIcon}
+          onSelect={onMarkReady}
+        >
+          Ready to review
         </WorkspaceMenuItem>
       ) : null}
       {onTogglePin ? (
@@ -205,7 +226,8 @@ export function SidebarWorkspaceMenu({
   onCopyPath,
   onCopyBranchName,
   onRename,
-  onMarkAsRead,
+  onMarkDone,
+  onMarkReady,
   onArchive,
   archiveLabel,
   archiveStatus,
@@ -236,7 +258,8 @@ export function SidebarWorkspaceMenu({
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
           onRename={onRename}
-          onMarkAsRead={onMarkAsRead}
+          onMarkDone={onMarkDone}
+          onMarkReady={onMarkReady}
           onArchive={onArchive}
           archiveLabel={archiveLabel}
           archiveStatus={archiveStatus}
@@ -268,7 +291,8 @@ export function SidebarWorkspaceContextMenu({
   onCopyPath,
   onCopyBranchName,
   onRename,
-  onMarkAsRead,
+  onMarkDone,
+  onMarkReady,
   onArchive,
   archiveLabel,
   archiveStatus,
@@ -334,7 +358,8 @@ export function SidebarWorkspaceContextMenu({
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
           onRename={onRename}
-          onMarkAsRead={onMarkAsRead}
+          onMarkDone={onMarkDone}
+          onMarkReady={onMarkReady}
           onArchive={onArchive}
           archiveLabel={archiveLabel}
           archiveStatus={archiveStatus}

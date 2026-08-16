@@ -580,6 +580,7 @@ function createSessionForWorkspaceTests(
     archiveSnapshot: async () => ({}),
     unarchiveSnapshot: async () => true,
     clearAgentAttention: async () => {},
+    markAgentReadyForReview: async () => {},
     notifyAgentState: () => {},
     ...options.agentManager,
   });
@@ -1702,6 +1703,110 @@ test("workspace clear attention clears stored-only agents and responds", async (
   if (agentUpdate.payload.kind === "upsert") {
     expect(agentUpdate.payload.agent.requiresAttention).toBe(false);
   }
+});
+
+test("workspace mark ready restores stored-only workspace review attention", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: REPO_CWD,
+    projectId: REPO_CWD,
+    cwd: REPO_CWD,
+    kind: "directory",
+    displayName: "repo",
+    createdAt: "2026-03-30T15:00:00.000Z",
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  });
+  let storedRecord = makeStoredAgent({
+    id: "stored-agent-ready",
+    cwd: REPO_CWD,
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  });
+  storedRecord.workspaceId = workspace.workspaceId;
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+
+  session.workspaceRegistry.get = async (id: string) =>
+    id === workspace.workspaceId ? workspace : null;
+  session.projectRegistry.get = async () =>
+    createPersistedProjectRecord({
+      projectId: workspace.projectId,
+      rootPath: workspace.cwd,
+      kind: "non_git",
+      displayName: "repo",
+      createdAt: workspace.createdAt,
+      updatedAt: workspace.updatedAt,
+    });
+  session.agentStorage.get = async (agentId: string) =>
+    agentId === storedRecord.id ? storedRecord : null;
+  session.agentStorage.upsert = async (record: unknown) => {
+    storedRecord = record as StoredAgentRecord;
+  };
+  session.listAgentPayloads = async () => [
+    makeAgent({
+      id: storedRecord.id,
+      cwd: storedRecord.cwd,
+      workspaceId: workspace.workspaceId,
+      status: "closed",
+      updatedAt: storedRecord.updatedAt,
+    }),
+  ];
+
+  await session.handleMessage({
+    type: "workspace.mark_ready.request",
+    workspaceId: workspace.workspaceId,
+    requestId: "mark-ready-1",
+  });
+
+  expect(storedRecord).toMatchObject({
+    requiresAttention: true,
+    attentionReason: "finished",
+    attentionTimestamp: expect.any(String),
+  });
+  expect(findByType(emitted, "workspace.mark_ready.response").payload).toEqual({
+    requestId: "mark-ready-1",
+    workspaceId: workspace.workspaceId,
+    agentId: storedRecord.id,
+    success: true,
+    error: null,
+  });
+  const agentUpdate = findByType(emitted, "agent_update");
+  expect(agentUpdate.payload.kind).toBe("upsert");
+  if (agentUpdate.payload.kind === "upsert") {
+    expect(agentUpdate.payload.agent).toMatchObject({
+      id: storedRecord.id,
+      requiresAttention: true,
+      attentionReason: "finished",
+    });
+  }
+});
+
+test("workspace mark ready rejects workspaces without a root agent", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: REPO_CWD,
+    projectId: REPO_CWD,
+    cwd: REPO_CWD,
+    kind: "directory",
+    displayName: "repo",
+    createdAt: "2026-03-30T15:00:00.000Z",
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  });
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  session.workspaceRegistry.get = async () => workspace;
+  session.listAgentPayloads = async () => [];
+
+  await session.handleMessage({
+    type: "workspace.mark_ready.request",
+    workspaceId: workspace.workspaceId,
+    requestId: "mark-ready-empty",
+  });
+
+  expect(findByType(emitted, "workspace.mark_ready.response").payload).toEqual({
+    requestId: "mark-ready-empty",
+    workspaceId: workspace.workspaceId,
+    agentId: null,
+    success: false,
+    error: `Workspace has no root agent: ${workspace.workspaceId}`,
+  });
 });
 
 test("legacy agent attention clear without an explicit gesture is a successful no-op", async () => {

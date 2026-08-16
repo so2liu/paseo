@@ -136,7 +136,10 @@ status buckets.
 
 The workspace moves to **Done** only after an explicit user gesture sends
 `workspace.clear_attention.request`; this clears all non-permission attention owned by that
-`workspaceId`. The legacy `clear_agent_attention` RPC remains parseable for protocol compatibility,
+`workspaceId`. A Done workspace can be returned to **Ready to review** with the row's explicit
+**Ready to review** action. The daemon applies fresh finished attention to the workspace's newest
+root agent; it never resumes a closed provider runtime solely to change review state. The legacy
+`clear_agent_attention` RPC remains parseable for protocol compatibility,
 but the daemon only honors it when an updated client marks the request `explicit: true`. Older
 clients that used the same RPC for focus-driven auto-clear receive a successful no-op response.
 Archiving a workspace that is still **Ready to review** requires a separate destructive
