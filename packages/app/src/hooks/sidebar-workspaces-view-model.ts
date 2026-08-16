@@ -38,6 +38,8 @@ export interface SidebarStatusWorkspacePlacement extends SidebarWorkspacePlaceme
 
 export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
   hasUnreadAttention: boolean;
+  hasRootAgent?: boolean;
+  supportsMarkReady?: boolean;
   workspaceDirectory: string;
   workspaceDirectoryLabel: string;
   // Raw user-set title (null when the name is derived from branch/directory).
@@ -150,6 +152,7 @@ export function createSidebarWorkspaceEntry(input: {
   projectViewKey?: string;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
   workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
+  supportsMarkReady?: boolean;
 }): SidebarWorkspaceEntry {
   const projectViewKey = input.projectViewKey ?? input.workspace.projectId;
   const effectiveStatus = deriveEffectiveWorkspaceStatus(input);
@@ -174,6 +177,8 @@ export function createSidebarWorkspaceEntry(input: {
     statusEnteredAt: effectiveStatus.enteredAt,
     // Opening a workspace is not acknowledgement; only the explicit review action may clear it.
     hasUnreadAttention: effectiveStatus.status === "attention",
+    hasRootAgent: input.workspaceAgentActivity?.has(input.workspace.id) === true,
+    supportsMarkReady: input.supportsMarkReady === true,
     archivingAt: input.workspace.archivingAt,
     diffStat: input.workspace.diffStat,
     prHint: selectPrHintFromStatus(
@@ -369,6 +374,7 @@ export function buildSidebarWorkspaceEntries(input: {
   sessions: SidebarWorkspaceSession[];
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
   previousEntries?: ReadonlyMap<string, SidebarWorkspaceEntry>;
+  supportsMarkReadyByServerId?: ReadonlyMap<string, boolean>;
 }): Map<string, SidebarWorkspaceEntry> {
   if (input.placements.length === 0 || input.sessions.length === 0) {
     return new Map();
@@ -393,6 +399,7 @@ export function buildSidebarWorkspaceEntries(input: {
       projectViewKey: placement.projectViewKey,
       pendingCreateAttempts: input.pendingCreateAttempts,
       workspaceAgentActivity: session.workspaceAgentActivity,
+      supportsMarkReady: input.supportsMarkReadyByServerId?.get(placement.serverId) === true,
     });
     const previousEntry = input.previousEntries?.get(placement.workspaceKey);
     entries.set(

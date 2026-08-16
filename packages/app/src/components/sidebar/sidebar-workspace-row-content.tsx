@@ -272,6 +272,7 @@ function ReviewStatusButton({
   action: "done" | "ready";
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const handlePressIn = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
@@ -294,7 +295,9 @@ function ReviewStatusButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        action === "done" ? "Mark workspace as done" : "Mark workspace as ready to review"
+        action === "done"
+          ? t("sidebar.workspace.actions.markDoneAccessibility")
+          : t("sidebar.workspace.actions.markReadyAccessibility")
       }
       hitSlop={4}
       onPressIn={handlePressIn}
@@ -309,7 +312,11 @@ function ReviewStatusButton({
       ) : (
         <ThemedUndo2 size={12} uniProps={iconUniProps} />
       )}
-      <Text style={textStyle}>{action === "done" ? "Mark as done" : "Ready to review"}</Text>
+      <Text style={textStyle}>
+        {action === "done"
+          ? t("sidebar.workspace.actions.markDone")
+          : t("sidebar.workspace.actions.markReady")}
+      </Text>
     </Pressable>
   );
 }

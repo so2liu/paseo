@@ -174,18 +174,22 @@ describe("persistence hooks", () => {
     });
   });
 
-  test("extractTimestamps treats incomplete or invalid legacy attention as clear", () => {
-    for (const attentionTimestamp of [null, "not-a-timestamp"]) {
-      expect(
-        extractTimestamps(
-          createRecord({
-            requiresAttention: true,
-            attentionReason: "finished",
-            attentionTimestamp,
-          }),
-        ).attention,
-      ).toEqual({ requiresAttention: false });
-    }
+  test("extractTimestamps restores legacy attention without reason or timestamp metadata", () => {
+    const updatedAt = "2026-08-16T11:20:00.000Z";
+    expect(
+      extractTimestamps(
+        createRecord({
+          updatedAt,
+          requiresAttention: true,
+          attentionReason: undefined,
+          attentionTimestamp: undefined,
+        }),
+      ).attention,
+    ).toEqual({
+      requiresAttention: true,
+      attentionReason: "finished",
+      attentionTimestamp: new Date(updatedAt),
+    });
   });
 
   test("buildSessionConfig accepts providers from the canonical manifest", () => {

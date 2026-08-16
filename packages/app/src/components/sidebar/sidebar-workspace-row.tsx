@@ -167,6 +167,9 @@ export function SidebarWorkspaceRow({
   const { canMarkDone, canMarkReady, markDone, markReady } = useWorkspaceReviewStatus({
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
+    status: workspace.statusBucket,
+    hasRootAgent: workspace.hasRootAgent === true,
+    supportsMarkReady: workspace.supportsMarkReady === true,
   });
   const handleMarkAsDone = useCallback(() => {
     void markDone().catch((error) => {

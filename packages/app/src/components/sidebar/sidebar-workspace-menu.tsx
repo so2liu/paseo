@@ -176,7 +176,7 @@ function SidebarWorkspaceMenuItems({
           leading={markDoneLeadingIcon}
           onSelect={onMarkDone}
         >
-          Mark as done
+          {t("sidebar.workspace.actions.markDone")}
         </WorkspaceMenuItem>
       ) : null}
       {onMarkReady ? (
@@ -186,7 +186,7 @@ function SidebarWorkspaceMenuItems({
           leading={markReadyLeadingIcon}
           onSelect={onMarkReady}
         >
-          Ready to review
+          {t("sidebar.workspace.actions.markReady")}
         </WorkspaceMenuItem>
       ) : null}
       {onTogglePin ? (

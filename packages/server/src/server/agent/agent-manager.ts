@@ -251,6 +251,7 @@ type ProviderClientMap = Partial<Record<AgentProvider, AgentClient>>;
 
 export interface CreateAgentOptions {
   labels?: Record<string, string>;
+  attention?: AttentionState;
   initialPrompt?: string;
   env?: Record<string, string>;
   persistSession?: boolean;
@@ -1131,6 +1132,7 @@ export class AgentManager {
     await this.requireExternalMcpSupport(session, storedConfig);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       labels: options.labels,
+      attention: options.attention,
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
       owner: options.owner,

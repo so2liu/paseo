@@ -66,6 +66,53 @@ test("preserves unread attention when loading an agent for viewing", async () =>
   }
 });
 
+test("preserves unread attention when loading from stored config without persistence", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-loading-config-attention-"));
+  const logger = createTestLogger();
+  const storage = new AgentStorage(path.join(root, "agents"), logger);
+  const manager = new AgentManager({
+    clients: createTestAgentClients(),
+    registry: storage,
+    logger,
+  });
+  const agentId = "00000000-0000-4000-8000-000000000304";
+  const timestamp = "2026-08-16T11:30:00.000Z";
+
+  try {
+    await storage.upsert({
+      id: agentId,
+      provider: "codex",
+      cwd: root,
+      workspaceId: "workspace-review",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      lastActivityAt: timestamp,
+      title: null,
+      labels: {},
+      lastStatus: "idle",
+      config: {},
+      persistence: null,
+      requiresAttention: true,
+      attentionReason: "finished",
+      attentionTimestamp: timestamp,
+    });
+
+    await ensureAgentLoaded(agentId, { agentManager: manager, agentStorage: storage, logger });
+    await manager.flush();
+
+    expect(manager.getAgent(agentId)?.attention).toEqual({
+      requiresAttention: true,
+      attentionReason: "finished",
+      attentionTimestamp: new Date(timestamp),
+    });
+  } finally {
+    await manager.closeAgent(agentId).catch(() => undefined);
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("serializes an explicit attention clear after an in-flight resume", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-loading-attention-race-"));
   const logger = createTestLogger();

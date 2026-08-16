@@ -121,16 +121,14 @@ export function extractTimestamps(record: StoredAgentRecord): {
         attentionTimestamp: Date;
       };
 } {
-  const parsedAttentionTimestamp =
-    record.attentionTimestamp != null ? new Date(record.attentionTimestamp) : null;
+  const storedAttentionTimestamp =
+    record.attentionTimestamp ?? record.lastActivityAt ?? record.updatedAt;
+  const parsedAttentionTimestamp = new Date(storedAttentionTimestamp);
   const attention =
-    record.requiresAttention === true &&
-    record.attentionReason != null &&
-    parsedAttentionTimestamp != null &&
-    Number.isFinite(parsedAttentionTimestamp.getTime())
+    record.requiresAttention === true && Number.isFinite(parsedAttentionTimestamp.getTime())
       ? {
           requiresAttention: true as const,
-          attentionReason: record.attentionReason,
+          attentionReason: record.attentionReason ?? ("finished" as const),
           attentionTimestamp: parsedAttentionTimestamp,
         }
       : { requiresAttention: false as const };

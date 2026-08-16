@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore } from "@/stores/session-store";
+import { useHostFeatureMap } from "@/runtime/host-features";
 import {
   areSidebarWorkspaceSessionsEqual,
   buildSidebarWorkspaceEntries,
@@ -32,6 +33,7 @@ export function useSidebarWorkspaceEntries(
   const pendingCreateAttempts = useCreateFlowStore((state) =>
     enabled ? state.pendingByDraftId : EMPTY_PENDING_CREATE_ATTEMPTS,
   );
+  const supportsMarkReadyByServerId = useHostFeatureMap(serverIds, "workspaceMarkReady");
   const previousEntriesRef = useRef<ReadonlyMap<string, SidebarWorkspaceEntry>>(EMPTY_ENTRIES);
 
   // Collection ownership is intentional: retained sidebars have one cheap
@@ -50,10 +52,11 @@ export function useSidebarWorkspaceEntries(
       sessions,
       pendingCreateAttempts,
       previousEntries: previousEntriesRef.current,
+      supportsMarkReadyByServerId,
     });
     previousEntriesRef.current = nextEntries;
     return nextEntries;
-  }, [enabled, pendingCreateAttempts, placements, sessions]);
+  }, [enabled, pendingCreateAttempts, placements, sessions, supportsMarkReadyByServerId]);
 
   return entries;
 }
