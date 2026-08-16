@@ -1779,6 +1779,135 @@ test("workspace mark ready restores stored-only workspace review attention", asy
   }
 });
 
+test("workspace mark ready does not overwrite live error attention", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: REPO_CWD,
+    projectId: REPO_CWD,
+    cwd: REPO_CWD,
+    kind: "directory",
+    displayName: "repo",
+    createdAt: "2026-03-30T15:00:00.000Z",
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  });
+  const liveAgent = makeManagedAgent({
+    id: "live-agent-failed",
+    cwd: REPO_CWD,
+    workspaceId: workspace.workspaceId,
+    lifecycle: "error",
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  }) as unknown as ManagedAgent;
+  liveAgent.attention = {
+    requiresAttention: true,
+    attentionReason: "error",
+    attentionTimestamp: new Date("2026-03-30T15:00:00.000Z"),
+  };
+  let markReadyCalls = 0;
+  const session = createSessionForWorkspaceTests({
+    onMessage: (message) => emitted.push(message),
+    agentManager: {
+      getAgent: () => liveAgent,
+      markAgentReadyForReview: async () => {
+        markReadyCalls += 1;
+      },
+    },
+  });
+  session.workspaceRegistry.get = async () => workspace;
+  session.listAgentPayloads = async () => [
+    makeAgent({
+      id: liveAgent.id,
+      cwd: liveAgent.cwd,
+      workspaceId: workspace.workspaceId,
+      status: "closed",
+      updatedAt: liveAgent.updatedAt.toISOString(),
+    }),
+  ];
+
+  await session.handleMessage({
+    type: "workspace.mark_ready.request",
+    workspaceId: workspace.workspaceId,
+    requestId: "mark-ready-live-failed",
+  });
+
+  expect(markReadyCalls).toBe(0);
+  expect(findByType(emitted, "workspace.mark_ready.response").payload).toEqual({
+    requestId: "mark-ready-live-failed",
+    workspaceId: workspace.workspaceId,
+    agentId: null,
+    success: false,
+    error: `Workspace is not done: ${workspace.workspaceId}`,
+  });
+});
+
+test("workspace mark ready accepts a cross-workspace subagent as that workspace root", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: "workspace-child",
+    projectId: REPO_CWD,
+    cwd: REPO_CWD,
+    kind: "directory",
+    displayName: "child",
+    createdAt: "2026-03-30T15:00:00.000Z",
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  });
+  const parent = makeAgent({
+    id: "parent-agent",
+    cwd: REPO_CWD,
+    workspaceId: "workspace-parent",
+    status: "idle",
+    updatedAt: "2026-03-30T14:00:00.000Z",
+  });
+  const child = makeAgent({
+    id: "cross-workspace-child",
+    cwd: REPO_CWD,
+    workspaceId: workspace.workspaceId,
+    status: "closed",
+    updatedAt: "2026-03-30T15:00:00.000Z",
+  });
+  child.labels = { "paseo.parent-agent-id": parent.id };
+  const storedRecord = makeStoredAgent({
+    id: child.id,
+    cwd: child.cwd,
+    updatedAt: child.updatedAt,
+  });
+  storedRecord.workspaceId = workspace.workspaceId;
+  storedRecord.labels = child.labels;
+  let persisted = storedRecord;
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  session.workspaceRegistry.get = async () => workspace;
+  session.projectRegistry.get = async () =>
+    createPersistedProjectRecord({
+      projectId: workspace.projectId,
+      rootPath: workspace.cwd,
+      kind: "non_git",
+      displayName: "repo",
+      createdAt: workspace.createdAt,
+      updatedAt: workspace.updatedAt,
+    });
+  session.agentStorage.get = async () => persisted;
+  session.agentStorage.upsert = async (record) => {
+    persisted = record as StoredAgentRecord;
+  };
+  session.listAgentPayloads = async () => [parent, child];
+
+  await session.handleMessage({
+    type: "workspace.mark_ready.request",
+    workspaceId: workspace.workspaceId,
+    requestId: "mark-ready-child",
+  });
+
+  expect(persisted).toMatchObject({
+    requiresAttention: true,
+    attentionReason: "finished",
+  });
+  expect(findByType(emitted, "workspace.mark_ready.response").payload).toMatchObject({
+    requestId: "mark-ready-child",
+    workspaceId: workspace.workspaceId,
+    agentId: child.id,
+    success: true,
+  });
+});
+
 test("workspace mark ready does not overwrite stored error attention", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const workspace = createPersistedWorkspaceRecord({

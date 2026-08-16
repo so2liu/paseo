@@ -70,6 +70,7 @@ import { getErrorMessage, getErrorMessageOr } from "@getpaseo/protocol/error-uti
 import { getAgentStatusPriority } from "@getpaseo/protocol/agent-state-bucket";
 import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
 import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspace-git-service.js";
+import { resolveWorkspaceRootAgent } from "./workspace-directory.js";
 import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
 import {
   CLIENT_SHUTDOWN_RPC_REASON,
@@ -6347,10 +6348,13 @@ export class Session {
       }
 
       const agents = await this.listAgentPayloads();
+      const activeAgentsById = new Map(
+        agents.filter((agent) => !agent.archivedAt).map((agent) => [agent.id, agent]),
+      );
       const candidate = agents
         .filter((agent) => !agent.archivedAt)
         .filter((agent) => agent.workspaceId === workspaceId)
-        .filter((agent) => getParentAgentIdFromLabels(agent.labels) === null)
+        .filter((agent) => resolveWorkspaceRootAgent(agent, activeAgentsById)?.id === agent.id)
         .sort((left, right) => {
           const activityDelta = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
           if (activityDelta !== 0) {
@@ -6371,6 +6375,9 @@ export class Session {
       await serializeAgentLoadMutation(candidate.id, async () => {
         const liveAgent = this.agentManager.getAgent(candidate.id);
         if (liveAgent) {
+          if (liveAgent.attention.requiresAttention) {
+            throw new Error(`Workspace is not done: ${workspaceId}`);
+          }
           await this.agentManager.markAgentReadyForReview(candidate.id);
           return;
         }
