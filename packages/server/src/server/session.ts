@@ -6269,14 +6269,9 @@ export class Session {
             ) {
               return false;
             }
-            const nextRecord: StoredAgentRecord = {
-              ...record,
-              updatedAt: new Date().toISOString(),
+            const nextRecord = await this.agentStorage.setAttention(agentId, {
               requiresAttention: false,
-              attentionReason: null,
-              attentionTimestamp: null,
-            };
-            await this.agentStorage.upsert(nextRecord);
+            });
             this.agentManager.publishStoredAgentRecord(nextRecord);
             return true;
           });
@@ -6388,14 +6383,11 @@ export class Session {
           throw new Error(`Workspace is not done: ${workspaceId}`);
         }
         const timestamp = new Date().toISOString();
-        const nextRecord: StoredAgentRecord = {
-          ...record,
-          updatedAt: timestamp,
+        const nextRecord = await this.agentStorage.setAttention(candidate.id, {
           requiresAttention: true,
           attentionReason: "finished",
           attentionTimestamp: timestamp,
-        };
-        await this.agentStorage.upsert(nextRecord);
+        });
         this.agentManager.publishStoredAgentRecord(nextRecord);
       });
 

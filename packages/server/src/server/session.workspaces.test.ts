@@ -115,6 +115,7 @@ interface SessionTestAccess {
     list(...args: unknown[]): Promise<unknown[]>;
     get(agentId: string): Promise<unknown>;
     upsert(record: unknown): Promise<void>;
+    setAttention(agentId: string, attention: unknown): Promise<unknown>;
   };
   agentManager: {
     listAgents(): unknown[];
@@ -672,6 +673,9 @@ function createSessionForWorkspaceTests(
               })
             : null,
         upsert: async () => {},
+        setAttention: async () => {
+          throw new Error("Agent not found");
+        },
         ...options.agentStorage,
       }),
       projectRegistry: options.projectRegistry ?? {
@@ -1676,8 +1680,14 @@ test("workspace clear attention clears stored-only agents and responds", async (
   session.projectRegistry.get = async (id: string) => (id === project.projectId ? project : null);
   session.agentStorage.get = async (agentId: string) =>
     agentId === storedRecord.id ? storedRecord : null;
-  session.agentStorage.upsert = async (record: unknown) => {
-    storedRecord = record as StoredAgentRecord;
+  session.agentStorage.setAttention = async () => {
+    storedRecord = {
+      ...storedRecord,
+      requiresAttention: false,
+      attentionReason: null,
+      attentionTimestamp: null,
+    };
+    return storedRecord;
   };
   session.listAgentPayloads = async () => [
     makeAgent({
@@ -1754,8 +1764,19 @@ test("workspace mark ready restores stored-only workspace review attention", asy
     });
   session.agentStorage.get = async (agentId: string) =>
     agentId === storedRecord.id ? storedRecord : null;
-  session.agentStorage.upsert = async (record: unknown) => {
-    storedRecord = record as StoredAgentRecord;
+  session.agentStorage.setAttention = async (_agentId, attention) => {
+    const nextAttention = attention as {
+      requiresAttention: true;
+      attentionReason: "finished";
+      attentionTimestamp: string;
+    };
+    storedRecord = {
+      ...storedRecord,
+      requiresAttention: true,
+      attentionReason: nextAttention.attentionReason,
+      attentionTimestamp: nextAttention.attentionTimestamp,
+    };
+    return storedRecord;
   };
   session.listAgentPayloads = async () => [
     makeAgent({
@@ -1898,8 +1919,19 @@ test("workspace mark ready accepts a cross-workspace subagent as that workspace 
       updatedAt: workspace.updatedAt,
     });
   session.agentStorage.get = async () => persisted;
-  session.agentStorage.upsert = async (record) => {
-    persisted = record as StoredAgentRecord;
+  session.agentStorage.setAttention = async (_agentId, attention) => {
+    const nextAttention = attention as {
+      requiresAttention: true;
+      attentionReason: "finished";
+      attentionTimestamp: string;
+    };
+    persisted = {
+      ...persisted,
+      requiresAttention: true,
+      attentionReason: nextAttention.attentionReason,
+      attentionTimestamp: nextAttention.attentionTimestamp,
+    };
+    return persisted;
   };
   session.listAgentPayloads = async () => [parent, child];
 
@@ -2107,9 +2139,19 @@ test("workspace clear attention can clear multiple workspaces in one request", a
   session.projectRegistry.get = async (id: string) =>
     projects.find((project) => project.projectId === id) ?? null;
   session.agentStorage.get = async (agentId: string) => storedRecords.get(agentId) ?? null;
-  session.agentStorage.upsert = async (record: unknown) => {
-    const storedRecord = record as StoredAgentRecord;
-    storedRecords.set(storedRecord.id, storedRecord);
+  session.agentStorage.setAttention = async (agentId) => {
+    const record = storedRecords.get(agentId);
+    if (!record) {
+      throw new Error(`Agent not found: ${agentId}`);
+    }
+    const nextRecord: StoredAgentRecord = {
+      ...record,
+      requiresAttention: false,
+      attentionReason: null,
+      attentionTimestamp: null,
+    };
+    storedRecords.set(agentId, nextRecord);
+    return nextRecord;
   };
   session.listAgentPayloads = async () =>
     Array.from(storedRecords.values()).map((record) => {
