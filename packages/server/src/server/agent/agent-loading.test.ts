@@ -17,6 +17,55 @@ import type {
 } from "./agent-sdk-types.js";
 import { createTestAgentClients } from "../test-utils/fake-agent-client.js";
 
+test("preserves unread attention when loading an agent for viewing", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-loading-attention-"));
+  const logger = createTestLogger();
+  const storage = new AgentStorage(path.join(root, "agents"), logger);
+  const clients = createTestAgentClients();
+  const manager = new AgentManager({
+    clients,
+    registry: storage,
+    logger,
+  });
+  const agentId = "00000000-0000-4000-8000-000000000300";
+
+  try {
+    const agent = await manager.createAgent({ provider: "codex", cwd: root }, agentId, {
+      workspaceId: "workspace-review",
+    });
+    await manager.runAgent(agent.id, "finish this turn");
+    await manager.flush();
+
+    const beforeClose = await storage.get(agent.id);
+    expect(beforeClose).toMatchObject({
+      requiresAttention: true,
+      attentionReason: "finished",
+    });
+    const attentionTimestamp = beforeClose?.attentionTimestamp;
+    expect(attentionTimestamp).toEqual(expect.any(String));
+
+    await manager.closeAgent(agent.id);
+    await ensureAgentLoaded(agent.id, { agentManager: manager, agentStorage: storage, logger });
+    await manager.flush();
+
+    expect(manager.getAgent(agent.id)?.attention).toMatchObject({
+      requiresAttention: true,
+      attentionReason: "finished",
+      attentionTimestamp: new Date(attentionTimestamp ?? ""),
+    });
+    expect(await storage.get(agent.id)).toMatchObject({
+      requiresAttention: true,
+      attentionReason: "finished",
+      attentionTimestamp,
+    });
+  } finally {
+    await manager.closeAgent(agentId).catch(() => undefined);
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("loads archived records for history and active records with the interactive default", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-loading-purpose-"));
   const logger = createTestLogger();

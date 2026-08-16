@@ -3,6 +3,7 @@ import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import {
   buildConfigOverrides,
   buildSessionConfig,
+  extractTimestamps,
   toAgentPersistenceHandle,
 } from "./persistence-hooks.js";
 
@@ -154,6 +155,37 @@ describe("persistence hooks", () => {
         url: "https://example.com/custom-paseo",
       },
     });
+  });
+
+  test("extractTimestamps restores unread attention for runtime resume", () => {
+    const attentionTimestamp = "2026-08-16T11:30:00.000Z";
+    const extracted = extractTimestamps(
+      createRecord({
+        requiresAttention: true,
+        attentionReason: "finished",
+        attentionTimestamp,
+      }),
+    );
+
+    expect(extracted.attention).toEqual({
+      requiresAttention: true,
+      attentionReason: "finished",
+      attentionTimestamp: new Date(attentionTimestamp),
+    });
+  });
+
+  test("extractTimestamps treats incomplete or invalid legacy attention as clear", () => {
+    for (const attentionTimestamp of [null, "not-a-timestamp"]) {
+      expect(
+        extractTimestamps(
+          createRecord({
+            requiresAttention: true,
+            attentionReason: "finished",
+            attentionTimestamp,
+          }),
+        ).attention,
+      ).toEqual({ requiresAttention: false });
+    }
   });
 
   test("buildSessionConfig accepts providers from the canonical manifest", () => {
