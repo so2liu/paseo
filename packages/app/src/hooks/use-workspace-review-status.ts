@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef } from "react";
 import { i18n } from "@/i18n/i18next";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useHostFeature } from "@/runtime/host-features";
+import { deriveEffectiveWorkspaceStatus } from "@/hooks/sidebar-workspaces-view-model";
 import { useSessionStore } from "@/stores/session-store";
 
 export interface WorkspaceReviewStatusController {
@@ -18,9 +19,18 @@ export function useWorkspaceReviewStatus({
   serverId: string;
   workspaceId: string;
 }): WorkspaceReviewStatusController {
-  const status = useSessionStore(
-    (state) => state.sessions[serverId]?.workspaces.get(workspaceId)?.status ?? null,
-  );
+  const status = useSessionStore((state) => {
+    const session = state.sessions[serverId];
+    const workspace = session?.workspaces.get(workspaceId);
+    if (!workspace) {
+      return null;
+    }
+    return deriveEffectiveWorkspaceStatus({
+      serverId,
+      workspace,
+      workspaceAgentActivity: session.workspaceAgentActivity,
+    }).status;
+  });
   const hasRootAgent = useSessionStore(
     (state) => state.sessions[serverId]?.workspaceAgentActivity.has(workspaceId) === true,
   );
