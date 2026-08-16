@@ -1751,8 +1751,19 @@ test("workspace mark ready restores stored-only workspace review attention", asy
     },
   });
 
+  session.workspaceRegistry.list = async () => [workspace];
   session.workspaceRegistry.get = async (id: string) =>
     id === workspace.workspaceId ? workspace : null;
+  session.projectRegistry.list = async () => [
+    createPersistedProjectRecord({
+      projectId: workspace.projectId,
+      rootPath: workspace.cwd,
+      kind: "non_git",
+      displayName: "repo",
+      createdAt: workspace.createdAt,
+      updatedAt: workspace.updatedAt,
+    }),
+  ];
   session.projectRegistry.get = async () =>
     createPersistedProjectRecord({
       projectId: workspace.projectId,
@@ -1908,7 +1919,18 @@ test("workspace mark ready accepts a cross-workspace subagent as that workspace 
   storedRecord.labels = child.labels;
   let persisted = storedRecord;
   const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  session.workspaceRegistry.list = async () => [workspace];
   session.workspaceRegistry.get = async () => workspace;
+  session.projectRegistry.list = async () => [
+    createPersistedProjectRecord({
+      projectId: workspace.projectId,
+      rootPath: workspace.cwd,
+      kind: "non_git",
+      displayName: "repo",
+      createdAt: workspace.createdAt,
+      updatedAt: workspace.updatedAt,
+    }),
+  ];
   session.projectRegistry.get = async () =>
     createPersistedProjectRecord({
       projectId: workspace.projectId,

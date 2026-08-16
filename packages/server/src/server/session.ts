@@ -6359,6 +6359,16 @@ export class Session {
       }
 
       await serializeAgentLoadMutation(candidate.id, async () => {
+        const currentWorkspace = (
+          await this.buildWorkspaceDescriptorMap({
+            includeGitData: false,
+            workspaceIds: [workspaceId],
+          })
+        ).get(workspaceId);
+        if (currentWorkspace?.status !== "done") {
+          throw new Error(`Workspace is not done: ${workspaceId}`);
+        }
+
         const liveAgent = this.agentManager.getAgent(candidate.id);
         if (liveAgent) {
           if (
