@@ -89,6 +89,7 @@ import { isElectronRuntime } from "@/desktop/host";
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { resolveDisplayAppVersion } from "@/utils/app-version";
+import { toComparableVersion } from "@/utils/custom-build-version";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { settingsStyles } from "@/styles/settings";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
@@ -670,9 +671,13 @@ function HostVersionRow({
   );
 
   const normalizedHost = normalizeVersion(daemonVersion);
-  const normalizedClient = normalizeVersion(clientVersion);
+  // Compare the semantic version, not the string: the app carries the fork release counter
+  // (`0.3.1-LY.1`) and a daemon carries the runtime marker (`0.3.1+LY`), so the same build
+  // reads as two different versions. See `toComparableVersion`.
+  const comparableHost = toComparableVersion(daemonVersion);
+  const comparableClient = toComparableVersion(clientVersion);
   const isMismatch =
-    normalizedHost !== null && normalizedClient !== null && normalizedHost !== normalizedClient;
+    comparableHost !== null && comparableClient !== null && comparableHost !== comparableClient;
 
   let valueText: string;
   if (!isConnected) {
