@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
 import {
+  collectAssistantResponseContentForStreamRenderStrategy,
   collectAssistantTurnConclusionForStreamRenderStrategy,
-  collectAssistantTurnContentForStreamRenderStrategy,
   getBottomOffsetForStreamRenderStrategy,
   getFrameChildOrderForStreamRenderStrategy,
   getHistoryLiveBoundaryIndexForStreamRenderStrategy,
@@ -48,8 +48,9 @@ function toolCall(id: string, seed: number): StreamItem {
       source: "orchestrator",
       data: {
         toolCallId: id,
-        toolName: "read",
-        arguments: {},
+        toolName: "Shell",
+        arguments: "echo hi",
+        result: null,
         status: "completed",
       },
     },
@@ -175,7 +176,7 @@ describe("neighbor and traversal semantics", () => {
     expect(getStreamNeighborIndex({ strategy: inverted, index: 3, relation: "below" })).toBe(2);
   });
 
-  it("collects assistant turn content with strategy traversal direction", () => {
+  it("collects assistant response content with strategy traversal direction", () => {
     const chronological: StreamItem[] = [
       userMessage("u1", "user-1", 1),
       assistantMessage("a1", "assistant-1", 2),
@@ -189,7 +190,7 @@ describe("neighbor and traversal semantics", () => {
     });
     const forwardStartIndex = chronological.findIndex((item) => item.id === "a2");
     expect(
-      collectAssistantTurnContentForStreamRenderStrategy({
+      collectAssistantResponseContentForStreamRenderStrategy({
         strategy: forward,
         items: chronological,
         startIndex: forwardStartIndex,
@@ -206,7 +207,7 @@ describe("neighbor and traversal semantics", () => {
     });
     const invertedStartIndex = invertedItems.findIndex((item) => item.id === "a2");
     expect(
-      collectAssistantTurnContentForStreamRenderStrategy({
+      collectAssistantResponseContentForStreamRenderStrategy({
         strategy: inverted,
         items: invertedItems,
         startIndex: invertedStartIndex,
@@ -290,6 +291,23 @@ describe("neighbor and traversal semantics", () => {
         startIndex: 2,
       }),
     ).toBe("only answer");
+  });
+
+  it("collects copy content across adjacent turns without a visible prompt", () => {
+    const chronological: StreamItem[] = [
+      { ...assistantMessage("a1", "first turn", 1), turnId: "turn-1" },
+      { ...toolCall("tool", 2), turnId: "turn-2" },
+      { ...assistantMessage("a2", "second turn", 3), turnId: "turn-2" },
+    ];
+    const strategy = resolveStreamRenderStrategy({ platform: "web", isMobileBreakpoint: false });
+
+    expect(
+      collectAssistantResponseContentForStreamRenderStrategy({
+        strategy,
+        items: chronological,
+        startIndex: 2,
+      }),
+    ).toBe("first turn\n\nsecond turn");
   });
 
   it("returns undefined neighbor when index would be out of bounds", () => {

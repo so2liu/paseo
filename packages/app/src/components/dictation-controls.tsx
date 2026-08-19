@@ -302,7 +302,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   timerText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.semibold,
     fontVariant: ["tabular-nums"],
   },
@@ -340,7 +340,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   statusLabel: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.semibold,
   },
 }));
@@ -382,13 +382,13 @@ const overlayStyles = StyleSheet.create((theme) => ({
     gap: theme.spacing[4],
   },
   timerText: {
-    fontSize: theme.fontSize.xl,
+    fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.semibold,
     fontVariant: ["tabular-nums"],
   },
   transcriptText: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: Math.ceil(theme.fontSize.sm * 1.25),
+    fontSize: theme.fontSize.base,
+    lineHeight: Math.ceil(theme.fontSize.base * 1.25),
     fontWeight: theme.fontWeight.normal,
     textAlign: "center",
     paddingHorizontal: theme.spacing[2],

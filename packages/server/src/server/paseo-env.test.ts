@@ -20,6 +20,7 @@ describe("paseo env contract", () => {
     PASEO_DESKTOP_BUILD_ID: "desktop-build",
     [PASEO_NODE_ENV]: "production",
     PASEO_SUPERVISED: "1",
+    ESBUILD_BINARY_PATH: "/Applications/Paseo.app/Contents/Resources/app.asar.unpacked/esbuild",
   };
   const runtimeControlEnvKeys = [
     "ELECTRON_RUN_AS_NODE",
@@ -28,6 +29,7 @@ describe("paseo env contract", () => {
     "PASEO_DESKTOP_BUILD_ID",
     "PASEO_SUPERVISED",
     "ELECTRON_NO_ATTACH_CONSOLE",
+    "ESBUILD_BINARY_PATH",
   ] as const;
 
   test("builds internal daemon child env by preserving pass-through and control vars", () => {

@@ -111,7 +111,8 @@ export class AgentMessageQueueService {
     this.draining.add(agentId);
     try {
       const prompt = buildAgentPrompt(item.text, item.images, item.attachments);
-      const steered = await this.agentManager.steerAgent(agentId, prompt);
+      const steered =
+        (await this.agentManager.steerAgentRun(agentId, prompt)).status === "accepted";
       if (!steered) {
         // The provider may finish between the UI rendering the steer action and
         // this request reaching the daemon. Preserve the user's intent by

@@ -242,6 +242,7 @@ function BadgePreview({
         {t("settings.host.appearance.preview.workspaceName")}
       </Text>
       <WorkspaceMetaRow
+        currentBranch={null}
         projectName={null}
         hostBadge={hostBadge}
         prHint={null}
@@ -326,7 +327,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   triggerText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   swatch: {
     width: ICON_SIZE.md,
@@ -347,7 +348,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   nameText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     flexShrink: 1,
   },
   preview: {
@@ -362,7 +363,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   previewTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     flexShrink: 1,
   },
 }));

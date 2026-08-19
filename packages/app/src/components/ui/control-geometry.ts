@@ -1,5 +1,5 @@
 import type { StyleProp, ViewStyle } from "react-native";
-import type { Theme } from "@/styles/theme";
+import { CONTROL_HEIGHT, type Theme } from "@/styles/theme";
 
 export type ButtonControlSize = "xs" | "sm" | "md" | "lg";
 export type FieldControlSize = "sm" | "md";
@@ -32,6 +32,24 @@ const CONTROL_FOCUS_RING_WIDTH = 2;
 const CONTROL_FOCUS_RING_OFFSET = 1;
 const CONTROL_CENTER_JUSTIFY_CONTENT = "center";
 const FIELD_TEXT_LINE_HEIGHT_RATIO = 1.4;
+
+/**
+ * The three control heights every button, field, and segmented control is built from.
+ * Exported so a row that hosts one of those controls can size itself from the same
+ * numbers instead of guessing a height the control then outgrows.
+ */
+export const CONTROL_HEIGHTS = {
+  tight: CONTROL_HEIGHT.tight,
+  compact: CONTROL_HEIGHT.compact,
+  field: CONTROL_HEIGHT.field,
+};
+
+export const buttonControlHeight: Record<ButtonControlSize, number> = {
+  xs: CONTROL_HEIGHTS.tight,
+  sm: CONTROL_HEIGHTS.compact,
+  md: CONTROL_HEIGHTS.field,
+  lg: CONTROL_HEIGHTS.field,
+};
 
 function fieldLineHeight(fontSize: number): number {
   return Math.round(fontSize * FIELD_TEXT_LINE_HEIGHT_RATIO);
@@ -70,7 +88,6 @@ export function resolveControlInteractionStyles(
 }
 
 export function createControlGeometry(theme: Theme) {
-  const controlHeights = theme.controlHeight;
   const switchScale = theme.iconSize.md / SWITCH_THUMB_SIZE;
   const switchTrackWidth = SWITCH_TRACK_WIDTH * switchScale;
   const switchTrackHeight = SWITCH_TRACK_HEIGHT * switchScale;
@@ -82,22 +99,22 @@ export function createControlGeometry(theme: Theme) {
     thumbSize: switchThumbSize,
     thumbTravel: switchTrackWidth - switchThumbSize - switchTrackInset * 2,
   };
-  const fieldTextSmLineHeight = fieldLineHeight(theme.fontSize.sm);
+  const fieldTextSmLineHeight = fieldLineHeight(theme.fontSize.base);
   const fieldTextMdLineHeight = fieldLineHeight(theme.fontSize.base);
   const fieldControlSm = {
-    minHeight: controlHeights.compact,
+    minHeight: CONTROL_HEIGHTS.compact,
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: fieldVerticalPadding(controlHeights.compact, fieldTextSmLineHeight),
+    paddingVertical: fieldVerticalPadding(CONTROL_HEIGHTS.compact, fieldTextSmLineHeight),
     borderRadius: theme.borderRadius.md,
   };
   const fieldControlMd = {
-    minHeight: controlHeights.field,
+    minHeight: CONTROL_HEIGHTS.field,
     paddingHorizontal: theme.spacing[4],
-    paddingVertical: fieldVerticalPadding(controlHeights.field, fieldTextMdLineHeight),
+    paddingVertical: fieldVerticalPadding(CONTROL_HEIGHTS.field, fieldTextMdLineHeight),
     borderRadius: theme.borderRadius.lg,
   };
   const fieldTextSm = {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     lineHeight: fieldTextSmLineHeight,
   };
   const fieldTextMd = {
@@ -105,36 +122,36 @@ export function createControlGeometry(theme: Theme) {
     lineHeight: fieldTextMdLineHeight,
   };
   const switchControl = {
-    minHeight: controlHeights.compact,
+    minHeight: CONTROL_HEIGHTS.compact,
     justifyContent: CONTROL_CENTER_JUSTIFY_CONTENT,
   } satisfies { minHeight: number; justifyContent: "center" };
 
   return {
     buttonXs: {
-      minHeight: controlHeights.tight,
+      minHeight: buttonControlHeight.xs,
       paddingHorizontal: theme.spacing[3],
       borderRadius: theme.borderRadius.md,
     },
     buttonSm: {
-      minHeight: controlHeights.compact,
+      minHeight: buttonControlHeight.sm,
       paddingHorizontal: theme.spacing[3],
       borderRadius: theme.borderRadius.md,
     },
     buttonMd: {
-      minHeight: controlHeights.field,
+      minHeight: buttonControlHeight.md,
       paddingHorizontal: theme.spacing[4],
       borderRadius: theme.borderRadius.lg,
     },
     buttonLg: {
-      minHeight: controlHeights.field,
+      minHeight: buttonControlHeight.lg,
       paddingHorizontal: theme.spacing[6],
       borderRadius: theme.borderRadius.xl,
     },
     buttonText: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
     buttonTextXs: {
-      fontSize: theme.fontSize.xs,
+      fontSize: theme.fontSize.sm,
     },
     formTextInputSm: {
       ...fieldControlSm,
@@ -177,40 +194,40 @@ export function createControlGeometry(theme: Theme) {
     switchControl,
     switchGeometry,
     segmentedContainerXs: {
-      minHeight: controlHeights.tight,
+      minHeight: CONTROL_HEIGHTS.tight,
       padding: 0,
     },
     segmentedContainerSm: {
-      minHeight: controlHeights.compact,
+      minHeight: CONTROL_HEIGHTS.compact,
       padding: 0,
     },
     segmentedContainerMd: {
-      minHeight: controlHeights.field,
+      minHeight: CONTROL_HEIGHTS.field,
       padding: 0,
     },
     segmentedSegmentXs: {
-      minHeight: controlHeights.tight - SEGMENTED_TIGHT_INSET * 2,
-      paddingHorizontal: theme.spacing[3],
-      borderRadius: theme.borderRadius.full,
+      minHeight: CONTROL_HEIGHTS.tight - SEGMENTED_TIGHT_INSET * 2,
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.borderRadius.md,
     },
     segmentedSegmentSm: {
-      minHeight: controlHeights.compact - SEGMENTED_COMPACT_INSET * 2,
-      paddingHorizontal: theme.spacing[3],
-      borderRadius: theme.borderRadius.full,
+      minHeight: CONTROL_HEIGHTS.compact - SEGMENTED_COMPACT_INSET * 2,
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.borderRadius.md,
     },
     segmentedSegmentMd: {
-      minHeight: controlHeights.field - SEGMENTED_FIELD_INSET * 2,
-      paddingHorizontal: theme.spacing[4],
-      borderRadius: theme.borderRadius.full,
+      minHeight: CONTROL_HEIGHTS.field - SEGMENTED_FIELD_INSET * 2,
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: theme.borderRadius.lg,
     },
     segmentedLabelXs: {
-      fontSize: theme.fontSize.xs,
+      fontSize: theme.fontSize.sm,
     },
     segmentedLabelSm: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
     segmentedLabelMd: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
   };
 }

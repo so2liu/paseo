@@ -20,6 +20,16 @@ export interface CommandCenterAgentResult {
   run(): void;
 }
 
+export interface CommandCenterFileResult {
+  kind: "file";
+  id: string;
+  filePath: string;
+  title: string;
+  subtitle: string;
+  searchText: string;
+  run(): void;
+}
+
 export interface CommandCenterContributionResult {
   kind: "contribution";
   id: string;
@@ -31,6 +41,7 @@ export interface CommandCenterContributionResult {
 export type CommandCenterResult =
   | CommandCenterWorkspaceResult
   | CommandCenterAgentResult
+  | CommandCenterFileResult
   | CommandCenterContributionResult;
 
 export interface CommandCenterResultSection {
@@ -86,6 +97,7 @@ function contributionSearchText(contribution: CommandCenterContribution): string
 
 function resultHeight(result: CommandCenterResult, metrics: CommandCenterRowMetrics): number {
   if (result.kind === "workspace" || result.kind === "agent") return metrics.tallRow;
+  if (result.kind === "file") return metrics.compactRow;
   if (result.contribution.presentation.kind === "action") {
     return result.contribution.presentation.subtitle ? metrics.tallRow : metrics.compactRow;
   }

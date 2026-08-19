@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import type { DraggableListDragHandleProps } from "@/components/draggable-list.types";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
@@ -22,6 +23,7 @@ import { useWorkspaceReviewStatus } from "@/hooks/use-workspace-review-status";
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { isNative as platformIsNative } from "@/constants/platform";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import {
   SidebarWorkspaceContextMenu,
@@ -283,7 +285,8 @@ function WorkspaceRowBody({
   onMarkReady,
   archiveShortcutKeys,
 }: WorkspaceRowBodyProps) {
-  const isTouchPlatform = platformIsNative;
+  const isCompact = useIsCompactFormFactor();
+  const isTouchPlatform = platformIsNative || isCompact;
   const [isPressed, setIsPressed] = useState(false);
   const trailing = useSidebarWorkspaceTrailing();
   const draggable = Boolean(drag);
@@ -330,6 +333,7 @@ function WorkspaceRowBody({
           selected,
           isHovered,
         });
+        const backdrop = getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered });
         return (
           // The fork adds swipe-to-mark-done on touch platforms; the row itself is upstream's.
           <SidebarWorkspaceReviewSwipe onMarkDone={onMarkDone}>
@@ -378,17 +382,16 @@ function WorkspaceRowBody({
                   workspace={workspace}
                   hostBadge={hostBadge}
                   serviceSummary={serviceSummary}
-                  backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
+                  backdrop={backdrop}
                   isHovered={isHovered}
                   isLoading={isArchiving || isCreating}
                   isCreating={isCreating}
                   shortcutNumber={shortcutNumber}
                   showShortcutBadge={showShortcutBadge}
-                  onMarkDone={onMarkDone}
-                  onMarkReady={onMarkReady}
                 >
                   <WorkspaceRowTrailingActions
                     workspace={workspace}
+                    backdrop={backdrop}
                     trailing={trailing}
                     isHovered={isHovered}
                     isTouchPlatform={isTouchPlatform}
@@ -418,6 +421,7 @@ function WorkspaceRowBody({
 
 function WorkspaceRowTrailingActions({
   workspace,
+  backdrop,
   trailing,
   isHovered,
   isTouchPlatform,
@@ -436,6 +440,7 @@ function WorkspaceRowTrailingActions({
   onRename,
 }: {
   workspace: SidebarWorkspaceEntry;
+  backdrop: SidebarSurfaceBackdrop;
   trailing: SidebarWorkspaceTrailing;
   isHovered: boolean;
   isTouchPlatform: boolean;
@@ -481,11 +486,17 @@ function WorkspaceRowTrailingActions({
           <SidebarWorkspaceTrailingActionBase visible={showTrailing}>
             <SidebarWorkspaceTrailingContent workspace={workspace} trailing={trailing} />
           </SidebarWorkspaceTrailingActionBase>
-          <SidebarWorkspaceTrailingActionOverlay visible={kebab.showKebab} scrim={showScrim}>
+          <SidebarWorkspaceTrailingActionOverlay
+            visible={kebab.showKebab}
+            scrimBackdrop={showScrim ? backdrop : undefined}
+          >
             {onArchive ? (
               <SidebarWorkspaceMenu
                 {...kebab.menuProps}
                 workspaceKey={workspace.workspaceKey}
+                serverId={workspace.serverId}
+                workspaceId={workspace.workspaceId}
+                workspaceLabels={workspace.labels}
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
                 onRename={onRename}
@@ -518,8 +529,8 @@ function getWorkspaceRowStyle({
 }) {
   return [
     styles.workspaceRow,
-    selected && styles.sidebarRowSelected,
     isHovered && styles.workspaceRowHovered,
+    selected && styles.sidebarRowSelected,
     isDragging && styles.workspaceRowDragging,
     isPressed && styles.workspaceRowPressed,
   ];
@@ -559,11 +570,11 @@ const styles = StyleSheet.create((theme) => ({
     ...theme.shadow.md,
   },
   sidebarRowSelected: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surfaceSidebarSelected,
   },
   workspaceCreatingText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     flexShrink: 0,
   },
 }));
