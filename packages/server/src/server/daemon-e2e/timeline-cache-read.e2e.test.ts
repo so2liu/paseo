@@ -85,7 +85,7 @@ describe("daemon E2E - durable timeline reads", () => {
       const { agentManager } = ctx.daemon.daemon;
       // Stand in for the idle-runtime sweep that collects agents after an hour.
       await agentManager.closeAgent(agent.id);
-      await agentManager.flushCommittedTimelines();
+      await agentManager.flushForShutdown();
       expect(agentManager.getAgent(agent.id)).toBeNull();
 
       const timeline = await ctx.client.fetchAgentTimeline(agent.id, {
@@ -166,7 +166,7 @@ describe("daemon E2E - durable timeline reads", () => {
 
       const { agentManager } = ctx.daemon.daemon;
       await agentManager.closeAgent(agent.id);
-      await agentManager.flushCommittedTimelines();
+      await agentManager.flushForShutdown();
       expect(agentManager.getAgent(agent.id)).toBeNull();
 
       const cached = await ctx.client.fetchAgentTimeline(agent.id, {

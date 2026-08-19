@@ -158,12 +158,12 @@ describe("applyAppearance", () => {
     alreadyScaled.controlHeight = { tight: 99, compact: 99, field: 99 };
 
     const result = updater(alreadyScaled);
-    expect(result.iconSize).toEqual({ xs: 24, sm: 28, md: 32, lg: 40 });
-    expect(result.controlHeight).toEqual({ tight: 56, compact: 64, field: 88 });
+    expect(result.iconSize).toEqual({ xs: 27, sm: 32, md: 37, lg: 46 });
+    expect(result.controlHeight).toEqual({ tight: 64, compact: 73, field: 101 });
   });
 
   it("keeps authored icon and control geometry at the default UI size", () => {
-    applyAppearance(makeInput({ uiBaseFontSize: 16 }));
+    applyAppearance(makeInput({ uiBaseFontSize: 14 }));
 
     const result = runCapturedUpdater();
     expect(result.iconSize).toEqual({ xs: 12, sm: 14, md: 16, lg: 20 });
@@ -187,7 +187,7 @@ describe("applyAppearance", () => {
   });
 
   it("does not let the independent code size affect icons or controls", () => {
-    applyAppearance(makeInput({ uiBaseFontSize: 16, codeFontSize: 32 }));
+    applyAppearance(makeInput({ uiBaseFontSize: 14, codeFontSize: 32 }));
 
     const result = runCapturedUpdater();
     expect(result.iconSize).toEqual({ xs: 12, sm: 14, md: 16, lg: 20 });

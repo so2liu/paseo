@@ -20,7 +20,7 @@ describe("AgentMessageQueueService", () => {
     const manager = {
       subscribe: vi.fn(() => () => undefined),
       hasInFlightRun: vi.fn(() => true),
-      steerAgent: vi.fn(async () => true),
+      steerAgentRun: vi.fn(async () => ({ status: "accepted" as const })),
       getAgent: vi.fn(() => ({ id: "agent-1", provider: "claude" })),
       tryRunOutOfBand: vi.fn(() => false),
       streamAgent,
@@ -65,13 +65,13 @@ describe("AgentMessageQueueService", () => {
 
     await service.steer("agent-1", "message-1");
 
-    expect(manager.steerAgent).toHaveBeenCalledOnce();
+    expect(manager.steerAgentRun).toHaveBeenCalledOnce();
     expect(await service.list("agent-1")).toEqual([]);
   });
 
   test("starts the queued message as the next turn when the active turn already finished", async () => {
     const { manager, service } = await createService();
-    vi.mocked(manager.steerAgent).mockResolvedValueOnce(false);
+    vi.mocked(manager.steerAgentRun).mockResolvedValueOnce({ status: "unavailable" });
     vi.mocked(manager.hasInFlightRun).mockReturnValue(false);
     await service.enqueue({
       id: "message-1",
@@ -90,7 +90,7 @@ describe("AgentMessageQueueService", () => {
 
   test("keeps the queued message when an active provider rejects steering", async () => {
     const { manager, service } = await createService();
-    vi.mocked(manager.steerAgent).mockRejectedValueOnce(new Error("provider rejected steer"));
+    vi.mocked(manager.steerAgentRun).mockRejectedValueOnce(new Error("provider rejected steer"));
     await service.enqueue({
       id: "message-1",
       agentId: "agent-1",

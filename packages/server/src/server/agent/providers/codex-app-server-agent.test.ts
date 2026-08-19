@@ -3314,14 +3314,17 @@ describe("Codex app-server provider", () => {
     const session = createSession();
     const requests: Array<{ method: string; params: unknown }> = [];
     session.currentTurnId = "active-turn";
+    session.activeForegroundTurnId = "foreground-turn";
     session.client = {
       request: async (method, params) => {
         requests.push({ method, params });
-        return {};
+        return { turnId: "active-turn" };
       },
     };
 
-    await session.steer?.("Use the existing implementation instead.");
+    await session.steerActiveTurn?.("Use the existing implementation instead.", {
+      expectedTurnId: "foreground-turn",
+    });
 
     expect(requests).toContainEqual({
       method: "turn/steer",

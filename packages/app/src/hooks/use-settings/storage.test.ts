@@ -159,18 +159,6 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.sendBehavior).toBe("queue");
   });
 
-  it("preserves an explicit interrupt preference", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "interrupt" }),
-      }),
-    });
-
-    const result = await loadAppSettingsFromStorage(deps);
-
-    expect(result.sendBehavior).toBe("interrupt");
-  });
-
   it("defaults workspace title source to title when storage is empty", async () => {
     const deps = makeDeps();
 

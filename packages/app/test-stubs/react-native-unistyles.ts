@@ -51,7 +51,10 @@ const testTheme = {
     xl: 12,
     full: 9999,
   },
-  iconSize: { sm: 16, md: 20 },
+  // Fork: icon sizes and control heights scale with the UI font size, so the stub
+  // carries the full ramp `createControlGeometry` reads.
+  iconSize: { xs: 12, sm: 16, md: 20, lg: 24 },
+  controlHeight: { tight: 28, compact: 32, field: 44 },
   opacity: { 50: 0.5 },
   shadow: {
     sm: {
