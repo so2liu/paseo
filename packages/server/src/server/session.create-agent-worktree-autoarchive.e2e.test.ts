@@ -154,12 +154,16 @@ test("create_agent_request creates a worktree and auto-archives both after the f
   // last-reference worktree directory is gone.
   await expectAgentAbsentFromActiveList(created.id);
   await expect.poll(() => existsSync(created.cwd), { timeout: 10000, interval: 100 }).toBe(false);
-  // Archived tabs can continue asking for history. These reads must not recreate
-  // the removed workspace observation or compromise the next agent lifecycle.
+  // Archived tabs can continue asking for history. Upstream rejects these reads
+  // because it has no way to answer without a runtime; this fork serves them from
+  // the committed timeline, so they succeed. Either way the property that matters
+  // is the same: the reads must not recreate the removed workspace observation or
+  // compromise the next agent lifecycle.
   const staleTimelineReads = await Promise.allSettled(
     Array.from({ length: 10 }, () => ctx.client.fetchAgentTimeline(created.id, { limit: 20 })),
   );
-  expect(staleTimelineReads.every((result) => result.status === "rejected")).toBe(true);
+  expect(staleTimelineReads.every((result) => result.status === "fulfilled")).toBe(true);
+  expect(existsSync(created.cwd)).toBe(false);
   const subsequent = await ctx.client.createAgent({
     config: { ...getFullAccessConfig("codex"), cwd: repoDir },
     initialPrompt: "Say done.",
