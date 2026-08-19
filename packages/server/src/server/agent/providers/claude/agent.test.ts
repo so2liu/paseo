@@ -21,6 +21,7 @@ import type { AgentSession, AgentTimelineItem, AgentStreamEvent } from "../../ag
 
 interface TestClaudeSession {
   translateMessageToEvents(message: SDKMessage): AgentStreamEvent[];
+  close(): Promise<void>;
 }
 
 afterEach(() => {
@@ -777,7 +778,7 @@ describe("ClaudeAgentSession features", () => {
     await session.close();
   });
 
-  test("steers an active Claude turn with a priority-now user message", async () => {
+  test("pushes a steer into the exact active Claude query without starting another turn", async () => {
     const { queryFactory } = createQueryMock();
     const client = new ClaudeAgentClient({
       logger,
@@ -785,115 +786,44 @@ describe("ClaudeAgentSession features", () => {
       resolveBinary: async () => "/test/claude/bin",
     });
     const session = await client.createSession({ provider: "claude", cwd: process.cwd() });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+    try {
+      const { turnId } = await session.startTurn("first turn");
+      const input = queryFactory.mock.calls[0]?.[0].prompt as AsyncIterable<SDKUserMessage>;
+      const iterator = input[Symbol.asyncIterator]();
+      await expect(iterator.next()).resolves.toMatchObject({ value: { type: "user" } });
 
-    await session.startTurn("initial task");
-    const prompt = queryFactory.mock.calls[0]?.[0].prompt;
-    if (typeof prompt === "string") throw new Error("Expected streaming Claude input");
-    const iterator = prompt[Symbol.asyncIterator]();
-    await iterator.next();
+      await expect(
+        session.steerActiveTurn?.("same turn follow-up", {
+          expectedTurnId: turnId,
+          clientMessageId: "steer-client-id",
+        }),
+      ).resolves.toEqual({ status: "accepted" });
+      await expect(iterator.next()).resolves.toMatchObject({
+        value: {
+          type: "user",
+          priority: "next",
+          message: { content: [{ type: "text", text: "same turn follow-up" }] },
+        },
+      });
+      expect(events.filter((event) => event.type === "turn_started")).toHaveLength(1);
 
-    await session.steer?.("change direction");
-
-    await expect(iterator.next()).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "user",
-        priority: "now",
-        message: { role: "user", content: [{ type: "text", text: "change direction" }] },
-      },
-    });
-    await session.close();
-  });
-
-  test("shares query initialization when the first steer races session startup", async () => {
-    const { queryFactory } = createQueryMock();
-    let resolveBinary!: (value: string) => void;
-    const binary = new Promise<string>((resolve) => {
-      resolveBinary = resolve;
-    });
-    const client = new ClaudeAgentClient({
-      logger,
-      queryFactory,
-      resolveBinary: () => binary,
-    });
-    const session = await client.createSession({ provider: "claude", cwd: process.cwd() });
-
-    const startPromise = session.startTurn("initial task");
-    const steerPromise = session.steer?.("change direction");
-    resolveBinary("/test/claude/bin");
-    await Promise.all([startPromise, steerPromise]);
-
-    expect(queryFactory).toHaveBeenCalledTimes(1);
-    const prompt = queryFactory.mock.calls[0]?.[0].prompt;
-    if (typeof prompt === "string") throw new Error("Expected streaming Claude input");
-    const iterator = prompt[Symbol.asyncIterator]();
-    await expect(iterator.next()).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "user",
-        message: { role: "user", content: [{ type: "text", text: "initial task" }] },
-      },
-    });
-    await expect(iterator.next()).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "user",
-        priority: "now",
-        message: { role: "user", content: [{ type: "text", text: "change direction" }] },
-      },
-    });
-    await session.close();
-  });
-
-  test("maps Ultracode to xhigh effort and Claude ultracode settings", async () => {
-    const { queryFactory } = createQueryMock();
-    const client = new ClaudeAgentClient({
-      logger,
-      queryFactory,
-      resolveBinary: async () => "/test/claude/bin",
-    });
-    const session = await client.createSession({
-      provider: "claude",
-      cwd: process.cwd(),
-      model: "claude-opus-4-8",
-      thinkingOptionId: "ultracode",
-    });
-
-    await expect(session.startTurn("hello")).resolves.toEqual({
-      turnId: expect.stringMatching(/^foreground-turn-/),
-    });
-
-    expect(queryFactory.mock.calls[0]?.[0].options).toMatchObject({
-      effort: "xhigh",
-      thinking: { type: "adaptive" },
-      settings: { ultracode: true },
-    });
-
-    await session.close();
-  });
-
-  test("turns Claude thinking off without retaining an effort level", async () => {
-    const { queryFactory, launches } = createQueryMock();
-    const client = new ClaudeAgentClient({
-      logger,
-      queryFactory,
-      resolveBinary: async () => "/test/claude/bin",
-    });
-    const session = await client.createSession({
-      provider: "claude",
-      cwd: process.cwd(),
-      model: "claude-sonnet-5",
-      thinkingOptionId: "off",
-    });
-
-    await expect(session.startTurn("hello")).resolves.toEqual({
-      turnId: expect.stringMatching(/^foreground-turn-/),
-    });
-
-    expect(launches[0]?.options.thinking).toEqual({ type: "disabled" });
-    expect(launches[0]?.options).not.toHaveProperty("effort");
-
-    await session.close();
+      await expect(
+        session.steerActiveTurn?.("/rewind submitted-message-id", { expectedTurnId: turnId }),
+      ).resolves.toEqual({ status: "unavailable" });
+      let rewindReachedLiveInput = false;
+      void iterator.next().then(() => {
+        rewindReachedLiveInput = true;
+        return undefined;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(rewindReachedLiveInput).toBe(false);
+    } finally {
+      unsubscribe();
+      await session.close();
+    }
   });
 
   test.each([
@@ -1455,6 +1385,52 @@ describe("ClaudeAgentSession context window usage", () => {
       model: options?.model,
     });
   }
+
+  test("emits canonical task snapshots from Claude TaskCreate results", async () => {
+    const session = await createSessionForTest();
+    try {
+      session.translateMessageToEvents({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "task-create-1",
+              name: "TaskCreate",
+              input: { subject: "Inspect provider", activeForm: "Inspecting provider" },
+            },
+          ],
+        },
+      } as unknown as SDKMessage);
+
+      const events = session.translateMessageToEvents({
+        type: "user",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "task-create-1", content: "created" }],
+        },
+        toolUseResult: { task: { id: "1", subject: "Inspect provider" } },
+      } as unknown as SDKMessage);
+
+      expect(events).toContainEqual({
+        type: "timeline",
+        provider: "claude",
+        item: {
+          type: "todo",
+          items: [
+            {
+              id: "1",
+              text: "Inspect provider",
+              activeForm: "Inspecting provider",
+              status: "pending",
+              completed: false,
+            },
+          ],
+        },
+      });
+    } finally {
+      await session.close();
+    }
+  });
 
   async function collectStreamEvents(session: AgentSession, prompt = "turn") {
     const events: AgentStreamEvent[] = [];

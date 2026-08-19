@@ -222,7 +222,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.foreground,
   },
   // The bubble takes its height from the text it renders. Two things scale that text and
-  // only one of them is knowable here: the appearance setting drives `fontSize.xs` (12 at
+  // only one of them is knowable here: the appearance setting drives `fontSize.sm` (12 at
   // the default interface size, 24 at the largest), while system Dynamic Type scales it
   // again at render. Any height computed from the token alone clips the second line, so the
   // box is sized by its content and centred with a percentage translation instead.
@@ -241,7 +241,7 @@ const styles = StyleSheet.create((theme) => ({
     ...theme.shadow.md,
   },
   previewText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
   },
 }));

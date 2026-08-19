@@ -3,11 +3,6 @@ import { existsSync, readFileSync } from "node:fs";
 
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "../private-files.js";
 
-interface PushTokenEntry {
-  token: string;
-  deviceId: string | null;
-}
-
 /**
  * Store for Expo push tokens.
  *
@@ -21,58 +16,69 @@ interface PushTokenEntry {
  */
 export class PushTokenStore {
   private readonly logger: pino.Logger;
-  private entries: Map<string, PushTokenEntry> = new Map();
+  private subscriptions = new Map<string, number>();
   private readonly filePath: string;
+  private readonly now: () => number;
+  private readonly leaseMs: number;
+  private readonly write: typeof writePrivateFileAtomicSync;
 
-  constructor(logger: pino.Logger, filePath: string) {
+  constructor(
+    logger: pino.Logger,
+    filePath: string,
+    now: () => number,
+    leaseMs: number,
+    write: typeof writePrivateFileAtomicSync = writePrivateFileAtomicSync,
+  ) {
     this.logger = logger.child({ component: "token-store" });
     this.filePath = filePath;
+    this.now = now;
+    this.leaseMs = leaseMs;
+    this.write = write;
     this.loadFromDisk();
   }
 
-  addToken(token: string, deviceId?: string | null): void {
+  renewToken(token: string): void {
     const normalized = token.trim();
     if (!normalized) return;
-    const normalizedDeviceId = deviceId?.trim() || null;
-
-    const supersededTokens = normalizedDeviceId
-      ? [...this.entries.values()]
-          .filter((entry) => entry.deviceId === normalizedDeviceId && entry.token !== normalized)
-          .map((entry) => entry.token)
-      : [];
-
-    const existing = this.entries.get(normalized);
-    // A client that does not identify its device must not erase an association we already have.
-    // Downgrading the app re-registers the same token without a device id, and overwriting the
-    // entry with null would leave the next upgrade unable to evict this token again.
-    const effectiveDeviceId = normalizedDeviceId ?? existing?.deviceId ?? null;
-    if (existing && existing.deviceId === effectiveDeviceId && supersededTokens.length === 0) {
-      return;
-    }
-
-    for (const superseded of supersededTokens) {
-      this.entries.delete(superseded);
-    }
-    this.entries.set(normalized, { token: normalized, deviceId: effectiveDeviceId });
-    this.persist();
-    this.logger.debug(
-      { total: this.entries.size, superseded: supersededTokens.length },
-      "Added token",
-    );
+    const now = this.now();
+    const currentExpiry = this.subscriptions.get(normalized);
+    if (currentExpiry !== undefined && currentExpiry - now > this.leaseMs / 2) return;
+    const next = new Map(this.subscriptions);
+    next.set(normalized, now + this.leaseMs);
+    this.persist(next);
+    this.subscriptions = next;
+    this.logger.debug({ total: this.subscriptions.size }, "Renewed token");
   }
 
-  removeToken(token: string): void {
+  revokeToken(token: string): void {
     const normalized = token.trim();
     if (!normalized) return;
-    const deleted = this.entries.delete(normalized);
-    if (deleted) {
-      this.persist();
-      this.logger.debug({ total: this.entries.size }, "Removed token");
-    }
+    if (!this.subscriptions.has(normalized)) return;
+    const next = new Map(this.subscriptions);
+    next.delete(normalized);
+    this.persist(next);
+    this.subscriptions = next;
+    this.logger.debug({ total: this.subscriptions.size }, "Revoked token");
   }
 
-  getAllTokens(): string[] {
-    return [...this.entries.keys()];
+  getActiveTokens(): string[] {
+    const now = this.now();
+    const active = new Map(this.subscriptions);
+    for (const [token, expiresAt] of this.subscriptions) {
+      if (expiresAt <= now) {
+        active.delete(token);
+      }
+    }
+    if (active.size !== this.subscriptions.size) {
+      try {
+        this.persist(active);
+        this.subscriptions = active;
+      } catch {
+        // Keep the previous state so a later send retries pruning. Expired tokens
+        // are still excluded from this delivery.
+      }
+    }
+    return Array.from(active.keys());
   }
 
   private loadFromDisk(): void {
@@ -82,50 +88,60 @@ export class PushTokenStore {
       }
       ensurePrivateFile(this.filePath);
       const raw = readFileSync(this.filePath, "utf-8");
-      const parsed = JSON.parse(raw) as { tokens?: unknown; entries?: unknown };
-      this.entries = new Map(
-        readPersistedEntries(parsed).map((entry) => [entry.token, entry] as const),
-      );
-      this.logger.info({ total: this.entries.size }, "Loaded push tokens");
+      const parsed = JSON.parse(raw) as { subscriptions?: unknown; tokens?: unknown };
+      const loaded = new Map<string, number>();
+      const subscriptions = Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [];
+      for (const value of subscriptions) {
+        if (!value || typeof value !== "object") continue;
+        const candidate = value as { token?: unknown; expiresAt?: unknown };
+        if (typeof candidate.token !== "string" || typeof candidate.expiresAt !== "string")
+          continue;
+        const token = candidate.token.trim();
+        const expiresAt = Date.parse(candidate.expiresAt);
+        if (token && Number.isFinite(expiresAt)) {
+          loaded.set(token, expiresAt);
+        }
+      }
+      this.subscriptions = loaded;
+
+      const legacyTokens = Array.isArray(parsed.tokens)
+        ? parsed.tokens.filter((token): token is string => typeof token === "string")
+        : [];
+      if (legacyTokens.length > 0) {
+        const migrated = new Map(loaded);
+        const expiresAt = this.now() + this.leaseMs;
+        for (const token of legacyTokens) {
+          const normalized = token.trim();
+          if (normalized) migrated.set(normalized, expiresAt);
+        }
+        this.persist(migrated);
+        this.subscriptions = migrated;
+      }
+      this.logger.info({ total: this.subscriptions.size }, "Loaded push tokens");
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.warn({ err }, "Failed to load push tokens");
     }
   }
 
-  private persist(): void {
+  private persist(subscriptions: ReadonlyMap<string, number>): void {
     try {
-      const entries = [...this.entries.values()];
-      // `tokens` is still written as a plain array so rolling the daemon back to a build that
-      // predates device ids keeps working instead of silently losing every registration.
       const payload =
-        JSON.stringify({ tokens: entries.map((entry) => entry.token), entries }, null, 2) + "\n";
-      writePrivateFileAtomicSync(this.filePath, payload);
+        JSON.stringify(
+          {
+            subscriptions: Array.from(subscriptions, ([token, expiresAt]) => ({
+              token,
+              expiresAt: new Date(expiresAt).toISOString(),
+            })),
+          },
+          null,
+          2,
+        ) + "\n";
+      this.write(this.filePath, payload);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.warn({ err }, "Failed to persist push tokens");
+      throw err;
     }
   }
-}
-
-function readPersistedEntries(parsed: { tokens?: unknown; entries?: unknown }): PushTokenEntry[] {
-  if (Array.isArray(parsed.entries)) {
-    return parsed.entries.flatMap((value) => {
-      if (typeof value !== "object" || value === null) return [];
-      const { token, deviceId } = value as { token?: unknown; deviceId?: unknown };
-      if (typeof token !== "string" || !token.trim()) return [];
-      return [
-        {
-          token: token.trim(),
-          deviceId: typeof deviceId === "string" && deviceId.trim() ? deviceId.trim() : null,
-        },
-      ];
-    });
-  }
-  if (Array.isArray(parsed.tokens)) {
-    return parsed.tokens.flatMap((value) =>
-      typeof value === "string" && value.trim() ? [{ token: value.trim(), deviceId: null }] : [],
-    );
-  }
-  return [];
 }

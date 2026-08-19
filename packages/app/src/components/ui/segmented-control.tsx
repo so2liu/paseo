@@ -188,7 +188,7 @@ const styles = StyleSheet.create((theme) => {
       ...geometry.segmentedSegmentMd,
     },
     segmentSelected: {
-      backgroundColor: theme.colors.foreground,
+      backgroundColor: theme.colors.surface3,
     },
     segmentHover: {
       backgroundColor: theme.colors.surface2,
@@ -217,7 +217,7 @@ const styles = StyleSheet.create((theme) => {
       ...geometry.segmentedLabelMd,
     },
     labelSelected: {
-      color: theme.colors.surface0,
+      color: theme.colors.foreground,
     },
   };
 });

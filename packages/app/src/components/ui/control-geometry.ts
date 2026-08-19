@@ -1,5 +1,5 @@
 import type { StyleProp, ViewStyle } from "react-native";
-import type { Theme } from "@/styles/theme";
+import { CONTROL_HEIGHT, type Theme } from "@/styles/theme";
 
 export type ButtonControlSize = "xs" | "sm" | "md" | "lg";
 export type FieldControlSize = "sm" | "md";
@@ -32,6 +32,24 @@ const CONTROL_FOCUS_RING_WIDTH = 2;
 const CONTROL_FOCUS_RING_OFFSET = 1;
 const CONTROL_CENTER_JUSTIFY_CONTENT = "center";
 const FIELD_TEXT_LINE_HEIGHT_RATIO = 1.4;
+
+/**
+ * The three control heights every button, field, and segmented control is built from.
+ * Exported so a row that hosts one of those controls can size itself from the same
+ * numbers instead of guessing a height the control then outgrows.
+ */
+export const CONTROL_HEIGHTS = {
+  tight: CONTROL_HEIGHT.tight,
+  compact: CONTROL_HEIGHT.compact,
+  field: CONTROL_HEIGHT.field,
+};
+
+export const buttonControlHeight: Record<ButtonControlSize, number> = {
+  xs: CONTROL_HEIGHTS.tight,
+  sm: CONTROL_HEIGHTS.compact,
+  md: CONTROL_HEIGHTS.field,
+  lg: CONTROL_HEIGHTS.field,
+};
 
 function fieldLineHeight(fontSize: number): number {
   return Math.round(fontSize * FIELD_TEXT_LINE_HEIGHT_RATIO);
@@ -70,6 +88,8 @@ export function resolveControlInteractionStyles(
 }
 
 export function createControlGeometry(theme: Theme) {
+  // Fork: control heights scale with the UI font size, so they come off the theme
+  // rather than the module-level ramp the static exports above expose.
   const controlHeights = theme.controlHeight;
   const switchScale = theme.iconSize.md / SWITCH_THUMB_SIZE;
   const switchTrackWidth = SWITCH_TRACK_WIDTH * switchScale;
@@ -82,7 +102,7 @@ export function createControlGeometry(theme: Theme) {
     thumbSize: switchThumbSize,
     thumbTravel: switchTrackWidth - switchThumbSize - switchTrackInset * 2,
   };
-  const fieldTextSmLineHeight = fieldLineHeight(theme.fontSize.sm);
+  const fieldTextSmLineHeight = fieldLineHeight(theme.fontSize.base);
   const fieldTextMdLineHeight = fieldLineHeight(theme.fontSize.base);
   const fieldControlSm = {
     minHeight: controlHeights.compact,
@@ -97,7 +117,7 @@ export function createControlGeometry(theme: Theme) {
     borderRadius: theme.borderRadius.lg,
   };
   const fieldTextSm = {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     lineHeight: fieldTextSmLineHeight,
   };
   const fieldTextMd = {
@@ -131,10 +151,10 @@ export function createControlGeometry(theme: Theme) {
       borderRadius: theme.borderRadius.xl,
     },
     buttonText: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
     buttonTextXs: {
-      fontSize: theme.fontSize.xs,
+      fontSize: theme.fontSize.sm,
     },
     formTextInputSm: {
       ...fieldControlSm,
@@ -190,27 +210,27 @@ export function createControlGeometry(theme: Theme) {
     },
     segmentedSegmentXs: {
       minHeight: controlHeights.tight - SEGMENTED_TIGHT_INSET * 2,
-      paddingHorizontal: theme.spacing[3],
-      borderRadius: theme.borderRadius.full,
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.borderRadius.md,
     },
     segmentedSegmentSm: {
       minHeight: controlHeights.compact - SEGMENTED_COMPACT_INSET * 2,
-      paddingHorizontal: theme.spacing[3],
-      borderRadius: theme.borderRadius.full,
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.borderRadius.md,
     },
     segmentedSegmentMd: {
       minHeight: controlHeights.field - SEGMENTED_FIELD_INSET * 2,
-      paddingHorizontal: theme.spacing[4],
-      borderRadius: theme.borderRadius.full,
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: theme.borderRadius.lg,
     },
     segmentedLabelXs: {
-      fontSize: theme.fontSize.xs,
+      fontSize: theme.fontSize.sm,
     },
     segmentedLabelSm: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
     segmentedLabelMd: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
   };
 }

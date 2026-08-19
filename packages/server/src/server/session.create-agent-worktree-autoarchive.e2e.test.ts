@@ -141,12 +141,12 @@ test("create_agent_request creates a worktree and auto-archives both after the f
 
   expect(created.cwd).not.toBe(repoDir);
   const listedWithWorktree = await ctx.client.getPaseoWorktreeList({ cwd: repoDir });
-  expect(listedWithWorktree.worktrees).toEqual([
-    expect.objectContaining({
-      worktreePath: created.cwd,
-      branchName: "agent-lifecycle-dispatch-test",
-    }),
-  ]);
+  expect(listedWithWorktree.worktrees).toHaveLength(1);
+  const listedWorktree = listedWithWorktree.worktrees[0];
+  expect(listedWorktree?.branchName).toBe("agent-lifecycle-dispatch-test");
+  expect(createRealpathAwarePathMatcher(created.cwd)(listedWorktree?.worktreePath ?? "")).toBe(
+    true,
+  );
 
   await ctx.client.waitForFinish(created.id, 10000);
 
@@ -154,6 +154,22 @@ test("create_agent_request creates a worktree and auto-archives both after the f
   // last-reference worktree directory is gone.
   await expectAgentAbsentFromActiveList(created.id);
   await expect.poll(() => existsSync(created.cwd), { timeout: 10000, interval: 100 }).toBe(false);
+  // Archived tabs can continue asking for history. Upstream rejects these reads
+  // because it has no way to answer without a runtime; this fork serves them from
+  // the committed timeline, so they succeed. Either way the property that matters
+  // is the same: the reads must not recreate the removed workspace observation or
+  // compromise the next agent lifecycle.
+  const staleTimelineReads = await Promise.allSettled(
+    Array.from({ length: 10 }, () => ctx.client.fetchAgentTimeline(created.id, { limit: 20 })),
+  );
+  expect(staleTimelineReads.every((result) => result.status === "fulfilled")).toBe(true);
+  expect(existsSync(created.cwd)).toBe(false);
+  const subsequent = await ctx.client.createAgent({
+    config: { ...getFullAccessConfig("codex"), cwd: repoDir },
+    initialPrompt: "Say done.",
+  });
+  await ctx.client.waitForFinish(subsequent.id, 10_000);
+  await expectAgentPresentInActiveList(subsequent.id);
 }, 30000);
 
 test("create_agent_request auto-archives a nested workspace from an existing Paseo worktree", async () => {

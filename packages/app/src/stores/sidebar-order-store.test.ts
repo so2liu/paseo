@@ -17,6 +17,7 @@ describe("migrateSidebarOrderState", () => {
     expect(migrated).toEqual({
       hostOrder: [],
       projectOrder: ["project-a"],
+      pinnedWorkspaceOrder: [],
       workspaceOrderByProject: {
         "project-a": ["host-a:main", "host-a:feature", "host-b:main"],
       },
@@ -27,7 +28,16 @@ describe("migrateSidebarOrderState", () => {
     expect(migrateSidebarOrderState({ hostOrder: ["host-b", "host-a", "host-b", ""] })).toEqual({
       hostOrder: ["host-b", "host-a"],
       projectOrder: [],
+      pinnedWorkspaceOrder: [],
       workspaceOrderByProject: {},
     });
+  });
+
+  it("normalizes pinned workspace order", () => {
+    const migrated = migrateSidebarOrderState({
+      pinnedWorkspaceOrder: [" host-a:one ", "host-a:one", "", "host-b:two"],
+    });
+
+    expect(migrated.pinnedWorkspaceOrder).toEqual(["host-a:one", "host-b:two"]);
   });
 });

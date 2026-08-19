@@ -250,8 +250,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   tileDescription: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    lineHeight: Math.round(theme.fontSize.sm * 1.3),
+    fontSize: theme.fontSize.base,
+    lineHeight: Math.round(theme.fontSize.base * 1.3),
   },
   communityRow: {
     position: "absolute",

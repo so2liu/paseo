@@ -128,14 +128,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   title: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xl,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     textAlign: "center",
   },
   body: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    lineHeight: Math.max(20, Math.round(theme.fontSize.sm * 1.4)),
+    fontSize: theme.fontSize.base,
+    lineHeight: Math.max(20, Math.round(theme.fontSize.base * 1.4)),
     textAlign: "center",
   },
   details: {
@@ -144,7 +144,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   detailsLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
   detailsSurface: {

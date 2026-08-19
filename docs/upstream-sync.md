@@ -171,14 +171,21 @@ git log --oneline <上次基线>..<同步前的 main> --full-history -- $(cat /t
 把清单当成证明）。正因如此，下面这份单独确认清单不能省：
 
 - 火山引擎 STT provider（`packages/server/src/server/speech/providers/volcengine/`）
-- SQLite timeline store（`packages/server/src/server/agent/sqlite-agent-timeline-store.ts`）
-- `mermaid` 依赖（`packages/app/package.json`）—— `v0.2.3` 那次就是从这里丢的
 - `so2liu` 更新源（`packages/desktop/electron-builder.yml`）
 - fork 的 Expo 项目 ID（`packages/app/app.config.js`）
+- 控件几何随字号缩放：`createControlGeometry` 必须读 `theme.controlHeight`，不是
+  模块级的静态高度表；`v0.5.0-beta.2` 那次就是被换成静态值、typecheck 和 lint
+  全绿、只有 `control-geometry.test.ts` 抓到（`packages/app/src/components/ui/control-geometry.ts`）
+- 界面字号上限 32（上游是 21）：`MAX_UI_BASE_FONT_SIZE`（`packages/app/src/hooks/use-settings/storage.ts`）
 - idle agent 必须常驻：从 `v0.2.5` 起，上游的无限期常驻已经完整覆盖并取代 fork
   原先的一小时 TTL；后续同步不得重新引入更短的自动回收（`docs/agent-lifecycle.md`）
-- 默认排队消息（`cd38ba86b`）、native mobile lite 模式（`d137fe81e`）、
-  混合项目 push token 重试（`0fe522848`）
+- 默认排队消息（`cd38ba86b`）、native mobile lite 模式（`d137fe81e`）
+
+以下几项**已经交还给上游**，不要在后续同步里"找回来"：SQLite timeline store 与
+epoch/backfill 补丁（`v0.5.0` 换成上游的 `FileAgentTimelineStore`）、`steer()` 与
+Claude 的 priority `now`（换成 `steerActiveTurn`）、push token 的 device-id 去重
+（换成上游的租约续期）、`file-preview/` 下的 Mermaid 与 HTML 沙箱预览（换成上游的
+`components/markdown/fence/mermaid/` 与 `file-pane/`）。
 
 ### 机械核对：导出符号与新增文件
 
@@ -234,6 +241,24 @@ git diff -U0 <上次基线> <同步前的 main> -- 'packages/*/src/*' | grep -E 
 
 从这两处得到的判断口径：**丢了"我们加的功能"要补回来；丢了"我们在旧实现上打的补丁"、
 而上游已经重写了那块实现，就以上游为准。**
+
+### `v0.5.0-beta.2` 那次的实际结果
+
+跨了两个 minor（`0.3.1` → `0.5.0-beta.2`）：上游 208 个提交、1413 个文件，91 个
+文件冲突。这次的特点是**上游一口气把 fork 四块定制的地基自己重写了**——转向、
+持久化时间线、推送令牌、Mermaid/HTML 预览。按上面的口径全部让位给上游，fork 的
+功能重新接到上游的新接口上（比如队列消息改走 `steerAgentRun`，"不加载 agent 直接
+读历史"改用 `getLatestCommittedSeq`）。让位的清单记在前面那份"已经交还给上游"里。
+
+两个值得记住的坑：
+
+1. **上游删掉了 `fontSize.xs` 这一档。** 它在自己的代码里把所有 `xs` 提到了 `sm`，
+   而 fork 保留 `xs` 的地方合并后全部编译不过。同批的 `FONT_SIZE.base` 从 16 变成
+   14，几何缩放的参考点跟着变，`apply-appearance.test.ts` 的期望值要重算。
+2. **`createControlGeometry` 被换成了静态高度表，typecheck 和 lint 全绿。**
+   大字号下控件不再跟着放大，是纯粹的行为回归，只有 `control-geometry.test.ts`
+   抓到了。这正是"机械核对认不出函数体内一行"的那类盲区——**跑定制自己的那几个
+   测试文件，比通读 diff 有效**。
 
 ## 合并同步 PR
 

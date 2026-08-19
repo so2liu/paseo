@@ -69,7 +69,7 @@ export function HostTransferModal({ visible, onClose }: { visible: boolean; onCl
     >
       <Text style={styles.helper}>{t("settings.serverMigration.importHelp")}</Text>
       <AdaptiveTextInput
-        value={value}
+        initialValue={value}
         onChangeText={setValue}
         placeholder={t("settings.serverMigration.placeholder")}
         multiline

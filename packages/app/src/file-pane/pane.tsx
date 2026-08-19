@@ -35,8 +35,7 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { useLiveFile } from "./live-file/hook";
 import { FilePanelBar } from "./bar";
 import { FileHtmlPreview } from "./html-preview";
-import { FileMarkdownPreview } from "@/file-preview/file-markdown-preview";
-import { MermaidViewportScroll } from "@/file-preview/mermaid-viewport-scroll";
+import { FileMarkdownPreview } from "./markdown-preview";
 import { FileEditorModel, getFileConflictCallout, type FileConflictCallout } from "./editor/model";
 import { createFileObservationSource } from "./editor/observation-source";
 import { FileEditorView } from "./editor/view";
@@ -303,16 +302,13 @@ function FilePreviewBody({
     if (renderKind === "markdown") {
       return (
         <View style={styles.previewScrollContainer}>
-          {/* Fork: Mermaid fences render as diagrams, and the scroller lets a wide
-              diagram pan without fighting the page scroll. See docs/file-preview.md. */}
-          <MermaidViewportScroll
+          <RNScrollView
             ref={previewScrollRef}
             style={styles.previewContent}
-            contentContainerStyle={styles.previewMarkdownScrollContent}
             showsVerticalScrollIndicator
           >
             <FileMarkdownPreview source={preview.content ?? ""} />
-          </MermaidViewportScroll>
+          </RNScrollView>
         </View>
       );
     }
@@ -856,22 +852,22 @@ const styles = StyleSheet.create((theme) => ({
   loadingText: {
     marginTop: theme.spacing[2],
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   errorText: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     textAlign: "center",
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
     textAlign: "center",
   },
   binaryMetaText: {
     marginTop: theme.spacing[2],
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   previewScrollContainer: {
     flex: 1,
@@ -882,9 +878,6 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
   },
   previewCodeScrollContent: {
-    padding: theme.spacing[4],
-  },
-  previewMarkdownScrollContent: {
     padding: theme.spacing[4],
   },
   previewImageScrollContent: {

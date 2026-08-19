@@ -243,8 +243,8 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: Math.round(theme.fontSize.base * 1.4),
   },
   description: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: Math.round(theme.fontSize.sm * 1.4),
+    fontSize: theme.fontSize.base,
+    lineHeight: Math.round(theme.fontSize.base * 1.4),
   },
   footer: {
     gap: theme.spacing[2],

@@ -5,6 +5,7 @@ import type pino from "pino";
 import { describe, expect, test } from "vitest";
 
 import { PRIVATE_FILE_MODE } from "../private-files.js";
+import { createPushNotifications } from "./index.js";
 import { PushTokenStore } from "./token-store.js";
 
 const MODE_MASK = 0o777;
@@ -16,6 +17,7 @@ function createLogger(): pino.Logger {
     debug: () => undefined,
     info: () => undefined,
     warn: () => undefined,
+    error: () => undefined,
   };
   return logger as unknown as pino.Logger;
 }
@@ -29,9 +31,12 @@ describe.skipIf(process.platform === "win32")("PushTokenStore file permissions",
     const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
     const tokenPath = path.join(home, "push-tokens.json");
     try {
-      const store = new PushTokenStore(createLogger(), tokenPath);
+      const pushNotifications = createPushNotifications({
+        logger: createLogger(),
+        filePath: tokenPath,
+      });
 
-      store.addToken("ExponentPushToken[test]");
+      pushNotifications.renew("ExponentPushToken[test]");
 
       expect(modeOf(tokenPath)).toBe(PRIVATE_FILE_MODE);
     } finally {
@@ -39,16 +44,22 @@ describe.skipIf(process.platform === "win32")("PushTokenStore file permissions",
     }
   });
 
-  test("repairs existing push token file permissions when loading", () => {
+  test("repairs existing push token file permissions when loading", async () => {
     const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
     const tokenPath = path.join(home, "push-tokens.json");
     try {
       writeFileSync(tokenPath, JSON.stringify({ tokens: ["ExponentPushToken[test]"] }));
       chmodSync(tokenPath, PERMISSIVE_FILE_MODE);
 
-      const store = new PushTokenStore(createLogger(), tokenPath);
+      const deliveries: string[][] = [];
+      const pushNotifications = createPushNotifications({
+        logger: createLogger(),
+        filePath: tokenPath,
+        deliver: async (tokens) => deliveries.push(tokens),
+      });
+      await pushNotifications.send({ title: "Agent finished", body: "Done" });
 
-      expect(store.getAllTokens()).toEqual(["ExponentPushToken[test]"]);
+      expect(deliveries).toEqual([["ExponentPushToken[test]"]]);
       expect(modeOf(tokenPath)).toBe(PRIVATE_FILE_MODE);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -56,100 +67,38 @@ describe.skipIf(process.platform === "win32")("PushTokenStore file permissions",
   });
 });
 
-describe("PushTokenStore device identity", () => {
-  test("replaces a device's previous token instead of pushing to both", () => {
-    const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
-    const tokenPath = path.join(home, "push-tokens.json");
-    try {
-      const store = new PushTokenStore(createLogger(), tokenPath);
+describe("PushTokenStore persistence", () => {
+  test("does not apply a revocation until the updated subscriptions are durable", () => {
+    let rejectWrites = false;
+    let persisted = "";
+    const store = new PushTokenStore(
+      createLogger(),
+      path.join(tmpdir(), `missing-push-token-store-${process.pid}`, "push-tokens.json"),
+      () => Date.parse("2026-08-10T00:00:00.000Z"),
+      48 * 60 * 60 * 1000,
+      (_filePath, payload) => {
+        if (rejectWrites) throw new Error("disk full");
+        persisted = String(payload);
+      },
+    );
 
-      store.addToken("ExponentPushToken[old]", "device-a");
-      store.addToken("ExponentPushToken[new]", "device-a");
+    store.renewToken("ExponentPushToken[test]");
+    rejectWrites = true;
 
-      expect(store.getAllTokens()).toEqual(["ExponentPushToken[new]"]);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
+    expect(() => store.revokeToken("ExponentPushToken[test]")).toThrow("disk full");
+    expect(store.getActiveTokens()).toEqual(["ExponentPushToken[test]"]);
+    expect(JSON.parse(persisted)).toEqual({
+      subscriptions: [
+        {
+          token: "ExponentPushToken[test]",
+          expiresAt: "2026-08-12T00:00:00.000Z",
+        },
+      ],
+    });
 
-  test("keeps one token per device when several devices register", () => {
-    const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
-    const tokenPath = path.join(home, "push-tokens.json");
-    try {
-      const store = new PushTokenStore(createLogger(), tokenPath);
-
-      store.addToken("ExponentPushToken[phone]", "device-a");
-      store.addToken("ExponentPushToken[tablet]", "device-b");
-      store.addToken("ExponentPushToken[phone-2]", "device-a");
-
-      expect(store.getAllTokens()).toEqual([
-        "ExponentPushToken[tablet]",
-        "ExponentPushToken[phone-2]",
-      ]);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
-  test("still accepts tokens from clients that do not identify their device", () => {
-    const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
-    const tokenPath = path.join(home, "push-tokens.json");
-    try {
-      const store = new PushTokenStore(createLogger(), tokenPath);
-
-      store.addToken("ExponentPushToken[one]");
-      store.addToken("ExponentPushToken[two]");
-
-      expect(store.getAllTokens()).toEqual(["ExponentPushToken[one]", "ExponentPushToken[two]"]);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
-  test("reloads device identity so a restart still replaces the right token", () => {
-    const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
-    const tokenPath = path.join(home, "push-tokens.json");
-    try {
-      new PushTokenStore(createLogger(), tokenPath).addToken("ExponentPushToken[old]", "device-a");
-
-      const reloaded = new PushTokenStore(createLogger(), tokenPath);
-      reloaded.addToken("ExponentPushToken[new]", "device-a");
-
-      expect(reloaded.getAllTokens()).toEqual(["ExponentPushToken[new]"]);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
-  test("keeps a known device association when a downgraded client re-registers", () => {
-    const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
-    const tokenPath = path.join(home, "push-tokens.json");
-    try {
-      const store = new PushTokenStore(createLogger(), tokenPath);
-      store.addToken("ExponentPushToken[old]", "device-a");
-
-      // A build without device ids re-registers the same token.
-      store.addToken("ExponentPushToken[old]");
-      // Upgrading again rotates the token; the association must still be there to evict it.
-      store.addToken("ExponentPushToken[new]", "device-a");
-
-      expect(store.getAllTokens()).toEqual(["ExponentPushToken[new]"]);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
-  test("reads token files written before device ids existed", () => {
-    const home = mkdtempSync(path.join(tmpdir(), "paseo-push-tokens-"));
-    const tokenPath = path.join(home, "push-tokens.json");
-    try {
-      writeFileSync(tokenPath, JSON.stringify({ tokens: ["ExponentPushToken[legacy]"] }));
-
-      const store = new PushTokenStore(createLogger(), tokenPath);
-
-      expect(store.getAllTokens()).toEqual(["ExponentPushToken[legacy]"]);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
+    rejectWrites = false;
+    store.revokeToken("ExponentPushToken[test]");
+    expect(store.getActiveTokens()).toEqual([]);
+    expect(JSON.parse(persisted)).toEqual({ subscriptions: [] });
   });
 });

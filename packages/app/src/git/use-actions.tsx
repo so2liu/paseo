@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, type ReactElement } from "re
 import { Info } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { z } from "zod";
 import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
 import { getForgePresentation, type Forge } from "@/git/forge";
@@ -31,6 +32,7 @@ import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { deriveEffectiveWorkspaceStatus } from "@/hooks/sidebar-workspaces-view-model";
+import { readValidatedString } from "@/storage/validated-storage";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -376,10 +378,10 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     }
     let isActive = true;
     setShipDefault("pr");
-    AsyncStorage.getItem(shipDefaultStorageKey)
+    readValidatedString(AsyncStorage, shipDefaultStorageKey, z.enum(["pr", "merge"]))
       .then((value) => {
         if (!isActive) return;
-        if (value === "pr" || value === "merge") {
+        if (value) {
           setShipDefault(value);
           return;
         }

@@ -6,47 +6,33 @@ import {
   CONTROL_HEIGHT,
   FONT_SIZE,
   ICON_SIZE,
+  REGISTERED_THEMES,
   type Theme,
 } from "@/styles/theme";
 import { applyRootUiFont } from "./apply-root-font";
 
-// All registered Unistyles keys — pinned literal (greppable, type-checked).
-// The `as const` element types stay assignable to
-// `UnistylesRuntime.updateTheme`'s first argument as themes are added.
-const ALL_THEME_KEYS = [
-  "light",
-  "dark",
-  "darkZinc",
-  "darkMidnight",
-  "darkClaude",
-  "darkGhostty",
-  "darkPureBlack",
-] as const;
-
-// The UI font size at which the FONT_SIZE ramp is authored (1.0 scale factor).
-const BASE_UI_REFERENCE = FONT_SIZE.base; // 16
+const ALL_THEME_KEYS = Object.keys(REGISTERED_THEMES) as (keyof typeof REGISTERED_THEMES)[];
 
 export interface AppearanceInput {
   uiFontFamily: string; // "" -> default stack
   monoFontFamily: string; // "" -> default stack
-  uiFontSize: number; // already clamped
+  uiBaseFontSize: number; // already clamped
   codeFontSize: number; // already clamped
   syntaxTheme: SyntaxThemeId;
 }
 
 /**
  * Build the font-size ramp from the canonical `FONT_SIZE` ramp, scaled
- * proportionally by `uiSize / 16` so the type hierarchy is preserved at non-default
+ * proportionally from the requested base size so the type hierarchy is preserved
  * sizes. Deriving from the authored ramp — NOT the live (possibly already-scaled)
  * theme — makes `applyAppearance` idempotent: repeated applies never compound, and a
- * code-size change (uiSize unchanged) leaves the UI ramp at its authored values.
+ * code-size change (base size unchanged) leaves the UI ramp at its authored values.
  * `code` is set absolutely to `codeSize`, never scaled by the UI factor — a separate
  * control on a separate semantic axis (mono/diff text).
  */
-function scaleFontSize(uiSize: number, codeSize: number): Theme["fontSize"] {
-  const r = uiSize / BASE_UI_REFERENCE;
+function scaleFontSize(uiBaseSize: number, codeSize: number): Theme["fontSize"] {
+  const r = uiBaseSize / FONT_SIZE.base;
   return {
-    xs: Math.round(FONT_SIZE.xs * r),
     sm: Math.round(FONT_SIZE.sm * r),
     base: Math.round(FONT_SIZE.base * r),
     lg: Math.round(FONT_SIZE.lg * r),
@@ -57,6 +43,8 @@ function scaleFontSize(uiSize: number, codeSize: number): Theme["fontSize"] {
     code: codeSize, // absolute, NOT scaled
   };
 }
+
+const BASE_UI_REFERENCE = FONT_SIZE.base;
 
 function scaleUiGeometry(uiSize: number) {
   const r = uiSize / BASE_UI_REFERENCE;
@@ -101,8 +89,8 @@ export function applyAppearance(input: AppearanceInput): void {
   for (const key of themeKeys) {
     UnistylesRuntime.updateTheme(key, (t) => {
       const fontFamily = { ui, mono };
-      const fontSize = scaleFontSize(input.uiFontSize, input.codeFontSize);
-      const { iconSize, controlHeight } = scaleUiGeometry(input.uiFontSize);
+      const fontSize = scaleFontSize(input.uiBaseFontSize, input.codeFontSize);
+      const { iconSize, controlHeight } = scaleUiGeometry(input.uiBaseFontSize);
       const lineHeight = { ...t.lineHeight, diff: diffLineHeight };
       if (t.colorScheme === "light") {
         return {

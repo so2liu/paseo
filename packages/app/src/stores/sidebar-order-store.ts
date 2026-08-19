@@ -1,16 +1,21 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { z } from "zod";
+import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 import { moveHostInOrder, type HostMoveDirection } from "@/utils/host-order";
 
 interface SidebarOrderStoreState {
   hostOrder: string[];
   projectOrder: string[];
+  pinnedWorkspaceOrder: string[];
   workspaceOrderByProject: Record<string, string[]>;
   setHostOrder: (keys: string[]) => void;
   moveHost: (hostIds: string[], serverId: string, direction: HostMoveDirection) => void;
   getProjectOrder: () => string[];
   setProjectOrder: (keys: string[]) => void;
+  getPinnedWorkspaceOrder: () => string[];
+  setPinnedWorkspaceOrder: (keys: string[]) => void;
   getWorkspaceOrder: (projectViewKey: string) => string[];
   setWorkspaceOrder: (projectViewKey: string, keys: string[]) => void;
 }
@@ -18,10 +23,21 @@ interface SidebarOrderStoreState {
 interface SidebarOrderPersistedState {
   hostOrder?: string[];
   projectOrder?: string[];
+  pinnedWorkspaceOrder?: string[];
   workspaceOrderByProject?: Record<string, string[]>;
   projectOrderByServerId?: Record<string, string[]>;
   workspaceOrderByServerAndProject?: Record<string, string[]>;
 }
+
+const StringArrayRecordSchema = z.record(z.string(), z.array(z.string()));
+const SidebarOrderPersistedStateSchema = z.strictObject({
+  hostOrder: z.array(z.string()).optional(),
+  projectOrder: z.array(z.string()).optional(),
+  pinnedWorkspaceOrder: z.array(z.string()).optional(),
+  workspaceOrderByProject: StringArrayRecordSchema.optional(),
+  projectOrderByServerId: StringArrayRecordSchema.optional(),
+  workspaceOrderByServerAndProject: StringArrayRecordSchema.optional(),
+});
 
 interface SidebarWorkspaceOrderScope {
   serverId: string;
@@ -75,13 +91,19 @@ function normalizeLegacyWorkspaceKey(serverId: string, rawWorkspaceKey: string):
 export function migrateSidebarOrderState(persistedState: unknown): {
   hostOrder: string[];
   projectOrder: string[];
+  pinnedWorkspaceOrder: string[];
   workspaceOrderByProject: Record<string, string[]>;
 } {
-  const state = persistedState as SidebarOrderPersistedState | undefined;
-
-  if (!state) {
-    return { hostOrder: [], projectOrder: [], workspaceOrderByProject: {} };
+  const result = SidebarOrderPersistedStateSchema.safeParse(persistedState);
+  if (!result.success) {
+    return {
+      hostOrder: [],
+      projectOrder: [],
+      pinnedWorkspaceOrder: [],
+      workspaceOrderByProject: {},
+    };
   }
+  const state: SidebarOrderPersistedState = result.data;
 
   const projectOrder = normalizeKeys(state.projectOrder ?? []);
   const seenProjects = new Set(projectOrder);
@@ -109,7 +131,12 @@ export function migrateSidebarOrderState(persistedState: unknown): {
     workspaceOrderByProject[scope.projectViewKey] = merged;
   }
 
-  return { hostOrder: normalizeKeys(state.hostOrder ?? []), projectOrder, workspaceOrderByProject };
+  return {
+    hostOrder: normalizeKeys(state.hostOrder ?? []),
+    projectOrder,
+    pinnedWorkspaceOrder: normalizeKeys(state.pinnedWorkspaceOrder ?? []),
+    workspaceOrderByProject,
+  };
 }
 
 export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
@@ -117,6 +144,7 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
     (set, get) => ({
       hostOrder: [],
       projectOrder: [],
+      pinnedWorkspaceOrder: [],
       workspaceOrderByProject: {},
       setHostOrder: (keys) => set({ hostOrder: normalizeKeys(keys) }),
       moveHost: (hostIds, serverId, direction) =>
@@ -132,6 +160,11 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
       setProjectOrder: (keys) => {
         const normalized = normalizeKeys(keys);
         set({ projectOrder: normalized });
+      },
+      getPinnedWorkspaceOrder: () => get().pinnedWorkspaceOrder,
+      setPinnedWorkspaceOrder: (keys) => {
+        const normalized = normalizeKeys(keys);
+        set({ pinnedWorkspaceOrder: normalized });
       },
       getWorkspaceOrder: (projectViewKey) => {
         const scope = projectViewKey.trim();
@@ -152,10 +185,11 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
     }),
     {
       name: "sidebar-project-workspace-order",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createValidatedPersistStorage(AsyncStorage, SidebarOrderPersistedStateSchema),
       partialize: (state) => ({
         hostOrder: state.hostOrder,
         projectOrder: state.projectOrder,
+        pinnedWorkspaceOrder: state.pinnedWorkspaceOrder,
         workspaceOrderByProject: state.workspaceOrderByProject,
       }),
       version: 2,

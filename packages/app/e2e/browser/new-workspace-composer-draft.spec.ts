@@ -153,4 +153,52 @@ test.describe("New workspace composer draft", () => {
       await firstProject.cleanup();
     }
   });
+
+  test("does not restore a submitted draft after deferred publication", async ({ page }) => {
+    const project = await seedWorkspace({ repoPrefix: "new-workspace-submitted-draft-" });
+
+    try {
+      await gotoAppShell(page);
+      await waitForSidebarHydration(page);
+      await openNewWorkspaceComposer(page, {
+        projectKey: project.projectKey,
+        projectDisplayName: project.projectDisplayName,
+      });
+
+      const composer = page.getByRole("textbox", { name: "Message agent..." });
+      const createButton = page.getByTestId("workspace-create-submit");
+      await expect(composer).toBeEditable({ timeout: 30_000 });
+      await expect(createButton).toBeEnabled({ timeout: 30_000 });
+
+      await composer.evaluate((element, draft) => {
+        if (!(element instanceof HTMLTextAreaElement)) {
+          throw new Error("Composer input is not a textarea");
+        }
+        const valueSetter = Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          "value",
+        )?.set;
+        if (!valueSetter) throw new Error("Textarea value setter is unavailable");
+        valueSetter.call(element, draft);
+        element.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            data: draft,
+            inputType: "insertText",
+          }),
+        );
+        const button = document.querySelector('[data-testid="workspace-create-submit"]');
+        if (!(button instanceof HTMLElement)) {
+          throw new Error("Create button is unavailable");
+        }
+        button.click();
+      }, DRAFT);
+
+      await page.waitForURL((url) => url.pathname.includes("/workspace/"), { timeout: 30_000 });
+      await openGlobalNewWorkspaceComposer(page);
+      await expectNewWorkspaceDraft(page, "");
+    } finally {
+      await project.cleanup();
+    }
+  });
 });

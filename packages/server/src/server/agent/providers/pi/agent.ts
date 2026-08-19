@@ -29,16 +29,17 @@ import {
   type AgentSlashCommand,
   type AgentSlashCommandKind,
   type AgentStreamEvent,
-  type AgentUsage,
   type FetchCatalogOptions,
   type ImportableProviderSession,
   type ImportProviderSessionContext,
   type ImportProviderSessionInput,
   type ListImportableSessionsOptions,
   type ProviderCatalog,
+  type ProviderRefreshContext,
   type ToolCallDetail,
 } from "../../agent-sdk-types.js";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
+import { runProviderRefreshActivity } from "../../provider-refresh-deadline.js";
 import { runProviderTurn } from "../provider-runner.js";
 import {
   checkProviderLaunchAvailable,
@@ -72,10 +73,10 @@ import type {
   PiModel,
   PiRpcSlashCommand,
   PiRuntimeEvent,
-  PiSessionStats,
   PiSessionState,
   PiThinkingLevel,
 } from "./rpc-types.js";
+import { PiUsagePoller, type PiUsagePollScheduler } from "./usage-poller.js";
 import {
   mapToolDetail,
   parseToolArgs,
@@ -88,7 +89,6 @@ import {
 const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
 const PI_BINARY_COMMAND = process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi";
-const PI_CATALOG_REQUEST_TIMEOUT_MS = 120_000;
 const PASEO_PI_TREE_EXTENSION_COMMAND = "paseo_tree";
 const PASEO_PI_CAPTURE_EXTENSION_COMMAND = "paseo_capture_entries";
 const PASEO_PI_ENTRY_CAPTURE_MARKER = "PASEO_ENTRY_CAPTURE";
@@ -183,6 +183,7 @@ export interface PiRpcAgentClientOptions {
   runtimeSettings?: ProviderRuntimeSettings;
   providerParams?: unknown;
   runtime?: PiRuntime;
+  usagePollScheduler?: PiUsagePollScheduler;
 }
 
 interface PiPromptPayload {
@@ -223,6 +224,8 @@ interface PiRpcAgentSessionOptions {
   currentModeId?: string | null;
   cleanup?: () => void;
   extensionTimeoutMs?: number;
+  logger: Logger;
+  usagePollScheduler?: PiUsagePollScheduler;
 }
 
 interface PiResumeConfig {
@@ -364,35 +367,6 @@ function mapThinkingOption(option: (typeof PI_THINKING_OPTIONS)[number]) {
     };
   }
   return mappedOption;
-}
-
-function toAgentUsage(stats: PiSessionStats): AgentUsage | undefined {
-  const inputTokens = stats.tokens?.input ?? 0;
-  const cachedInputTokens = stats.tokens?.cacheRead ?? 0;
-  const outputTokens = stats.tokens?.output ?? 0;
-  const totalCostUsd = stats.cost ?? 0;
-  const contextWindowMaxTokens = stats.contextUsage?.contextWindow ?? undefined;
-  const contextWindowUsedTokens = stats.contextUsage?.tokens ?? undefined;
-
-  if (
-    inputTokens === 0 &&
-    cachedInputTokens === 0 &&
-    outputTokens === 0 &&
-    totalCostUsd === 0 &&
-    contextWindowMaxTokens === undefined &&
-    contextWindowUsedTokens === undefined
-  ) {
-    return undefined;
-  }
-
-  return {
-    inputTokens,
-    cachedInputTokens,
-    outputTokens,
-    totalCostUsd,
-    ...(typeof contextWindowMaxTokens === "number" ? { contextWindowMaxTokens } : {}),
-    ...(typeof contextWindowUsedTokens === "number" ? { contextWindowUsedTokens } : {}),
-  };
 }
 
 function piModelSupportsImageInput(model: PiModel | null | undefined): boolean {
@@ -1249,6 +1223,8 @@ export class PiRpcAgentSession implements AgentSession {
   private commandCache: AgentSlashCommand[] | null = null;
   private state: PiSessionState;
   private readonly currentModeId: string | null;
+  private readonly logger: Logger;
+  private readonly usagePoller: PiUsagePoller;
   private closed = false;
   // Pi reports an aborted OpenAI Responses stream before the abort RPC resolves.
   // Keep the turn active until that RPC acknowledges the user-requested cancellation.
@@ -1269,6 +1245,22 @@ export class PiRpcAgentSession implements AgentSession {
       this.state.thinkingLevel ??
       null;
     this.extensionTimeoutMs = options.extensionTimeoutMs ?? DEFAULT_PI_EXTENSION_RESULT_TIMEOUT_MS;
+    this.logger = options.logger;
+    this.usagePoller = new PiUsagePoller({
+      scheduler: options.usagePollScheduler,
+      readStats: () => this.runtimeSession.getSessionStats(),
+      onUsage: (usage, turnId) => {
+        this.emit({
+          type: "usage_updated",
+          provider: this.provider,
+          usage,
+          ...(turnId === undefined ? {} : { turnId }),
+        });
+      },
+      onPollError: (error) => {
+        this.logger.debug({ err: error }, "Pi context usage poll failed");
+      },
+    });
 
     this.runtimeSession.onEvent((event) => {
       this.handleRuntimeEvent(event);
@@ -1304,6 +1296,7 @@ export class PiRpcAgentSession implements AgentSession {
     const payload = convertPromptInput(prompt, { model: this.state.model });
     const turnId = randomUUID();
     this.activeTurnId = turnId;
+    this.usagePoller.startTurn();
     this.lastInterruptedTurnId = null;
     this.activeClientMessageId = options?.clientMessageId ?? null;
     this.activeAssistantMessageId = null;
@@ -1338,6 +1331,7 @@ export class PiRpcAgentSession implements AgentSession {
         if (this.activeTurnId !== turnId) {
           return;
         }
+        this.usagePoller.stopTurn();
         this.activeTurnId = null;
         this.activeClientMessageId = null;
         this.activeTurnStarted = false;
@@ -1476,6 +1470,7 @@ export class PiRpcAgentSession implements AgentSession {
       if (this.interruptedTerminalError?.turnId === turnId) {
         const terminalError = this.interruptedTerminalError;
         this.interruptedTerminalError = null;
+        this.usagePoller.stopTurn();
         this.pendingAgentEnd = null;
         this.activeAgentLifecycleTurnId = null;
         this.activeTurnId = null;
@@ -1493,6 +1488,7 @@ export class PiRpcAgentSession implements AgentSession {
       throw error;
     }
     if (turnId && this.activeTurnId === turnId) {
+      this.usagePoller.stopTurn();
       this.activeTurnId = null;
       this.pendingAgentEnd = null;
       this.activeAgentLifecycleTurnId = null;
@@ -1548,6 +1544,7 @@ export class PiRpcAgentSession implements AgentSession {
       return;
     }
     this.closed = true;
+    this.usagePoller.close();
     try {
       await this.runtimeSession.close();
     } finally {
@@ -2068,6 +2065,7 @@ export class PiRpcAgentSession implements AgentSession {
       return;
     }
     const turnId = this.activeTurnId;
+    this.usagePoller.stopTurn();
     this.activeTurnId = null;
     this.activeClientMessageId = null;
     this.activeTurnStarted = false;
@@ -2395,6 +2393,7 @@ export class PiRpcAgentSession implements AgentSession {
     this.clearNoTurnBuffers();
     const errorMessage = latestPiErrorMessage(messages);
     if (typeof errorMessage === "string" && errorMessage.length > 0) {
+      this.usagePoller.stopTurn();
       this.emit({
         type: "turn_failed",
         provider: this.provider,
@@ -2403,34 +2402,21 @@ export class PiRpcAgentSession implements AgentSession {
       });
       return;
     }
+    const finalUsage = this.usagePoller.completeTurn(turnId);
     this.emit({
       type: "turn_completed",
       provider: this.provider,
       turnId,
     });
-    void this.refreshAfterTurn(turnId);
+    void this.refreshAfterTurn(finalUsage);
   }
 
   private async refreshState(): Promise<void> {
     this.state = await this.runtimeSession.getState();
   }
 
-  private async refreshAfterTurn(turnId: string | undefined): Promise<void> {
-    await this.refreshState().catch(() => undefined);
-    const usage = await this.runtimeSession
-      .getSessionStats()
-      .then((stats) => {
-        return toAgentUsage(stats);
-      })
-      .catch(() => undefined);
-    if (usage) {
-      this.emit({
-        type: "usage_updated",
-        provider: this.provider,
-        turnId,
-        usage,
-      });
-    }
+  private async refreshAfterTurn(finalUsage: Promise<void>): Promise<void> {
+    await Promise.all([this.refreshState().catch(() => undefined), finalUsage]);
   }
 }
 
@@ -2442,6 +2428,7 @@ export class PiRpcAgentClient implements AgentClient {
   private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly providerParams: PiProviderParams;
   private readonly runtime: PiRuntime;
+  private readonly usagePollScheduler?: PiUsagePollScheduler;
 
   constructor(options: PiRpcAgentClientOptions) {
     this.provider = PI_PROVIDER;
@@ -2450,6 +2437,7 @@ export class PiRpcAgentClient implements AgentClient {
     this.runtimeSettings = options.runtimeSettings;
     this.providerParams = PiProviderParamsSchema.parse(options.providerParams ?? {});
     this.runtime = options.runtime ?? createRuntime(options.logger, options.runtimeSettings);
+    this.usagePollScheduler = options.usagePollScheduler;
   }
 
   async createSession(
@@ -2489,6 +2477,8 @@ export class PiRpcAgentClient implements AgentClient {
         capabilities: capabilitiesForSession(mcpConfig !== null),
         cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension?.cleanup]),
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
+        logger: this.logger,
+        usagePollScheduler: this.usagePollScheduler,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
@@ -2550,6 +2540,8 @@ export class PiRpcAgentClient implements AgentClient {
         capabilities: capabilitiesForSession(mcpConfig !== null),
         cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension?.cleanup]),
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
+        logger: this.logger,
+        usagePollScheduler: this.usagePollScheduler,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
@@ -2559,19 +2551,40 @@ export class PiRpcAgentClient implements AgentClient {
     }
   }
 
-  async fetchCatalog(options: FetchCatalogOptions): Promise<ProviderCatalog> {
-    const runtimeSession = await this.runtime.startSession({
-      cwd: options.scope === "global" ? homedir() : options.cwd,
-    });
+  async fetchCatalog(
+    options: FetchCatalogOptions,
+    context?: ProviderRefreshContext,
+  ): Promise<ProviderCatalog> {
+    let runtimeSession: PiRuntimeSession | undefined;
+    let closePromise: Promise<void> | undefined;
+    const closeSession = () => {
+      if (!runtimeSession) return Promise.resolve();
+      closePromise ??= runtimeSession.close();
+      return closePromise;
+    };
+    const handleAbort = () => void closeSession().catch(() => undefined);
+    context?.signal.addEventListener("abort", handleAbort, { once: true });
     try {
+      await runProviderRefreshActivity(context, "runtime.start", async () => {
+        runtimeSession = await this.runtime.startSession({
+          cwd: options.scope === "global" ? homedir() : options.cwd,
+          signal: context?.signal,
+        });
+        if (context?.signal.aborted) await closeSession();
+      });
+      if (!runtimeSession) throw new Error("Pi catalog runtime did not start");
+      const catalogSession = runtimeSession;
       const models = transformPiModels(
-        (await runtimeSession.getAvailableModels(PI_CATALOG_REQUEST_TIMEOUT_MS)).map((model) =>
-          mapPiModel(model, PI_PROVIDER),
-        ),
+        (
+          await runProviderRefreshActivity(context, "get_available_models", () =>
+            catalogSession.getAvailableModels(null),
+          )
+        ).map((model) => mapPiModel(model, PI_PROVIDER)),
       );
       return { models, modes: [] };
     } finally {
-      await runtimeSession.close();
+      context?.signal.removeEventListener("abort", handleAbort);
+      await closeSession();
     }
   }
 

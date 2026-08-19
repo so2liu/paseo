@@ -592,11 +592,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   valueText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
   },
   valueSubtext: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   warningCard: {
     marginTop: theme.spacing[3],
@@ -617,11 +617,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   warningText: {
     color: theme.colors.palette.amber[500],
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   warningError: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
   },
   modalBody: {
     gap: theme.spacing[3],
@@ -629,9 +629,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   logOutput: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-    lineHeight: Math.round(theme.fontSize.xs * 1.5),
+    lineHeight: Math.round(theme.fontSize.sm * 1.5),
   },
   modalActions: {
     flexDirection: "row",
