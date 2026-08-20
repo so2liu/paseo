@@ -2,7 +2,11 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { EditingTextInput as ComposerTextInput } from "@/components/ui/text-input/text-input.web";
-import type { EditingTextInputHandle as ComposerTextInputHandle } from "@/components/ui/text-input";
+import type {
+  EditingTextInputHandle as ComposerTextInputHandle,
+  EditingTextInputProps,
+} from "@/components/ui/text-input";
+import { navigateInputHistory, type InputHistoryNavigationState } from "@/composer/input-history";
 
 interface MountedInput {
   root: Root;
@@ -21,6 +25,10 @@ const mountedInputs: MountedInput[] = [];
 function mountInput(
   onChangeText: (text: string) => void,
   inputRef: React.MutableRefObject<ComposerTextInputHandle | null> = React.createRef(),
+  options: {
+    initialValue?: string;
+    onKeyPress?: EditingTextInputProps["onKeyPress"];
+  } = {},
 ): MountedInput {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -30,9 +38,10 @@ function mountInput(
     root.render(
       <ComposerTextInput
         ref={inputRef}
-        initialValue=""
+        initialValue={options.initialValue ?? ""}
         multiline={true}
         onChangeText={onChangeText}
+        onKeyPress={options.onKeyPress}
         testID="composer-input"
       />,
     );
@@ -81,7 +90,7 @@ afterEach(() => {
   }
 });
 
-describe("ComposerTextInput web IME composition", () => {
+describe("ComposerTextInput web DOM ownership", () => {
   it("keeps locally typed text when its parent rerenders with a stale value", () => {
     const recorder = createTextRecorder();
     const mounted = mountInput(recorder.onChangeText);
@@ -192,5 +201,39 @@ describe("ComposerTextInput web IME composition", () => {
     });
 
     expect(mounted.textarea.value).toBe("");
+  });
+
+  it("replaces DOM-owned text when ArrowUp recalls input history", () => {
+    const inputRef = React.createRef<ComposerTextInputHandle>();
+    let navigationState: InputHistoryNavigationState = { index: null, draft: "" };
+    const mounted = mountInput(ignoreTextChange, inputRef, {
+      initialValue: "draft",
+      onKeyPress: (event) => {
+        if (event.nativeEvent.key !== "ArrowUp") return;
+        const result = navigateInputHistory({
+          direction: "older",
+          history: ["first", "second"],
+          currentText: inputRef.current?.getText() ?? "",
+          state: navigationState,
+        });
+        if (!result.handled) return;
+        event.preventDefault();
+        inputRef.current?.replaceText(result.text, {
+          start: result.text.length,
+          end: result.text.length,
+        });
+        navigationState = { index: result.index, draft: result.draft };
+      },
+    });
+
+    act(() => {
+      mounted.textarea.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(mounted.textarea.value).toBe("second");
+    expect(mounted.textarea.selectionStart).toBe("second".length);
+    expect(navigationState).toEqual({ index: 1, draft: "draft" });
   });
 });

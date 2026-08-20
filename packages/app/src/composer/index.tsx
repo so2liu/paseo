@@ -2099,12 +2099,12 @@ function ComposerContentImpl({
         return false;
       }
       event.preventDefault();
+      replaceUserInput(result.text, { start: result.text.length, end: result.text.length });
       inputHistoryStateRef.current = { index: result.index, draft: result.draft };
-      setUserInput(result.text);
       setCursorIndex(result.text.length);
       return true;
     },
-    [cursorIndex, inputHistory, setUserInput, userInput],
+    [cursorIndex, inputHistory, replaceUserInput, userInput],
   );
 
   const handleUserInputChange = useCallback(

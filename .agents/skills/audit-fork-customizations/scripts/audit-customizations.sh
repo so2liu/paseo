@@ -129,11 +129,11 @@ check_composer_history() {
         '
   )
   if [ -n "$block" ] \
-    && grep -q 'event.key === "ArrowUp"' <<<"$block" \
-    && grep -q 'event.key === "ArrowDown"' <<<"$block" \
-    && grep -q 'navigateInputHistory' <<<"$block" \
-    && grep -q 'replaceUserInput(result.text)' <<<"$block" \
-    && ! grep -q 'setUserInput(result.text)' <<<"$block"; then
+    && grep -Fq 'event.key === "ArrowUp"' <<<"$block" \
+    && grep -Fq 'event.key === "ArrowDown"' <<<"$block" \
+    && grep -Fq 'navigateInputHistory' <<<"$block" \
+    && grep -Fq 'replaceUserInput(result.text' <<<"$block" \
+    && ! grep -Fq 'setUserInput(result.text' <<<"$block"; then
     echo "  PASS composer history key handler replaces visible DOM/native text"
   else
     echo "  FAIL composer history key handler replaces visible DOM/native text ($file)"
