@@ -31,17 +31,20 @@ fi
 audit_tmp=$(mktemp -d "${TMPDIR:-/tmp}/paseo-customization-audit.XXXXXX")
 trap 'rm -rf "$audit_tmp"' EXIT
 
-changed_paths="$audit_tmp/upstream-changed.txt"
+changed_paths_z="$audit_tmp/upstream-changed.z"
 intersecting_commits="$audit_tmp/intersecting-commits.txt"
 missing_files="$audit_tmp/missing-files.txt"
 missing_symbols="$audit_tmp/missing-symbols.txt"
 
-git diff --name-only --no-renames "$old_base...$new_base" >"$changed_paths"
+git diff --name-only --no-renames -z "$old_base...$new_base" >"$changed_paths_z"
+changed_path_args=()
+while IFS= read -r -d '' file; do
+  changed_path_args+=("$file")
+done <"$changed_paths_z"
 
-if [ -s "$changed_paths" ]; then
-  # Repository paths contain no newlines. Keep --full-history so sync merge resolutions are audited.
-  # shellcheck disable=SC2046
-  git log --format='%h %s' "$old_base..$pre_sync" --full-history -- $(cat "$changed_paths") \
+if [ "${#changed_path_args[@]}" -gt 0 ]; then
+  # Keep every Git path as one pathspec and retain merge resolutions in the audit history.
+  git log --format='%h %s' "$old_base..$pre_sync" --full-history -- "${changed_path_args[@]}" \
     >"$intersecting_commits"
 else
   : >"$intersecting_commits"
@@ -81,7 +84,7 @@ echo "  new upstream:      $new_base"
 echo "  merged result:     $merged_ref"
 echo
 echo "history-derived scope"
-echo "  upstream-changed files: $(wc -l <"$changed_paths" | tr -d ' ')"
+echo "  upstream-changed files: ${#changed_path_args[@]}"
 echo "  intersecting fork commits: $(wc -l <"$intersecting_commits" | tr -d ' ')"
 cat "$intersecting_commits"
 echo
