@@ -1,22 +1,12 @@
 name: Nix Update Hash
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "nix/**"
-      - "flake.nix"
-      - "flake.lock"
-      - "package.json"
-      - "package-lock.json"
-      - "packages/highlight/**"
-      - "packages/plugin/**"
-      - "packages/server/**"
-      - "packages/relay/**"
-      - "packages/cli/**"
-      - "scripts/update-nix.sh"
-      - "scripts/fix-lockfile.mjs"
-      - ".github/workflows/nix-update-hash.yml"
+  # This job commits a refreshed npm-deps hash as the upstream Paseo bot, which
+  # needs the PASEO_BOT_APP_ID/PASEO_BOT_PRIVATE_KEY secrets this fork does not
+  # have — every automatic run died at `Input required and not supplied: app-id`.
+  # Nix is not an owner deployment channel either (see fork-releases.md), so the
+  # hash only matters when someone deliberately checks the Nix build.
+  workflow_dispatch:
 
 permissions:
   contents: read
