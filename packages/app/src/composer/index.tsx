@@ -2071,21 +2071,21 @@ function ComposerContentImpl({
   // Handle keyboard navigation for command autocomplete.
   const handleCommandKeyPress = useCallback(
     (event: ComposerKeyPressEvent) => {
-      if (autocompleteOnKeyPressRef.current(event)) {
-        return true;
-      }
       let direction: "older" | "newer" | null = null;
       if (event.key === "ArrowUp") {
         direction = "older";
       } else if (event.key === "ArrowDown") {
         direction = "newer";
       }
+      const historyNavigationActive = inputHistoryStateRef.current.index !== null;
+      if (!(historyNavigationActive && direction) && autocompleteOnKeyPressRef.current(event)) {
+        return true;
+      }
       if (!direction) {
         return false;
       }
       const liveText = event.input.text;
       const liveCursorIndex = event.input.selection.start;
-      const historyNavigationActive = inputHistoryStateRef.current.index !== null;
       if (!historyNavigationActive && direction === "older" && liveCursorIndex !== 0) {
         return false;
       }

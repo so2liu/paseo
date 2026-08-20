@@ -41,6 +41,7 @@ import {
 } from "../support/helpers/timeline-resume";
 import { workspaceDeckEntryLocator } from "../support/helpers/workspace-ui";
 import { expectInFlightForkAvailable } from "../support/helpers/assistant-fork";
+import { installListCommandsStub } from "../support/helpers/list-commands-stub";
 import {
   scrollTimelineToNewestLoadedEdge,
   scrollTimelineUntilOlderHistoryIsReachable,
@@ -822,8 +823,9 @@ async function completeDraftCreateSubmission(
 
 test.describe("Agent message submission", () => {
   test("recalls user input history through the production composer", async ({ page }, testInfo) => {
+    await installListCommandsStub(page);
     const olderPrompt = "Remember this older prompt for composer history.";
-    const newerPrompt = "Remember this newer prompt for composer history.";
+    const newerPrompt = "/he";
     const draft = "Restore this unsent draft.";
     const agent = await seedMockAgentWorkspace({
       repoPrefix: `composer-input-history-${testInfo.workerIndex}-`,
@@ -849,6 +851,12 @@ test.describe("Agent message submission", () => {
       });
       await composer.press("ArrowUp");
       await expect(composer).toHaveValue(newerPrompt);
+      await expect(
+        page
+          .getByTestId("composer-autocomplete-popover")
+          .getByText("/help", { exact: true })
+          .first(),
+      ).toBeVisible();
 
       await composer.press("ArrowUp");
       await expect(composer).toHaveValue(olderPrompt);

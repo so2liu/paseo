@@ -145,6 +145,7 @@ check_composer_history() {
     && grep -Fq 'event.input.text' <<<"$block" \
     && grep -Fq 'event.input.selection.start' <<<"$block" \
     && grep -Fq 'historyNavigationActive' <<<"$block" \
+    && grep -Fq '!(historyNavigationActive && direction)' <<<"$block" \
     && grep -Fq 'replaceUserInput(result.text' <<<"$block" \
     && ! grep -Fq 'setUserInput(result.text' <<<"$block" \
     && grep -Fq 'onKeyPress={handleCommandKeyPress}' <<<"$source"; then
