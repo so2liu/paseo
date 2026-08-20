@@ -48,6 +48,8 @@ import type {
 } from "./agent-sdk-types.js";
 import type { PaseoToolCatalog } from "./tools/types.js";
 import type { ProviderDefinition } from "./provider-registry.js";
+import { PiRpcAgentClient } from "./providers/pi/agent.js";
+import { FakePi } from "./providers/pi/test-utils/fake-pi.js";
 
 const DESKTOP_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("desktop-client");
 const MOBILE_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("mobile-client");
@@ -1182,6 +1184,49 @@ async function startAndSteerThroughManager(
   });
   return { manager, agentId: agent.id, workdir };
 }
+
+test("steers Pi through its native RPC without replacing the active turn", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-pi-steer-"));
+  const pi = new FakePi();
+  const manager = new AgentManager({
+    clients: {
+      pi: new (class extends PiRpcAgentClient {
+        override async isAvailable(): Promise<boolean> {
+          return true;
+        }
+      })({ logger, runtime: pi }),
+    },
+    logger,
+  });
+  let agentId: string | null = null;
+  try {
+    const agent = await manager.createAgent({ provider: "pi", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    agentId = agent.id;
+    const run = manager.streamAgent(agent.id, "initial task");
+    void (async () => {
+      for await (const _event of run) {
+      }
+    })();
+    await manager.waitForAgentRunStart(agent.id);
+
+    await expect(
+      manager.steerAgentRun(agent.id, "change direction", {
+        clientMessageId: "pi-steer-message",
+      }),
+    ).resolves.toEqual({ status: "accepted" });
+
+    expect(pi.latestSession().prompts).toEqual([{ message: "initial task", imageCount: 0 }]);
+    expect(pi.latestSession().steerRequests).toEqual([
+      { message: "change direction", imageCount: 0 },
+    ]);
+    expect(manager.hasInFlightRun(agent.id)).toBe(true);
+  } finally {
+    if (agentId) await manager.closeAgent(agentId).catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
 
 test("unavailable steer interrupts once and starts one replacement turn", async () => {
   const session = new SteeringTestSession({ provider: "codex", cwd: process.cwd() });

@@ -159,15 +159,37 @@ test("starts internal Pi agents without persisting a native session", async () =
   await session.close();
 });
 
-test("steers an active Pi turn through the native RPC command", async () => {
+test("steers the expected active Pi turn through the AgentSession contract", async () => {
   const { pi, session } = await createSession();
-  await session.startTurn("initial task");
+  const { turnId } = await session.startTurn("initial task");
+  const contract: AgentSession = session;
 
-  await session.steer?.("change direction");
+  await expect(
+    contract.steerActiveTurn!("change direction", {
+      expectedTurnId: turnId,
+      clientMessageId: "steer-message-1",
+    }),
+  ).resolves.toEqual({ status: "accepted" });
 
   expect(pi.latestSession().steerRequests).toEqual([
     { message: "change direction", imageCount: 0 },
   ]);
+  expect(pi.latestSession().prompts).toEqual([{ message: "initial task", imageCount: 0 }]);
+  await session.close();
+});
+
+test("rejects a Pi steer for a stale foreground turn", async () => {
+  const { pi, session } = await createSession();
+  await session.startTurn("initial task");
+  const contract: AgentSession = session;
+
+  await expect(
+    contract.steerActiveTurn!("change direction", {
+      expectedTurnId: "stale-turn-id",
+    }),
+  ).resolves.toEqual({ status: "unavailable" });
+
+  expect(pi.latestSession().steerRequests).toEqual([]);
   await session.close();
 });
 

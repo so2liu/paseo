@@ -36,6 +36,8 @@ import {
   type ListImportableSessionsOptions,
   type ProviderCatalog,
   type ProviderRefreshContext,
+  type SteerActiveTurnOptions,
+  type SteerResult,
   type ToolCallDetail,
 } from "../../agent-sdk-types.js";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
@@ -1361,12 +1363,16 @@ export class PiRpcAgentSession implements AgentSession {
     return { turnId };
   }
 
-  async steer(prompt: AgentPromptInput): Promise<void> {
-    if (!this.activeTurnId) {
-      throw new Error("Pi has no active turn to steer");
+  async steerActiveTurn(
+    prompt: AgentPromptInput,
+    options: SteerActiveTurnOptions,
+  ): Promise<SteerResult> {
+    if (!this.activeTurnId || this.activeTurnId !== options.expectedTurnId) {
+      return { status: "unavailable" };
     }
     const payload = convertPromptInput(prompt, { model: this.state.model });
     await this.runtimeSession.steer(payload.text, payload.images);
+    return { status: "accepted" };
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
