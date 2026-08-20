@@ -823,6 +823,7 @@ async function completeDraftCreateSubmission(
 test.describe("Agent message submission", () => {
   test("recalls user input history through the production composer", async ({ page }, testInfo) => {
     const previousPrompt = "Remember this prompt for composer history.";
+    const draft = "Restore this unsent draft.";
     const agent = await seedMockAgentWorkspace({
       repoPrefix: `composer-input-history-${testInfo.workerIndex}-`,
       title: "Composer input history",
@@ -838,12 +839,15 @@ test.describe("Agent message submission", () => {
       ).toBeVisible();
 
       const composer = composerLocator(page);
-      await expect(composer).toHaveValue("");
+      await composer.fill(draft);
+      await composer.evaluate((element) => {
+        (element as HTMLTextAreaElement).setSelectionRange(0, 0);
+      });
       await composer.press("ArrowUp");
       await expect(composer).toHaveValue(previousPrompt);
 
       await composer.press("ArrowDown");
-      await expect(composer).toHaveValue("");
+      await expect(composer).toHaveValue(draft);
     } finally {
       await agent.cleanup();
     }

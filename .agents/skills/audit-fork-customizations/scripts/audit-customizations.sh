@@ -135,6 +135,8 @@ check_composer_history() {
     && grep -Fq 'event.key === "ArrowUp"' <<<"$block" \
     && grep -Fq 'event.key === "ArrowDown"' <<<"$block" \
     && grep -Fq 'navigateInputHistory' <<<"$block" \
+    && grep -Fq 'event.input.text' <<<"$block" \
+    && grep -Fq 'event.input.selection.start' <<<"$block" \
     && grep -Fq 'replaceUserInput(result.text' <<<"$block" \
     && ! grep -Fq 'setUserInput(result.text' <<<"$block" \
     && grep -Fq 'onKeyPress={handleCommandKeyPress}' <<<"$source"; then

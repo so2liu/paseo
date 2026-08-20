@@ -2083,16 +2083,18 @@ function ComposerContentImpl({
       if (!direction) {
         return false;
       }
-      if (direction === "older" && cursorIndex !== 0) {
+      const liveText = event.input.text;
+      const liveCursorIndex = event.input.selection.start;
+      if (direction === "older" && liveCursorIndex !== 0) {
         return false;
       }
-      if (direction === "newer" && cursorIndex !== userInput.length) {
+      if (direction === "newer" && liveCursorIndex !== liveText.length) {
         return false;
       }
       const result = navigateInputHistory({
         direction,
         history: inputHistory,
-        currentText: userInput,
+        currentText: liveText,
         state: inputHistoryStateRef.current,
       });
       if (!result.handled) {
@@ -2104,7 +2106,7 @@ function ComposerContentImpl({
       setCursorIndex(result.text.length);
       return true;
     },
-    [cursorIndex, inputHistory, replaceUserInput, userInput],
+    [inputHistory, replaceUserInput],
   );
 
   const handleUserInputChange = useCallback(
