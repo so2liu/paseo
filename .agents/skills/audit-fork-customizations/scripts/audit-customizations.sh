@@ -163,6 +163,8 @@ check_pattern "control geometry uses scaled theme heights" \
   "packages/app/src/components/ui/control-geometry.ts" 'controlHeights = theme\.controlHeight'
 check_pattern "running-agent send defaults to queue" \
   "packages/app/src/hooks/use-settings/storage.ts" 'sendBehavior: "queue"'
+check_pattern "Pi provider implements the active-turn steering contract" \
+  "packages/server/src/server/agent/providers/pi/agent.ts" 'async steerActiveTurn\('
 check_pattern "attachment limit remains 1 GB" \
   "packages/app/src/composer/index.tsx" 'MAX_FILE_SIZE_BYTES = 1024 \* 1024 \* 1024'
 check_pattern "Desktop update feed remains on the fork" \
