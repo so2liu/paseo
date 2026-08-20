@@ -120,20 +120,21 @@ check_file() {
 
 check_composer_history() {
   file="packages/app/src/composer/index.tsx"
+  source=$(git show "$merged_ref:$file")
   block=$(
-    git show "$merged_ref:$file" \
-      | awk '
-          /const handleCommandKeyPress = useCallback/ { capture = 1 }
-          capture { print }
-          capture && /const handleUserInputChange = useCallback/ { exit }
-        '
+    awk '
+      /const handleCommandKeyPress = useCallback/ { capture = 1 }
+      capture { print }
+      capture && /const handleUserInputChange = useCallback/ { exit }
+    ' <<<"$source"
   )
   if [ -n "$block" ] \
     && grep -Fq 'event.key === "ArrowUp"' <<<"$block" \
     && grep -Fq 'event.key === "ArrowDown"' <<<"$block" \
     && grep -Fq 'navigateInputHistory' <<<"$block" \
     && grep -Fq 'replaceUserInput(result.text' <<<"$block" \
-    && ! grep -Fq 'setUserInput(result.text' <<<"$block"; then
+    && ! grep -Fq 'setUserInput(result.text' <<<"$block" \
+    && grep -Fq 'onKeyPress={handleCommandKeyPress}' <<<"$source"; then
     echo "  PASS composer history key handler replaces visible DOM/native text"
   else
     echo "  FAIL composer history key handler replaces visible DOM/native text ($file)"

@@ -821,6 +821,34 @@ async function completeDraftCreateSubmission(
 }
 
 test.describe("Agent message submission", () => {
+  test("recalls user input history through the production composer", async ({ page }, testInfo) => {
+    const previousPrompt = "Remember this prompt for composer history.";
+    const agent = await seedMockAgentWorkspace({
+      repoPrefix: `composer-input-history-${testInfo.workerIndex}-`,
+      title: "Composer input history",
+      initialPrompt: previousPrompt,
+    });
+    try {
+      await agent.client.waitForFinish(agent.agentId, 30_000);
+      await openAgentRoute(page, agent);
+      await expectComposerVisible(page);
+      await expectAgentIdle(page);
+      await expect(
+        page.getByTestId("user-message").filter({ hasText: previousPrompt }),
+      ).toBeVisible();
+
+      const composer = composerLocator(page);
+      await expect(composer).toHaveValue("");
+      await composer.press("ArrowUp");
+      await expect(composer).toHaveValue(previousPrompt);
+
+      await composer.press("ArrowDown");
+      await expect(composer).toHaveValue("");
+    } finally {
+      await agent.cleanup();
+    }
+  });
+
   test("settles an immediately interrupted first prompt", async ({ page }, testInfo) => {
     const workspace = await seedWorkspace({
       repoPrefix: `submission-immediate-interrupt-${testInfo.workerIndex}-`,
