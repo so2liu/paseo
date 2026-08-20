@@ -2085,10 +2085,15 @@ function ComposerContentImpl({
       }
       const liveText = event.input.text;
       const liveCursorIndex = event.input.selection.start;
-      if (direction === "older" && liveCursorIndex !== 0) {
+      const historyNavigationActive = inputHistoryStateRef.current.index !== null;
+      if (!historyNavigationActive && direction === "older" && liveCursorIndex !== 0) {
         return false;
       }
-      if (direction === "newer" && liveCursorIndex !== liveText.length) {
+      if (
+        !historyNavigationActive &&
+        direction === "newer" &&
+        liveCursorIndex !== liveText.length
+      ) {
         return false;
       }
       const result = navigateInputHistory({

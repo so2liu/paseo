@@ -822,21 +822,25 @@ async function completeDraftCreateSubmission(
 
 test.describe("Agent message submission", () => {
   test("recalls user input history through the production composer", async ({ page }, testInfo) => {
-    const previousPrompt = "Remember this prompt for composer history.";
+    const olderPrompt = "Remember this older prompt for composer history.";
+    const newerPrompt = "Remember this newer prompt for composer history.";
     const draft = "Restore this unsent draft.";
     const agent = await seedMockAgentWorkspace({
       repoPrefix: `composer-input-history-${testInfo.workerIndex}-`,
       title: "Composer input history",
-      initialPrompt: previousPrompt,
+      initialPrompt: olderPrompt,
     });
     try {
       await agent.client.waitForFinish(agent.agentId, 30_000);
       await openAgentRoute(page, agent);
       await expectComposerVisible(page);
       await expectAgentIdle(page);
-      await expect(
-        page.getByTestId("user-message").filter({ hasText: previousPrompt }),
-      ).toBeVisible();
+      await expect(page.getByTestId("user-message").filter({ hasText: olderPrompt })).toBeVisible();
+
+      await agent.client.sendAgentMessage(agent.agentId, newerPrompt);
+      await agent.client.waitForFinish(agent.agentId, 30_000);
+      await expect(page.getByTestId("user-message").filter({ hasText: newerPrompt })).toBeVisible();
+      await expectAgentIdle(page);
 
       const composer = composerLocator(page);
       await composer.fill(draft);
@@ -844,7 +848,13 @@ test.describe("Agent message submission", () => {
         (element as HTMLTextAreaElement).setSelectionRange(0, 0);
       });
       await composer.press("ArrowUp");
-      await expect(composer).toHaveValue(previousPrompt);
+      await expect(composer).toHaveValue(newerPrompt);
+
+      await composer.press("ArrowUp");
+      await expect(composer).toHaveValue(olderPrompt);
+
+      await composer.press("ArrowDown");
+      await expect(composer).toHaveValue(newerPrompt);
 
       await composer.press("ArrowDown");
       await expect(composer).toHaveValue(draft);
