@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -u
+set -euo pipefail
 
 usage() {
   echo "usage: $0 <previous-upstream-tag> <pre-sync-fork-ref> <new-upstream-tag> [merged-ref]" >&2
@@ -48,16 +48,27 @@ else
 fi
 
 git diff --name-status --no-renames "$old_base" "$pre_sync" -- 'packages/*' \
-  | awk '$1 == "A" { print $2 }' \
-  | grep -vE '\.(md|json|lock)$' \
+  | awk '$1 == "A" && $2 !~ /\.(md|json|lock)$/ { print $2 }' \
   | while IFS= read -r file; do
       git cat-file -e "$merged_ref:$file" 2>/dev/null || echo "$file"
     done >"$missing_files"
 
 git diff -U0 "$old_base" "$pre_sync" -- 'packages/*/src/*' \
-  | grep -E '^\+' \
-  | grep -oE '^\+export (async )?function [A-Za-z0-9_]+|^\+export (const|class|interface|type) [A-Za-z0-9_]+' \
-  | grep -oE '[A-Za-z0-9_]+$' \
+  | awk '
+      /^\+export (async )?function [A-Za-z0-9_]+/ {
+        line = $0
+        sub(/^\+export (async )?function /, "", line)
+        sub(/[^A-Za-z0-9_].*$/, "", line)
+        print line
+        next
+      }
+      /^\+export (const|class|interface|type) [A-Za-z0-9_]+/ {
+        line = $0
+        sub(/^\+export (const|class|interface|type) /, "", line)
+        sub(/[^A-Za-z0-9_].*$/, "", line)
+        print line
+      }
+    ' \
   | sort -u \
   | while IFS= read -r symbol; do
       git grep -qw "$symbol" "$merged_ref" -- packages || echo "$symbol"
