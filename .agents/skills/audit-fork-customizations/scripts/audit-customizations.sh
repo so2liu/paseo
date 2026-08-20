@@ -32,6 +32,7 @@ audit_tmp=$(mktemp -d "${TMPDIR:-/tmp}/paseo-customization-audit.XXXXXX")
 trap 'rm -rf "$audit_tmp"' EXIT
 
 changed_paths_z="$audit_tmp/upstream-changed.z"
+fork_name_status_z="$audit_tmp/fork-name-status.z"
 intersecting_commits="$audit_tmp/intersecting-commits.txt"
 missing_files="$audit_tmp/missing-files.txt"
 missing_symbols="$audit_tmp/missing-symbols.txt"
@@ -50,11 +51,17 @@ else
   : >"$intersecting_commits"
 fi
 
-git diff --name-status --no-renames "$old_base" "$pre_sync" -- 'packages/*' \
-  | awk '$1 == "A" && $2 !~ /\.(md|json|lock)$/ { print $2 }' \
-  | while IFS= read -r file; do
-      git cat-file -e "$merged_ref:$file" 2>/dev/null || echo "$file"
-    done >"$missing_files"
+git diff --name-status --no-renames -z "$old_base" "$pre_sync" -- 'packages/*' \
+  >"$fork_name_status_z"
+while IFS= read -r -d '' status && IFS= read -r -d '' file; do
+  if [ "$status" != "A" ]; then
+    continue
+  fi
+  case "$file" in
+    *.md | *.json | *.lock) continue ;;
+  esac
+  git cat-file -e "$merged_ref:$file" 2>/dev/null || printf '%s\n' "$file"
+done <"$fork_name_status_z" >"$missing_files"
 
 git diff -U0 "$old_base" "$pre_sync" -- 'packages/*/src/*' \
   | awk '
