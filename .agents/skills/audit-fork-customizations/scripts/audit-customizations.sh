@@ -107,18 +107,6 @@ check_pattern() {
   fi
 }
 
-check_absent_pattern() {
-  label=$1
-  file=$2
-  pattern=$3
-  if git grep -q -E "$pattern" "$merged_ref" -- "$file"; then
-    echo "  FAIL $label ($file)"
-    guardrail_failures=$((guardrail_failures + 1))
-  else
-    echo "  PASS $label"
-  fi
-}
-
 check_file() {
   label=$1
   file=$2
@@ -130,8 +118,30 @@ check_file() {
   fi
 }
 
-check_absent_pattern "composer history does not use the state-only setter" \
-  "packages/app/src/composer/index.tsx" 'setUserInput\(result\.text'
+check_composer_history() {
+  file="packages/app/src/composer/index.tsx"
+  block=$(
+    git show "$merged_ref:$file" \
+      | awk '
+          /const handleCommandKeyPress = useCallback/ { capture = 1 }
+          capture { print }
+          capture && /const handleUserInputChange = useCallback/ { exit }
+        '
+  )
+  if [ -n "$block" ] \
+    && grep -q 'event.key === "ArrowUp"' <<<"$block" \
+    && grep -q 'event.key === "ArrowDown"' <<<"$block" \
+    && grep -q 'navigateInputHistory' <<<"$block" \
+    && grep -q 'replaceUserInput(result.text)' <<<"$block" \
+    && ! grep -q 'setUserInput(result.text)' <<<"$block"; then
+    echo "  PASS composer history key handler replaces visible DOM/native text"
+  else
+    echo "  FAIL composer history key handler replaces visible DOM/native text ($file)"
+    guardrail_failures=$((guardrail_failures + 1))
+  fi
+}
+
+check_composer_history
 check_pattern "UI base font cap remains 32" \
   "packages/app/src/hooks/use-settings/storage.ts" 'MAX_UI_BASE_FONT_SIZE = 32'
 check_pattern "control geometry uses scaled theme heights" \
