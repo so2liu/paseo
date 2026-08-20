@@ -107,6 +107,12 @@ fork 专属依赖补回来。补完在三处确认：manifest、lockfile、`node
 
 ## 验证
 
+同步合并完成后必须执行仓库 Skill
+`.agents/skills/audit-fork-customizations/SKILL.md`。它维护 fork 全量 feature/fix 行为目录，
+并提供历史交集、缺失文件/符号和关键值检查脚本。任何新 fork feature 或真实 bug fix 都要在
+同一个 PR 更新该 Skill 的 `references/customizations.md`；不能只改本文件或 `CLAUDE.md` 的
+摘要表。
+
 ### 判断类型错误前必须完整重建
 
 `npm run build:client` **不构建** `relay` 和 `highlight`，它们陈旧的 dist 声明会
