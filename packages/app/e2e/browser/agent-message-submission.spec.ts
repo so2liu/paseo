@@ -41,6 +41,7 @@ import {
 } from "../support/helpers/timeline-resume";
 import { workspaceDeckEntryLocator } from "../support/helpers/workspace-ui";
 import { expectInFlightForkAvailable } from "../support/helpers/assistant-fork";
+import { installListCommandsStub } from "../support/helpers/list-commands-stub";
 import {
   scrollTimelineToNewestLoadedEdge,
   scrollTimelineUntilOlderHistoryIsReachable,
@@ -821,6 +822,55 @@ async function completeDraftCreateSubmission(
 }
 
 test.describe("Agent message submission", () => {
+  test("recalls user input history through the production composer", async ({ page }, testInfo) => {
+    await installListCommandsStub(page);
+    const olderPrompt = "Remember this older prompt for composer history.";
+    const newerPrompt = "/he";
+    const draft = "Restore this unsent draft.";
+    const agent = await seedMockAgentWorkspace({
+      repoPrefix: `composer-input-history-${testInfo.workerIndex}-`,
+      title: "Composer input history",
+      initialPrompt: olderPrompt,
+    });
+    try {
+      await agent.client.waitForFinish(agent.agentId, 30_000);
+      await openAgentRoute(page, agent);
+      await expectComposerVisible(page);
+      await expectAgentIdle(page);
+      await expect(page.getByTestId("user-message").filter({ hasText: olderPrompt })).toBeVisible();
+
+      await agent.client.sendAgentMessage(agent.agentId, newerPrompt);
+      await agent.client.waitForFinish(agent.agentId, 30_000);
+      await expect(page.getByTestId("user-message").filter({ hasText: newerPrompt })).toBeVisible();
+      await expectAgentIdle(page);
+
+      const composer = composerLocator(page);
+      await composer.fill(draft);
+      await composer.evaluate((element) => {
+        (element as HTMLTextAreaElement).setSelectionRange(0, 0);
+      });
+      await composer.press("ArrowUp");
+      await expect(composer).toHaveValue(newerPrompt);
+      await expect(
+        page
+          .getByTestId("composer-autocomplete-popover")
+          .getByText("/help", { exact: true })
+          .first(),
+      ).toBeVisible();
+
+      await composer.press("ArrowUp");
+      await expect(composer).toHaveValue(olderPrompt);
+
+      await composer.press("ArrowDown");
+      await expect(composer).toHaveValue(newerPrompt);
+
+      await composer.press("ArrowDown");
+      await expect(composer).toHaveValue(draft);
+    } finally {
+      await agent.cleanup();
+    }
+  });
+
   test("settles an immediately interrupted first prompt", async ({ page }, testInfo) => {
     const workspace = await seedWorkspace({
       repoPrefix: `submission-immediate-interrupt-${testInfo.workerIndex}-`,

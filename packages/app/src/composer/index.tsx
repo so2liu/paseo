@@ -2071,40 +2071,47 @@ function ComposerContentImpl({
   // Handle keyboard navigation for command autocomplete.
   const handleCommandKeyPress = useCallback(
     (event: ComposerKeyPressEvent) => {
-      if (autocompleteOnKeyPressRef.current(event)) {
-        return true;
-      }
       let direction: "older" | "newer" | null = null;
       if (event.key === "ArrowUp") {
         direction = "older";
       } else if (event.key === "ArrowDown") {
         direction = "newer";
       }
+      const historyNavigationActive = inputHistoryStateRef.current.index !== null;
+      if (!(historyNavigationActive && direction) && autocompleteOnKeyPressRef.current(event)) {
+        return true;
+      }
       if (!direction) {
         return false;
       }
-      if (direction === "older" && cursorIndex !== 0) {
+      const liveText = event.input.text;
+      const liveCursorIndex = event.input.selection.start;
+      if (!historyNavigationActive && direction === "older" && liveCursorIndex !== 0) {
         return false;
       }
-      if (direction === "newer" && cursorIndex !== userInput.length) {
+      if (
+        !historyNavigationActive &&
+        direction === "newer" &&
+        liveCursorIndex !== liveText.length
+      ) {
         return false;
       }
       const result = navigateInputHistory({
         direction,
         history: inputHistory,
-        currentText: userInput,
+        currentText: liveText,
         state: inputHistoryStateRef.current,
       });
       if (!result.handled) {
         return false;
       }
       event.preventDefault();
+      replaceUserInput(result.text, { start: result.text.length, end: result.text.length });
       inputHistoryStateRef.current = { index: result.index, draft: result.draft };
-      setUserInput(result.text);
       setCursorIndex(result.text.length);
       return true;
     },
-    [cursorIndex, inputHistory, setUserInput, userInput],
+    [inputHistory, replaceUserInput],
   );
 
   const handleUserInputChange = useCallback(

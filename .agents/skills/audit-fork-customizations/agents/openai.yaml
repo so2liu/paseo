@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Fork Customizations"
+  short_description: "Preserve fork features and fixes across upstream syncs"
+  default_prompt: "Use $audit-fork-customizations to audit this upstream sync and report any lost fork behavior."
