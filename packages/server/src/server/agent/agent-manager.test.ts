@@ -1189,7 +1189,13 @@ test("steers Pi through its native RPC without replacing the active turn", async
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-pi-steer-"));
   const pi = new FakePi();
   const manager = new AgentManager({
-    clients: { pi: new PiRpcAgentClient({ logger, runtime: pi }) },
+    clients: {
+      pi: new (class extends PiRpcAgentClient {
+        override async isAvailable(): Promise<boolean> {
+          return true;
+        }
+      })({ logger, runtime: pi }),
+    },
     logger,
   });
   let agentId: string | null = null;
