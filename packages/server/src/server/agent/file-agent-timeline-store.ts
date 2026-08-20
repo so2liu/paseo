@@ -35,6 +35,10 @@ const TimelineDocumentSchema = z.object({
 
 type TimelineDocument = z.infer<typeof TimelineDocumentSchema>;
 
+export interface ImportedAgentTimelineSnapshot extends AgentTimelineSnapshot {
+  epoch: string;
+}
+
 export interface FileAgentTimelineStoreOptions {
   writeJson?: (filePath: string, value: unknown) => Promise<void>;
 }
@@ -199,6 +203,35 @@ export class FileAgentTimelineStore implements AgentTimelineStore {
       validateDocument(proposed);
       await this.writeJson(this.filePath(agentId), proposed);
       this.documents.set(agentId, proposed);
+    });
+  }
+
+  /** Import a retired-store snapshot only when no current-format document exists. */
+  async importSnapshotIfAbsent(
+    agentId: string,
+    snapshot: ImportedAgentTimelineSnapshot,
+  ): Promise<boolean> {
+    return await this.runMutation(agentId, async () => {
+      try {
+        await fs.access(this.filePath(agentId));
+        return false;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+
+      const rows = snapshot.rows.map((row) => cloneRow(TimelineRowSchema.parse(row)));
+      if (rows.length === 0) return false;
+      const proposed: TimelineDocument = {
+        version: 1,
+        epoch: snapshot.epoch,
+        nextSeq: (rows.at(-1)?.seq ?? 0) + 1,
+        rows,
+        historyComplete: snapshot.historyComplete,
+      };
+      validateDocument(proposed);
+      await this.writeJson(this.filePath(agentId), proposed);
+      this.documents.set(agentId, proposed);
+      return true;
     });
   }
 

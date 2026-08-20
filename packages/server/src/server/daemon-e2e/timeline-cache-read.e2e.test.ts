@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 import { createDaemonTestContext, type DaemonTestContext } from "../test-utils/index.js";
 import { createTestAgentClients } from "../test-utils/fake-agent-client.js";
@@ -193,6 +194,101 @@ describe("daemon E2E - durable timeline reads", () => {
       expect(assistantTexts).toContain("CACHED");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
+describe("daemon E2E - legacy timeline cache upgrade", () => {
+  test("migrates SQLite history before a read can resume the provider", async () => {
+    const cwd = tmpCwd();
+    const paseoHomeRoot = mkdtempSync(path.join(tmpdir(), "paseo-legacy-timeline-home-"));
+    const counting = createHistoryCountingClients();
+    let context: DaemonTestContext | null = null;
+    try {
+      context = await createDaemonTestContext({
+        paseoHomeRoot,
+        cleanup: false,
+        agentClients: counting.clients,
+      });
+      const agent = await context.client.createAgent({
+        provider: "codex",
+        cwd,
+        title: "Legacy Timeline Upgrade Test",
+        modeId: "full-access",
+      });
+      await context.client.sendMessage(agent.id, "Respond with exactly: MIGRATED");
+      expect((await context.client.waitForFinish(agent.id, 5_000)).status).toBe("idle");
+      await context.daemon.daemon.agentManager.closeAgent(agent.id);
+      await context.daemon.daemon.agentManager.flushForShutdown();
+
+      const timelineDirectory = path.join(context.daemon.paseoHome, "agent-timelines");
+      const timelinePath = path.join(
+        timelineDirectory,
+        `agent-${Buffer.from(agent.id, "utf8").toString("base64url")}.json`,
+      );
+      const document = JSON.parse(readFileSync(timelinePath, "utf8")) as {
+        epoch: string;
+        historyComplete: boolean;
+        rows: Array<{ seq: number; timestamp: string; item: unknown }>;
+      };
+      expect(document.historyComplete).toBe(true);
+
+      await context.cleanup();
+      context = null;
+
+      const database = new DatabaseSync(path.join(paseoHomeRoot, ".paseo", "timelines.db"));
+      database.exec(`
+        CREATE TABLE agent_timelines (
+          agent_id TEXT PRIMARY KEY,
+          epoch TEXT NOT NULL,
+          backfill_complete INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE agent_timeline_rows (
+          agent_id TEXT NOT NULL,
+          seq INTEGER NOT NULL,
+          timestamp TEXT NOT NULL,
+          item TEXT NOT NULL,
+          PRIMARY KEY (agent_id, seq)
+        ) WITHOUT ROWID;
+      `);
+      database
+        .prepare(
+          "INSERT INTO agent_timelines (agent_id, epoch, backfill_complete) VALUES (?, ?, 1)",
+        )
+        .run(agent.id, document.epoch);
+      const insertRow = database.prepare(
+        `INSERT INTO agent_timeline_rows (agent_id, seq, timestamp, item)
+         VALUES (?, ?, ?, ?)`,
+      );
+      for (const row of document.rows) {
+        insertRow.run(agent.id, row.seq, row.timestamp, JSON.stringify(row.item));
+      }
+      database.close();
+      rmSync(timelineDirectory, { recursive: true, force: true });
+
+      const before = counting.replays();
+      context = await createDaemonTestContext({
+        paseoHomeRoot,
+        cleanup: false,
+        agentClients: counting.clients,
+      });
+      const timeline = await context.client.fetchAgentTimeline(agent.id, {
+        direction: "tail",
+        limit: 200,
+      });
+
+      expect(counting.replays() - before).toBe(0);
+      expect(context.daemon.daemon.agentManager.getAgent(agent.id)).toBeNull();
+      expect(timeline.epoch).toBe(document.epoch);
+      expect(
+        timeline.entries
+          .filter((entry) => entry.item.type === "assistant_message")
+          .map((entry) => entry.item.text),
+      ).toContain("MIGRATED");
+    } finally {
+      await context?.cleanup();
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(paseoHomeRoot, { recursive: true, force: true });
     }
   }, 30_000);
 });

@@ -131,6 +131,7 @@ import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { FileAgentTimelineStore } from "./agent/file-agent-timeline-store.js";
+import { migrateLegacyTimelineCache } from "./migrations/migrate-legacy-timeline-cache.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
@@ -855,6 +856,11 @@ export async function createPaseoDaemon(
 
   const agentStorage = new AgentStorage(config.agentStoragePath, logger);
   const timelineStore = new FileAgentTimelineStore(path.join(config.paseoHome, "agent-timelines"));
+  await migrateLegacyTimelineCache({
+    databasePath: path.join(config.paseoHome, "timelines.db"),
+    timelineStore,
+    logger,
+  });
   const projectRegistry = new FileBackedProjectRegistry(
     path.join(config.paseoHome, "projects", "projects.json"),
     logger,

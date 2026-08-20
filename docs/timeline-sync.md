@@ -18,8 +18,8 @@ tool payload.
 
 ## Reading history without a provider process
 
-Reading history must never cost a provider process. The daemon commits timeline rows to an
-durable table (see [data-model.md](./data-model.md#1a-committed-agent-timeline)), and
+Reading history must never cost a provider process. The daemon commits timeline rows to a
+durable log (see [data-model.md](./data-model.md#1a-committed-agent-timeline)), and
 `fetch_agent_timeline_request` picks its source in this order:
 
 1. **Live runtime** — the agent's in-memory timeline is authoritative and free.
@@ -27,9 +27,13 @@ durable table (see [data-model.md](./data-model.md#1a-committed-agent-timeline))
 3. **Load the agent** — only when the log holds nothing for that agent. Loading also backfills the
    log, so this happens at most once per agent.
 
-This matters because agent runtimes are collected after an hour idle, and every runtime is gone
-after a daemon restart. Before the log existed, opening any older conversation had to resume its
-provider session and replay the whole transcript first — seconds of latency for a pure read.
+This matters because an explicit close, archive, replacement, workspace teardown, or daemon restart
+can release a provider runtime. Before the log existed, opening any such conversation had to resume
+its provider session and replay the whole transcript first — seconds of latency for a pure read.
+
+The v0.5 move from the fork's retired SQLite cache to upstream's `FileAgentTimelineStore` preserves
+this invariant across the upgrade: bootstrap imports complete legacy timelines before sessions can
+read them. It retains the SQLite file for rollback and never overwrites a current-format timeline.
 
 The provider process is started by whatever actually needs it: a prompt, a steer, a permission
 response. Browsing history starts nothing.
