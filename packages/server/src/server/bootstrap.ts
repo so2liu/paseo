@@ -858,6 +858,7 @@ export async function createPaseoDaemon(
   const timelineStore = new FileAgentTimelineStore(path.join(config.paseoHome, "agent-timelines"));
   await migrateLegacyTimelineCache({
     databasePath: path.join(config.paseoHome, "timelines.db"),
+    markerPath: path.join(config.paseoHome, "agent-timelines", ".legacy-sqlite-migration.json"),
     timelineStore,
     logger,
   });

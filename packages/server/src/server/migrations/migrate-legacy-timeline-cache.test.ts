@@ -67,7 +67,9 @@ describe("legacy SQLite timeline cache migration", () => {
   test("preserves complete rows and epoch without removing the rollback database", async () => {
     const root = await makeRoot();
     const databasePath = path.join(root, "timelines.db");
-    const store = new FileAgentTimelineStore(path.join(root, "agent-timelines"));
+    const timelineDirectory = path.join(root, "agent-timelines");
+    const markerPath = path.join(timelineDirectory, ".legacy-sqlite-migration.json");
+    const store = new FileAgentTimelineStore(timelineDirectory);
     const rows: AgentTimelineRow[] = [
       {
         seq: 1,
@@ -86,6 +88,7 @@ describe("legacy SQLite timeline cache migration", () => {
 
     const result = await migrateLegacyTimelineCache({
       databasePath,
+      markerPath,
       timelineStore: store,
       logger: createTestLogger(),
     });
@@ -93,6 +96,7 @@ describe("legacy SQLite timeline cache migration", () => {
     expect(result).toEqual({
       sourceFound: true,
       migratedAgents: 1,
+      skippedMigratedAgents: 0,
       skippedExistingAgents: 0,
       skippedIncompleteAgents: 0,
       failedAgents: 0,
@@ -106,17 +110,20 @@ describe("legacy SQLite timeline cache migration", () => {
 
     const repeated = await migrateLegacyTimelineCache({
       databasePath,
-      timelineStore: new FileAgentTimelineStore(path.join(root, "agent-timelines")),
+      markerPath,
+      timelineStore: new FileAgentTimelineStore(timelineDirectory),
       logger: createTestLogger(),
     });
     expect(repeated.migratedAgents).toBe(0);
-    expect(repeated.skippedExistingAgents).toBe(1);
+    expect(repeated.skippedMigratedAgents).toBe(1);
   });
 
   test("never overwrites current-format rows", async () => {
     const root = await makeRoot();
     const databasePath = path.join(root, "timelines.db");
-    const store = new FileAgentTimelineStore(path.join(root, "agent-timelines"));
+    const timelineDirectory = path.join(root, "agent-timelines");
+    const markerPath = path.join(timelineDirectory, ".legacy-sqlite-migration.json");
+    const store = new FileAgentTimelineStore(timelineDirectory);
     seedLegacyDatabase(databasePath, [
       {
         agentId: "agent",
@@ -144,6 +151,7 @@ describe("legacy SQLite timeline cache migration", () => {
 
     const result = await migrateLegacyTimelineCache({
       databasePath,
+      markerPath,
       timelineStore: store,
       logger: createTestLogger(),
     });
@@ -156,7 +164,9 @@ describe("legacy SQLite timeline cache migration", () => {
   test("does not publish an interrupted SQLite backfill as committed history", async () => {
     const root = await makeRoot();
     const databasePath = path.join(root, "timelines.db");
-    const store = new FileAgentTimelineStore(path.join(root, "agent-timelines"));
+    const timelineDirectory = path.join(root, "agent-timelines");
+    const markerPath = path.join(timelineDirectory, ".legacy-sqlite-migration.json");
+    const store = new FileAgentTimelineStore(timelineDirectory);
     seedLegacyDatabase(databasePath, [
       {
         agentId: "partial-agent",
@@ -174,11 +184,52 @@ describe("legacy SQLite timeline cache migration", () => {
 
     const result = await migrateLegacyTimelineCache({
       databasePath,
+      markerPath,
       timelineStore: store,
       logger: createTestLogger(),
     });
 
     expect(result.skippedIncompleteAgents).toBe(1);
     expect(await store.getCommittedRows("partial-agent")).toEqual([]);
+  });
+
+  test("does not resurrect migrated SQLite history after the current cache is deleted", async () => {
+    const root = await makeRoot();
+    const databasePath = path.join(root, "timelines.db");
+    const timelineDirectory = path.join(root, "agent-timelines");
+    const markerPath = path.join(timelineDirectory, ".legacy-sqlite-migration.json");
+    const store = new FileAgentTimelineStore(timelineDirectory);
+    seedLegacyDatabase(databasePath, [
+      {
+        agentId: "reloaded-agent",
+        epoch: "obsolete-epoch",
+        complete: true,
+        rows: [
+          {
+            seq: 1,
+            timestamp: "2026-08-01T00:00:00.000Z",
+            item: { type: "assistant_message", text: "obsolete" },
+          },
+        ],
+      },
+    ]);
+    await migrateLegacyTimelineCache({
+      databasePath,
+      markerPath,
+      timelineStore: store,
+      logger: createTestLogger(),
+    });
+    await store.deleteAgent("reloaded-agent");
+
+    const restarted = new FileAgentTimelineStore(timelineDirectory);
+    const result = await migrateLegacyTimelineCache({
+      databasePath,
+      markerPath,
+      timelineStore: restarted,
+      logger: createTestLogger(),
+    });
+
+    expect(result.skippedMigratedAgents).toBe(1);
+    expect(await restarted.getCommittedRows("reloaded-agent")).toEqual([]);
   });
 });

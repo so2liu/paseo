@@ -70,7 +70,8 @@ $PASEO_HOME/
 │   └── managed-processes/
 │       └── {recordId}.json              # Helper processes owned by Paseo; reconciled on daemon bootstrap
 ├── agent-timelines/
-│   └── agent-{base64url(agentId)}.json  # Committed agent timeline document
+│   ├── agent-{base64url(agentId)}.json  # Committed agent timeline document
+│   └── .legacy-sqlite-migration.json    # Per-agent migration tombstones
 ├── timelines.db                         # Retained legacy SQLite cache; read only during migration
 └── push-tokens.json                     # Expo push notification tokens
 ```
@@ -215,7 +216,8 @@ Fork releases before v0.5 used `$PASEO_HOME/timelines.db`. Daemon bootstrap open
 SQLite cache read-only and atomically imports every complete timeline that has no current-format
 document. The legacy epoch is retained, incomplete backfills are skipped, and the database is never
 deleted, so migration is idempotent and downgrade-safe. Current-format data always wins if both
-stores contain the same agent.
+stores contain the same agent. A per-agent migration tombstone remains after Reload deletes a
+current-format timeline, preventing the retained database from resurrecting obsolete history.
 
 The committed document is what lets history be read without a provider process — see
 [timeline-sync.md](./timeline-sync.md#reading-history-without-a-provider-process).

@@ -34,6 +34,8 @@ its provider session and replay the whole transcript first — seconds of latenc
 The v0.5 move from the fork's retired SQLite cache to upstream's `FileAgentTimelineStore` preserves
 this invariant across the upgrade: bootstrap imports complete legacy timelines before sessions can
 read them. It retains the SQLite file for rollback and never overwrites a current-format timeline.
+A durable per-agent migration tombstone also prevents a later Reload from resurrecting the retired
+cache after it deliberately deletes the current timeline.
 
 The provider process is started by whatever actually needs it: a prompt, a steer, a permission
 response. Browsing history starts nothing.
