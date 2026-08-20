@@ -100,3 +100,4 @@ fork 里这几个 workflow 的 tag 触发被移除了，只保留手动 dispatch
 | `deploy-app`          | 部署的是上游托管的 web app                             |
 | `docker`              | 推送目标 `ghcr.io/getpaseo/paseo` 我们没有写权限       |
 | `release-notes-sync`  | LY tag 在 CHANGELOG 里没有对应条目                     |
+| `nix-update-hash`     | 以上游 bot 身份提交，缺 `PASEO_BOT_APP_ID` 必然失败    |
