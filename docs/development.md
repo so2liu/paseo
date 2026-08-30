@@ -424,6 +424,55 @@ Do not treat "the app is on the device" as proof a deploy landed — a previous
 build with the same version and build number is indistinguishable in the app
 list. Trust the `App installed:` receipt from `devicectl` instead.
 
+**4. "Device offline" is usually the Mac's DNS, not the device.** Xcode finds
+devices over mDNS, and a proxy running in fake-ip mode answers those lookups
+too. The tell is a `198.18.x.x` address on interface `0`:
+
+```bash
+dscacheutil -q host -a name <Device-Name>.coredevice.local   # want a LAN address
+dns-sd -B _apple-mobdev2._tcp                                # want the device listed
+```
+
+Clash's `fake-ip-filter` ships `'*.local'`, and `*` matches **one** label —
+`OMG.coredevice.local` has two, so it falls through and gets a fake address
+while `ly-mbp.local` resolves fine. `'+.local'` matches every depth. Confirm the
+device is actually on the LAN before blaming the proxy: `_apple-mobdev2._tcp`
+and `_remotepairing._tcp` are what a device advertises for wireless debugging,
+and if `dns-sd -B _services._dns-sd._udp` lists plenty of other services while
+those two are missing, the phone is on cellular or another network.
+
+### Building without the device present
+
+`expo run:ios --device` needs the device up front: `-destination id=<udid>`
+waits for it and dies with error 70. To compile while the phone is elsewhere,
+build for a generic destination and install later — the artifact is the same.
+
+```bash
+npm run build:app-deps          # workspace deps the bundler needs; see below
+cd packages/app/ios
+xcodebuild -workspace PaseoDebug.xcworkspace -scheme PaseoDebug \
+  -configuration Release -destination 'generic/platform=iOS' \
+  -allowProvisioningUpdates DEVELOPMENT_TEAM=366ADQ28F6 build
+```
+
+Two things Expo does for you that `xcodebuild` does not:
+
+- **`DEVELOPMENT_TEAM` must be explicit.** Prebuild writes no team, so a bare
+  `xcodebuild` fails with `Signing for "PaseoDebug" requires a development team`.
+  The wildcard profile (`366ADQ28F6.*`) covers this bundle id and both owner
+  iPhones, so signing works offline.
+- **Workspace deps must be built first.** The bundler resolves
+  `@getpaseo/expo-two-way-audio` to `build/index.js`, which does not exist in a
+  fresh checkout or right after an upstream sync. It surfaces late, as a failing
+  `Bundle React Native code and images` phase after signing already passed.
+
+Verify the artifact carries the JS bundle before installing — a Release build
+that skipped the bundling phase still produces a `.app`:
+
+```bash
+ls "$APP/main.jsbundle" && codesign -dv "$APP" 2>&1 | grep Identifier=
+```
+
 ### Custom fork build identity
 
 CLI and daemon builds from this fork append the SemVer build metadata `+LY` to
